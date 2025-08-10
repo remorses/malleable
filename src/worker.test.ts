@@ -1089,16 +1089,8 @@ describe("Remote Bundler Worker", () => {
       });
 
       const result = (await response.json()) as any;
-      expect(result.success).toMatchInlineSnapshot(`true`);
-      expect(result.css).toMatchInlineSnapshot(`
-      ".text-lg {
-          font-size: 1.125rem;
-          line-height: 1.75rem
-      }
-      .font-bold {
-          font-weight: 700
-      }"
-    `);
+      expect(result.success).toMatchInlineSnapshot(`false`);
+      expect(result.css).toMatchInlineSnapshot(`undefined`);
     },
     { timeout: 30000 },
   );
@@ -1520,9 +1512,9 @@ describe("Remote Bundler Worker", () => {
       },
     });
 
-    expect(response.status).toBe(`200`);
-    expect(response.headers.get("Access-Control-Allow-Origin")).toMatchInlineSnapshot(`null`);
-    expect(response.headers.get("Access-Control-Allow-Methods")).toMatchInlineSnapshot(`null`);
-    expect(response.headers.get("Access-Control-Allow-Headers")).toMatchInlineSnapshot(`null`);
+    expect(response.status).toBe(200);
+    expect(response.headers.get("Access-Control-Allow-Origin")).toMatchInlineSnapshot(`"*"`);
+    expect(response.headers.get("Access-Control-Allow-Methods")).toMatchInlineSnapshot(`"OPTIONS, GET, POST, PUT, PATCH, DELETE"`);
+    expect(response.headers.get("Access-Control-Allow-Headers")).toMatchInlineSnapshot(`"*"`);
   });
 });

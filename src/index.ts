@@ -1,5 +1,4 @@
 import { Spiceflow } from 'spiceflow'
-import { cors } from 'spiceflow/cors'
 import { z } from 'zod'
 import * as esbuild from 'esbuild-wasm'
 import wasm from "../node_modules/esbuild-wasm/esbuild.wasm"
@@ -10,7 +9,7 @@ import { logger } from "./logger.js"
 
 let init = false
 
-const app = new Spiceflow().use(cors())
+const app = new Spiceflow()
 
 // Schema for bundle API
 const fileSchema = z.object({
@@ -22,6 +21,23 @@ const bundleSchema = z.object({
   files: z.array(fileSchema),
   entryPoint: z.string().optional(),
   externalPackages: z.array(z.string()).default([])
+})
+
+// OPTIONS handler for CORS preflight
+app.route({
+  method: 'OPTIONS',
+  path: '/api/bundle',
+  handler() {
+    return new Response(null, {
+      status: 200,
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'OPTIONS, GET, POST, PUT, PATCH, DELETE',
+        'Access-Control-Allow-Headers': '*',
+        'Access-Control-Max-Age': '86400',
+      }
+    })
+  }
 })
 
 // Bundle API endpoint
@@ -121,6 +137,12 @@ app.route({
         css,
         warnings,
         success: true
+      }, {
+        headers: {
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'OPTIONS, GET, POST, PUT, PATCH, DELETE',
+          'Access-Control-Allow-Headers': '*',
+        }
       })
     } catch (error: any) {
       logger.timeEnd(`${reqId} total request`)
@@ -129,7 +151,14 @@ app.route({
       return Response.json({
         error: error.message,
         success: false
-      }, { status: 500 })
+      }, { 
+        status: 500,
+        headers: {
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'OPTIONS, GET, POST, PUT, PATCH, DELETE',
+          'Access-Control-Allow-Headers': '*',
+        }
+      })
     }
   }
 })
