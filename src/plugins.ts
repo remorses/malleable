@@ -1,4 +1,5 @@
 import type { Plugin, OnResolveArgs } from 'esbuild-wasm'
+import { logger } from './logger'
 
 const DEFAULT_EXTERNAL_PACKAGES = [
   'react',
@@ -9,18 +10,21 @@ const DEFAULT_EXTERNAL_PACKAGES = [
 
 export interface PluginOptions {
   externalPackages?: string[]
-  esmShUrl?: string
+  cdnUrl?: string
 }
+
+// Global caches that persist across requests
+const globalCodeCache = new Map<string, string>()
+const globalRedirectCache = new Map<string, string>()
 
 export function createEsmShPlugin(options: PluginOptions = {}): Plugin {
   const {
     externalPackages = [],
-    esmShUrl = 'https://esm.sh',
+    // Use unpkg (Cloudflare-hosted) for better performance when we're also on Cloudflare
+    cdnUrl = 'https://unpkg.com',
   } = options
 
   const allExternalPackages = [...DEFAULT_EXTERNAL_PACKAGES, ...externalPackages]
-  const codeCache = new Map<string, string>()
-  const redirectCache = new Map<string, string>()
 
   return {
     name: 'esm-sh-plugin',
@@ -65,8 +69,8 @@ export function createEsmShPlugin(options: PluginOptions = {}): Plugin {
           }
         }
 
-        // Resolve npm packages through esm.sh
-        const url = `${esmShUrl}/${args.path}`
+        // Resolve npm packages through CDN
+        const url = `${cdnUrl}/${args.path}`
         return {
           path: url,
           namespace,
@@ -86,8 +90,8 @@ export function createEsmShPlugin(options: PluginOptions = {}): Plugin {
           }
         }
 
-        // Resolve through esm.sh
-        const url = `${esmShUrl}/${args.path}`
+        // Resolve through CDN
+        const url = `${cdnUrl}/${args.path}`
         return {
           path: url,
           namespace,
@@ -99,19 +103,24 @@ export function createEsmShPlugin(options: PluginOptions = {}): Plugin {
         const url = args.path
 
         // Check cache first
-        if (codeCache.has(url)) {
+        if (globalCodeCache.has(url)) {
+          logger.log(`Cache hit for ${url.substring(0, 50)}`)
           return {
-            contents: codeCache.get(url),
+            contents: globalCodeCache.get(url),
             loader: 'js',
           }
         }
 
         try {
           // Follow redirects
-          const resolvedUrl = await resolveRedirect(url, redirectCache)
+          const resolvedUrl = await resolveRedirect(url, globalRedirectCache)
           
           // Fetch the module
+          const fetchId = Math.random().toString(36).substring(2, 9)
+          logger.time(`${fetchId} fetch ${url.substring(0, 50)}`)
           const response = await fetch(resolvedUrl)
+          logger.timeEnd(`${fetchId} fetch ${url.substring(0, 50)}`)
+          
           if (!response.ok) {
             throw new Error(`Failed to fetch ${resolvedUrl}: ${response.status} ${response.statusText}`)
           }
@@ -135,7 +144,7 @@ export function createEsmShPlugin(options: PluginOptions = {}): Plugin {
 
           // Cache JavaScript modules
           if (loader === 'js') {
-            codeCache.set(url, contents)
+            globalCodeCache.set(url, contents)
           }
 
           return {

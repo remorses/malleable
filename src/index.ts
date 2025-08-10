@@ -5,6 +5,7 @@ import wasm from '../node_modules/esbuild-wasm/esbuild.wasm'
 import { generateTailwindCSS } from './generate-tailwind'
 import { createEsmShPlugin } from './plugins'
 import { createLocalResolverPlugin } from './local-resolver-plugin'
+import { logger } from './logger'
 
 let init = false
 
@@ -28,16 +29,25 @@ app.route({
   path: '/api/bundle',
   request: bundleSchema,
   async handler({ request }) {
+    // Generate unique request ID for logging
+    const reqId = Math.random().toString(36).substring(2, 9)
+    
+    logger.time(`${reqId} total request`)
+    
     if (!init) {
+      logger.time(`${reqId} esbuild init`)
       await esbuild.initialize({
         wasmModule: wasm,
         worker: false
       })
       init = true
+      logger.timeEnd(`${reqId} esbuild init`)
     }
 
     try {
+      logger.time(`${reqId} parse body`)
       const body = await request.json()
+      logger.timeEnd(`${reqId} parse body`)
       const { 
         files,
         entryPoint,
@@ -72,9 +82,10 @@ app.route({
       // Determine jsxImportSource based on external packages
       const jsxImportSource = externalPackages.includes('react') 
         ? undefined 
-        : 'https://esm.sh/react'
+        : 'https://unpkg.com/react'
       
       // Always use build API with bundling
+      logger.time(`${reqId} esbuild build`)
       const result = await esbuild.build({
         entryPoints: [actualEntryPoint],
         bundle: true,
@@ -89,6 +100,7 @@ app.route({
         absWorkingDir: '/',
         loader: { '.tsx': 'tsx', '.ts': 'tsx', '.jsx': 'tsx', '.js': 'tsx' }
       })
+      logger.timeEnd(`${reqId} esbuild build`)
       
       const code = result.outputFiles?.[0]?.text || ''
       const warnings = result.warnings
@@ -97,8 +109,12 @@ app.route({
       const allCode = files.map(f => f.content).join('\n')
       
       // Always generate Tailwind CSS
+      logger.time(`${reqId} tailwind css`)
       const css = await generateTailwindCSS(allCode)
+      logger.timeEnd(`${reqId} tailwind css`)
 
+      logger.timeEnd(`${reqId} total request`)
+      
       return Response.json({
         code,
         css,
@@ -106,6 +122,9 @@ app.route({
         success: true
       })
     } catch (error: any) {
+      logger.timeEnd(`${reqId} total request`)
+      logger.error(`${reqId} error:`, error)
+      
       return Response.json({
         error: error.message,
         success: false
