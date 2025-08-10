@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react'
 import importMap from 'virtual:importmap'
 import { createOpenAI } from '@ai-sdk/openai'
-import { streamText } from 'ai'
+import { streamText, tool } from 'ai'
+import { z } from 'zod'
 
 // Setup import map in the document
 function setupImportMap() {
@@ -10,7 +11,7 @@ function setupImportMap() {
     const mapScript = document.createElement('script')
     mapScript.type = 'importmap'
     mapScript.textContent = JSON.stringify(importMap, null, 2)
-    document.head.append(mapScript)
+    document.head.append(mapScript as any)
   }
 }
 
@@ -21,7 +22,7 @@ export default function App() {
   const [css, setCss] = useState('')
   const [isGenerating, setIsGenerating] = useState(false)
   const [apiKey, setApiKey] = useState(() => localStorage.getItem('openai-api-key') || '')
-  const previewRef = useRef<HTMLDivElement>(null)
+  const [PreviewComponent, setPreviewComponent] = useState<React.ComponentType | null>(null)
 
   useEffect(() => {
     setupImportMap()
@@ -37,38 +38,44 @@ export default function App() {
 
     setIsGenerating(true)
     try {
-      const response = await fetch('/api/generate', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          prompt: prompt,
-          apiKey: apiKey || localStorage.getItem('openai-api-key')
-        })
+      const openai = createOpenAI({
+        apiKey: apiKey || localStorage.getItem('openai-api-key')!,
       })
 
-      if (!response.ok) {
-        throw new Error('Failed to generate component')
+      const { textStream } = await streamText({
+        model: openai('gpt-4o'),
+        system: `You are an expert React developer. When asked to create a component, use the generate_component tool to output the code.
+The component MUST:
+- Use functional components with hooks
+- Use Tailwind CSS classes for styling (including shadcn/ui theme colors like bg-primary, text-foreground, etc.)
+- ALWAYS export the component as default with: export default ComponentName
+- Include TypeScript types
+- Be self-contained
+- Use modern React patterns
+- Import React at the top if needed`,
+        prompt: prompt,
+        tools: {
+          generate_component: tool({
+            description: 'Generate a React component with TypeScript and Tailwind CSS',
+            inputSchema: z.object({
+              code: z.string().describe('The complete React component code with TypeScript and Tailwind CSS')
+            }),
+            execute: async ({ code }) => {
+              setCode(code)
+              // Bundle the generated code
+              await bundleAndRender(code)
+              return { success: true }
+            }
+          })
+        },
+        toolChoice: 'required',
+      })
+
+      // Process the stream
+      for await (const chunk of textStream) {
+        // Tool calls are handled automatically by the execute function
+        console.log('Streaming:', chunk)
       }
-
-      const reader = response.body?.getReader()
-      const decoder = new TextDecoder()
-      let fullCode = ''
-
-      if (reader) {
-        while (true) {
-          const { done, value } = await reader.read()
-          if (done) break
-          
-          const chunk = decoder.decode(value)
-          fullCode += chunk
-          setCode(fullCode)
-        }
-      }
-
-      // Bundle the generated code
-      await bundleAndRender(fullCode)
     } catch (error) {
       console.error('Generation error:', error)
       alert('Error generating component. Please check your API key and try again.')
@@ -99,27 +106,21 @@ export default function App() {
         setBundledCode(result.code)
         setCss(result.css)
 
-        // Create a function that returns the component
-        const moduleCode = `
-          ${result.code}
-          return exports.default || exports;
-        `
-
         try {
-          // Evaluate the bundled code to get the component
-          const ComponentModule = new Function('React', 'require', moduleCode)
-          const Component = ComponentModule(React, (id: string) => {
-            if (id === 'react') return React
-            throw new Error(`Module ${id} not found`)
-          })
-
-          // Render the component in preview
-          if (previewRef.current) {
-            const root = ReactDOM.createRoot(previewRef.current)
-            root.render(React.createElement(Component))
+          // Create a data URL for the module
+          const moduleCode = result.code
+          const dataUrl = `data:text/javascript;charset=utf-8,${encodeURIComponent(moduleCode)}`
+          
+          // Dynamically import the module
+          const module = await import(/* @vite-ignore */ dataUrl)
+          const Component = module.default
+          
+          // Set the component to render in preview
+          if (Component) {
+            setPreviewComponent(() => Component)
           }
         } catch (evalError) {
-          console.error('Eval error:', evalError)
+          console.error('Import error:', evalError)
           console.log('Bundled code:', result.code)
         }
       } else {
@@ -141,10 +142,19 @@ export default function App() {
             <div>
               <label className="block text-sm font-medium mb-2 text-foreground">
                 Describe your component
+                <span className="text-xs text-muted-foreground ml-2">(⌘+Enter to submit)</span>
               </label>
               <textarea
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
+                onKeyDown={(e) => {
+                  if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+                    e.preventDefault()
+                    if (!isGenerating && prompt) {
+                      generateComponent()
+                    }
+                  }
+                }}
                 className="w-full h-32 p-3 border border-input rounded-md bg-background text-foreground"
                 placeholder="A beautiful card component with a title, description, and action button..."
               />
@@ -176,7 +186,7 @@ export default function App() {
                 {css && (
                   <style dangerouslySetInnerHTML={{ __html: css }} />
                 )}
-                <div ref={previewRef} />
+                {PreviewComponent && <PreviewComponent />}
               </div>
             </div>
 
@@ -196,6 +206,3 @@ export default function App() {
     </div>
   )
 }
-
-// Import ReactDOM for rendering preview
-import ReactDOM from 'react-dom/client'

@@ -1,5 +1,5 @@
 import type { Plugin, OnResolveArgs } from 'esbuild-wasm'
-import { logger } from './logger'
+import { logger } from "./logger.js"
 
 const DEFAULT_EXTERNAL_PACKAGES = [
   'react',

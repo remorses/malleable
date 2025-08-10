@@ -1,15 +1,16 @@
 import { Spiceflow } from 'spiceflow'
+import { cors } from 'spiceflow/cors'
 import { z } from 'zod'
 import * as esbuild from 'esbuild-wasm'
-import wasm from '../node_modules/esbuild-wasm/esbuild.wasm'
-import { generateTailwindCSS } from './generate-tailwind'
-import { createEsmShPlugin } from './plugins'
-import { createLocalResolverPlugin } from './local-resolver-plugin'
-import { logger } from './logger'
+import wasm from "../node_modules/esbuild-wasm/esbuild.wasm"
+import { generateTailwindCSS } from "./generate-tailwind.js"
+import { createEsmShPlugin } from "./plugins.js"
+import { createLocalResolverPlugin } from "./local-resolver-plugin.js"
+import { logger } from "./logger.js"
 
 let init = false
 
-const app = new Spiceflow()
+const app = new Spiceflow().use(cors())
 
 // Schema for bundle API
 const fileSchema = z.object({
@@ -31,9 +32,9 @@ app.route({
   async handler({ request }) {
     // Generate unique request ID for logging
     const reqId = Math.random().toString(36).substring(2, 9)
-    
+
     logger.time(`${reqId} total request`)
-    
+
     if (!init) {
       logger.time(`${reqId} esbuild init`)
       await esbuild.initialize({
@@ -48,7 +49,7 @@ app.route({
       logger.time(`${reqId} parse body`)
       const body = await request.json()
       logger.timeEnd(`${reqId} parse body`)
-      const { 
+      const {
         files,
         entryPoint,
         externalPackages = []
@@ -56,7 +57,7 @@ app.route({
 
       // Determine actual entry point
       const actualEntryPoint = entryPoint || files[0]?.path
-      
+
       if (!actualEntryPoint) {
         return Response.json({
           error: 'No files provided',
@@ -78,12 +79,12 @@ app.route({
         createLocalResolverPlugin({ files }),
         createEsmShPlugin({ externalPackages })
       ]
-      
+
       // Determine jsxImportSource based on external packages
-      const jsxImportSource = externalPackages.includes('react') 
-        ? undefined 
+      const jsxImportSource = externalPackages.includes('react')
+        ? undefined
         : 'https://unpkg.com/react'
-      
+
       // Always use build API with bundling
       logger.time(`${reqId} esbuild build`)
       const result = await esbuild.build({
@@ -101,20 +102,20 @@ app.route({
         loader: { '.tsx': 'tsx', '.ts': 'tsx', '.jsx': 'tsx', '.js': 'tsx' }
       })
       logger.timeEnd(`${reqId} esbuild build`)
-      
+
       const code = result.outputFiles?.[0]?.text || ''
       const warnings = result.warnings
 
       // Collect all code for CSS extraction
       const allCode = files.map(f => f.content).join('\n')
-      
+
       // Always generate Tailwind CSS
       logger.time(`${reqId} tailwind css`)
       const css = await generateTailwindCSS(allCode)
       logger.timeEnd(`${reqId} tailwind css`)
 
       logger.timeEnd(`${reqId} total request`)
-      
+
       return Response.json({
         code,
         css,
@@ -124,7 +125,7 @@ app.route({
     } catch (error: any) {
       logger.timeEnd(`${reqId} total request`)
       logger.error(`${reqId} error:`, error)
-      
+
       return Response.json({
         error: error.message,
         success: false
@@ -134,7 +135,7 @@ app.route({
 })
 
 // Tagged template for HTML syntax highlighting
-const html = (strings: TemplateStringsArray, ...values: any[]) => 
+const html = (strings: TemplateStringsArray, ...values: any[]) =>
   strings.reduce((acc, str, i) => acc + str + (values[i] || ''), '')
 
 // Home page with form
@@ -152,7 +153,7 @@ app.route({
 <body>
     <div class="container">
         <h1>🚀 Remote Bundler</h1>
-        
+
         <form id="bundleForm">
             <div class="form-group">
                 <label for="externalPackages">External Packages (comma-separated)</label>
@@ -165,7 +166,7 @@ app.route({
                     <label for="fileInput">📁 Or upload files (.js, .jsx, .ts, .tsx) - supports multiple files!</label>
                 </div>
             </div>
-            
+
             <div class="form-group" id="entryPointGroup" style="display: none;">
                 <label for="entryPoint">Entry Point (for multiple files)</label>
                 <input type="text" id="entryPoint" name="entryPoint" placeholder="index.tsx">
@@ -185,14 +186,14 @@ app.route({
         const output = document.getElementById('output');
         const entryPointGroup = document.getElementById('entryPointGroup');
         const entryPointInput = document.getElementById('entryPoint');
-        
+
         let uploadedFiles = [];
 
         fileInput.addEventListener('change', async (e) => {
             const files = Array.from(e.target.files);
             if (files.length > 0) {
                 uploadedFiles = [];
-                
+
                 // Read all files
                 for (const file of files) {
                     const content = await file.text();
@@ -201,12 +202,12 @@ app.route({
                         content: content
                     });
                 }
-                
+
                 if (files.length === 1) {
                     entryPointGroup.style.display = 'none';
                 } else {
                     entryPointGroup.style.display = 'block';
-                    
+
                     // Try to auto-detect entry point
                     const possibleEntries = ['index.tsx', 'index.ts', 'index.jsx', 'index.js', 'main.tsx', 'main.ts', 'app.tsx', 'app.ts'];
                     const entryFile = files.find(f => possibleEntries.includes(f.name));
@@ -221,24 +222,24 @@ app.route({
 
         form.addEventListener('submit', async (e) => {
             e.preventDefault();
-            
+
             const formData = new FormData(form);
-            
+
             // Parse external packages
             const externalPackagesStr = formData.get('externalPackages') || '';
-            const externalPackages = externalPackagesStr ? 
+            const externalPackages = externalPackagesStr ?
                 externalPackagesStr.split(',').map(p => p.trim()).filter(Boolean) : [];
-            
+
             // Check if files were uploaded
             if (uploadedFiles.length === 0) {
                 alert('Please upload files to bundle');
                 return;
             }
-            
+
             const body = {
                 files: uploadedFiles,
-                entryPoint: uploadedFiles.length > 1 ? 
-                    formData.get('entryPoint') : 
+                entryPoint: uploadedFiles.length > 1 ?
+                    formData.get('entryPoint') :
                     undefined, // Let backend use first file for single file uploads
                 externalPackages
             };
@@ -253,18 +254,18 @@ app.route({
                 });
 
                 const result = await response.json();
-                
+
                 output.classList.add('show');
-                
+
                 if (result.success) {
                     let html = '<h3>✨ Transformed Code</h3>';
                     html += '<pre>' + escapeHtml(result.code) + '</pre>';
-                    
+
                     if (result.css) {
                         html += '<h3>🎨 Generated CSS</h3>';
                         html += '<pre>' + escapeHtml(result.css) + '</pre>';
                     }
-                    
+
                     output.innerHTML = html;
                 } else {
                     output.innerHTML = '<div class="error">❌ Error: ' + escapeHtml(result.error) + '</div>';
@@ -288,7 +289,7 @@ app.route({
     </script>
 </body>
 </html>`;
-    
+
     return new Response(htmlString, {
       headers: {
         'content-type': 'text/html;charset=UTF-8'
