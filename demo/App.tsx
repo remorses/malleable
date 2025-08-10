@@ -44,15 +44,23 @@ export default function App() {
 
       const { textStream } = await streamText({
         model: openai('gpt-4o'),
-        system: `You are an expert React developer. When asked to create a component, use the generate_component tool to output the code.
+        system: `
+
+You are an expert React developer. When asked to create a component, use the generate_component tool to output the code.
 The component MUST:
 - Use functional components with hooks
 - Use Tailwind CSS classes for styling (including shadcn/ui theme colors like bg-primary, text-foreground, etc.)
-- ALWAYS export the component as default with: export default ComponentName
-- Include TypeScript types
+- ALWAYS export the component as default with: export default ComponentName. do not use any props
+- Use js or typescript
 - Be self-contained
 - Use modern React patterns
-- Import React at the top if needed`,
+- Import React at the top if needed
+
+
+do not use props. create a modern styled and rich component
+
+the goal is to create beautiful components following user query. do not create too simple components
+`,
         prompt: prompt,
         tools: {
           generate_component: tool({
@@ -110,11 +118,11 @@ The component MUST:
           // Create a data URL for the module
           const moduleCode = result.code
           const dataUrl = `data:text/javascript;charset=utf-8,${encodeURIComponent(moduleCode)}`
-          
+
           // Dynamically import the module
           const module = await import(/* @vite-ignore */ dataUrl)
           const Component = module.default
-          
+
           // Set the component to render in preview
           if (Component) {
             setPreviewComponent(() => Component)
@@ -182,10 +190,11 @@ The component MUST:
           <div className="space-y-4">
             <div>
               <h3 className="text-lg font-semibold mb-2 text-foreground">Preview</h3>
-              <div className="border border-border rounded-md p-4 min-h-[400px] bg-card">
                 {css && (
                   <style dangerouslySetInnerHTML={{ __html: css }} />
                 )}
+              <div className="border border-border rounded-md p-4 min-h-[400px] bg-card flex flex-col items-center justify-center">
+
                 {PreviewComponent && <PreviewComponent />}
               </div>
             </div>
