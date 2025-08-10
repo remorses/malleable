@@ -2,7 +2,7 @@ import { Hono } from 'hono'
 import { html } from 'hono/html'
 import * as esbuild from 'esbuild-wasm'
 import wasm from '../node_modules/esbuild-wasm/esbuild.wasm'
-import { getTailwindClasses } from './get-tailwind-classes'
+import { generateTailwindCSS } from './generate-tailwind'
 
 const script = `/// <reference lib="DOM" />
 
@@ -89,21 +89,8 @@ app.post('/api/bundle', async (c) => {
 
     let css = ''
     if (extractCSS) {
-      try {
-        // Extract Tailwind classes using the WASM scanner
-        const classes = await getTailwindClasses({
-          content: inputCode,
-          extension: loader === 'tsx' || loader === 'jsx' ? 'jsx' : 'js'
-        })
-        
-        // Return the extracted classes
-        // Note: @tailwindcss/oxide doesn't work in Cloudflare Workers (requires .node files)
-        // Full CSS generation would require bundling Tailwind's CSS files
-        css = `/* Extracted Tailwind classes: ${classes.join(', ')} */`
-      } catch (cssError: any) {
-        console.warn('CSS extraction failed:', cssError)
-        css = `/* CSS extraction failed: ${cssError.message} */`
-      }
+      // Generate Tailwind CSS using PostCSS and Tailwind v3
+      css = await generateTailwindCSS(inputCode)
     }
 
     return c.json({

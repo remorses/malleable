@@ -4,8 +4,11 @@
     "deploy": "wrangler deploy --minify src/index.ts"
   },
   "dependencies": {
+    "autoprefixer": "^10.4.21",
     "esbuild-wasm": "^0.25.8",
-    "hono": "^4.9.0"
+    "hono": "^4.9.0",
+    "postcss": "^8.5.6",
+    "tailwindcss": "^3.4.17"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20250810.0",
