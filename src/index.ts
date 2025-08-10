@@ -3,6 +3,7 @@ import { html } from 'hono/html'
 import * as esbuild from 'esbuild-wasm'
 import wasm from '../node_modules/esbuild-wasm/esbuild.wasm'
 import { generateTailwindCSS } from './generate-tailwind'
+import { createEsmShPlugin } from './plugins'
 
 const script = `/// <reference lib="DOM" />
 
@@ -75,17 +76,50 @@ app.post('/api/bundle', async (c) => {
 
   try {
     const body = await c.req.json()
-    const { code: inputCode, loader = 'tsx', extractCSS = true } = body
+    const { 
+      code: inputCode, 
+      loader = 'tsx', 
+      extractCSS = true,
+      resolveImports = false,
+      externalPackages = []
+    } = body
 
     if (!inputCode) {
       return c.json({ error: 'No code provided' }, 400)
     }
 
-    const { code, warnings } = await esbuild.transform(inputCode, {
-      loader: loader as esbuild.Loader,
-      target: 'es2020',
-      format: 'esm'
-    })
+    // Use transform for simple transpilation or build for import resolution
+    let code: string
+    let warnings: esbuild.Message[] = []
+    
+    if (resolveImports) {
+      // Use build API with esm.sh plugin for import resolution
+      const result = await esbuild.build({
+        stdin: {
+          contents: inputCode,
+          loader: loader as esbuild.Loader,
+          resolveDir: '/',
+        },
+        bundle: true,
+        format: 'esm',
+        target: 'es2020',
+        platform: 'browser',
+        write: false,
+        plugins: [createEsmShPlugin({ externalPackages })],
+      })
+      
+      code = result.outputFiles?.[0]?.text || ''
+      warnings = result.warnings
+    } else {
+      // Use transform API for simple transpilation
+      const result = await esbuild.transform(inputCode, {
+        loader: loader as esbuild.Loader,
+        target: 'es2020',
+        format: 'esm'
+      })
+      code = result.code
+      warnings = result.warnings
+    }
 
     let css = ''
     if (extractCSS) {
