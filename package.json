@@ -1,7 +1,8 @@
 {
   "scripts": {
     "dev": "wrangler dev src/index.ts",
-    "deploy": "wrangler deploy --minify src/index.ts"
+    "test": "pnpm vitest -u",
+    "deployment": "wrangler deploy --minify src/index.ts"
   },
   "dependencies": {
     "autoprefixer": "^10.4.21",
