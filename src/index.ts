@@ -17,12 +17,8 @@ const fileSchema = z.object({
 })
 
 const bundleSchema = z.object({
-  code: z.string().optional(),
-  files: z.array(fileSchema).optional(),
+  files: z.array(fileSchema),
   entryPoint: z.string().optional(),
-  loader: z.enum(['tsx', 'ts', 'jsx', 'js']).default('tsx'),
-  extractCSS: z.boolean().default(true),
-  resolveImports: z.boolean().default(false),
   externalPackages: z.array(z.string()).default([])
 })
 
@@ -43,101 +39,65 @@ app.route({
     try {
       const body = await request.json()
       const { 
-        code: singleCode,
-        files = [],
-        entryPoint = 'index.tsx',
-        loader = 'tsx', 
-        extractCSS = true,
-        resolveImports = false,
+        files,
+        entryPoint,
         externalPackages = []
       } = body
 
-      // Determine input code and whether we have multiple files
-      let inputCode: string
-      let hasMultipleFiles = false
+      // Determine actual entry point
+      const actualEntryPoint = entryPoint || files[0]?.path
       
-      if (files && files.length > 0) {
-        // Multiple files mode
-        hasMultipleFiles = true
-        const entryFile = files.find(f => f.path === entryPoint)
-        if (!entryFile) {
-          return Response.json({
-            error: `Entry point "${entryPoint}" not found in provided files`,
-            success: false
-          }, { status: 400 })
-        }
-        inputCode = entryFile.content
-      } else if (singleCode) {
-        // Single code mode (backward compatibility)
-        inputCode = singleCode
-      } else {
+      if (!actualEntryPoint) {
         return Response.json({
-          error: 'No code or files provided',
+          error: 'No files provided',
           success: false
         }, { status: 400 })
       }
 
-      // Use transform for simple transpilation or build for import resolution
-      let code: string
-      let warnings: esbuild.Message[] = []
-      
-      if (resolveImports || hasMultipleFiles) {
-        // Use build API with plugins for import resolution
-        const plugins: esbuild.Plugin[] = []
-        
-        // Add local resolver if we have multiple files
-        if (hasMultipleFiles) {
-          plugins.push(createLocalResolverPlugin({ files }))
-        }
-        
-        // Add esm.sh plugin for npm imports (always needed for JSX runtime)
-        plugins.push(createEsmShPlugin({ externalPackages }))
-        
-        const result = await esbuild.build({
-          stdin: hasMultipleFiles ? undefined : {
-            contents: inputCode,
-            loader: loader as esbuild.Loader,
-            resolveDir: '/',
-          },
-          entryPoints: hasMultipleFiles ? [entryPoint] : undefined,
-          bundle: true,
-          format: 'esm',
-          target: 'es2020',
-          platform: 'browser',
-          write: false,
-          minify: false,
-          jsx: 'automatic',
-          jsxImportSource: 'https://esm.sh/react',
-          plugins,
-          absWorkingDir: '/',
-        })
-        
-        code = result.outputFiles?.[0]?.text || ''
-        warnings = result.warnings
-      } else {
-        // Use transform API for simple transpilation
-        const result = await esbuild.transform(inputCode, {
-          loader: loader as esbuild.Loader,
-          target: 'es2020',
-          format: 'esm',
-          minify: false,
-          jsx: 'automatic'
-        })
-        code = result.code
-        warnings = result.warnings
+      // Validate entry point exists
+      const entryFile = files.find(f => f.path === actualEntryPoint)
+      if (!entryFile) {
+        return Response.json({
+          error: `Entry point "${actualEntryPoint}" not found in provided files`,
+          success: false
+        }, { status: 400 })
       }
+
+      // Static plugins array
+      const plugins: esbuild.Plugin[] = [
+        createLocalResolverPlugin({ files }),
+        createEsmShPlugin({ externalPackages })
+      ]
+      
+      // Determine jsxImportSource based on external packages
+      const jsxImportSource = externalPackages.includes('react') 
+        ? undefined 
+        : 'https://esm.sh/react'
+      
+      // Always use build API with bundling
+      const result = await esbuild.build({
+        entryPoints: [actualEntryPoint],
+        bundle: true,
+        format: 'esm',
+        target: 'es2020',
+        platform: 'browser',
+        write: false,
+        minify: false,
+        jsx: 'automatic',
+        jsxImportSource,
+        plugins,
+        absWorkingDir: '/',
+        loader: { '.tsx': 'tsx', '.ts': 'tsx', '.jsx': 'tsx', '.js': 'tsx' }
+      })
+      
+      const code = result.outputFiles?.[0]?.text || ''
+      const warnings = result.warnings
 
       // Collect all code for CSS extraction
-      let allCode = inputCode
-      if (hasMultipleFiles) {
-        allCode = files.map(f => f.content).join('\n')
-      }
-
-      let css = ''
-      if (extractCSS) {
-        // Generate Tailwind CSS using PostCSS and Tailwind v3
-        css = await generateTailwindCSS(allCode)
-      }
+      const allCode = files.map(f => f.content).join('\n')
+      
+      // Always generate Tailwind CSS
+      const css = await generateTailwindCSS(allCode)
 
       return Response.json({
         code,
@@ -176,29 +136,8 @@ app.route({
         
         <form id="bundleForm">
             <div class="form-group">
-                <label for="code">Code (TypeScript/JSX)</label>
-                <textarea id="code" name="code" placeholder="const App = () => <div className='p-4 bg-blue-500'>Hello</div>;">const App = () => <div className="p-4 bg-blue-500 text-white">Hello World</div>;</textarea>
-            </div>
-
-            <div class="form-group">
-                <label for="loader">File Type</label>
-                <select id="loader" name="loader">
-                    <option value="tsx" selected>TSX</option>
-                    <option value="jsx">JSX</option>
-                    <option value="ts">TypeScript</option>
-                    <option value="js">JavaScript</option>
-                </select>
-            </div>
-
-            <div class="checkbox-group">
-                <label>
-                    <input type="checkbox" id="extractCSS" name="extractCSS" checked>
-                    Extract Tailwind CSS
-                </label>
-                <label>
-                    <input type="checkbox" id="resolveImports" name="resolveImports">
-                    Resolve npm imports
-                </label>
+                <label for="externalPackages">External Packages (comma-separated)</label>
+                <input type="text" id="externalPackages" name="externalPackages" placeholder="react, react-dom">
             </div>
 
             <div class="form-group">
@@ -223,7 +162,6 @@ app.route({
 
     <script>
         const form = document.getElementById('bundleForm');
-        const codeTextarea = document.getElementById('code');
         const fileInput = document.getElementById('fileInput');
         const output = document.getElementById('output');
         const entryPointGroup = document.getElementById('entryPointGroup');
@@ -246,21 +184,8 @@ app.route({
                 }
                 
                 if (files.length === 1) {
-                    // Single file - put in textarea
-                    codeTextarea.value = uploadedFiles[0].content;
                     entryPointGroup.style.display = 'none';
-                    
-                    // Auto-detect loader from file extension
-                    const ext = files[0].name.split('.').pop().toLowerCase();
-                    const loaderSelect = document.getElementById('loader');
-                    if (ext === 'tsx') loaderSelect.value = 'tsx';
-                    else if (ext === 'jsx') loaderSelect.value = 'jsx';
-                    else if (ext === 'ts') loaderSelect.value = 'ts';
-                    else if (ext === 'js') loaderSelect.value = 'js';
                 } else {
-                    // Multiple files
-                    codeTextarea.value = '// Multiple files uploaded:\\n' + files.map(f => '// - ' + f.name).join('\\n');
-                    codeTextarea.disabled = true;
                     entryPointGroup.style.display = 'block';
                     
                     // Try to auto-detect entry point
@@ -279,22 +204,25 @@ app.route({
             e.preventDefault();
             
             const formData = new FormData(form);
-            const body = {
-                loader: formData.get('loader'),
-                extractCSS: formData.get('extractCSS') === 'on',
-                resolveImports: formData.get('resolveImports') === 'on',
-                externalPackages: []
-            };
             
-            // Check if we have uploaded files
-            if (uploadedFiles.length > 1) {
-                body.files = uploadedFiles;
-                body.entryPoint = formData.get('entryPoint') || uploadedFiles[0].path;
-            } else if (uploadedFiles.length === 1) {
-                body.code = uploadedFiles[0].content;
-            } else {
-                body.code = formData.get('code');
+            // Parse external packages
+            const externalPackagesStr = formData.get('externalPackages') || '';
+            const externalPackages = externalPackagesStr ? 
+                externalPackagesStr.split(',').map(p => p.trim()).filter(Boolean) : [];
+            
+            // Check if files were uploaded
+            if (uploadedFiles.length === 0) {
+                alert('Please upload files to bundle');
+                return;
             }
+            
+            const body = {
+                files: uploadedFiles,
+                entryPoint: uploadedFiles.length > 1 ? 
+                    formData.get('entryPoint') : 
+                    undefined, // Let backend use first file for single file uploads
+                externalPackages
+            };
 
             try {
                 const response = await fetch('/api/bundle', {
