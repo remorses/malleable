@@ -5,6 +5,7 @@
     "deployment": "pnpm tsc && wrangler deploy --minify src/index.ts"
   },
   "dependencies": {
+    "@tailwindcss/typography": "^0.5.16",
     "@types/path-browserify": "^1.0.3",
     "autoprefixer": "^10.4.21",
     "esbuild-wasm": "^0.25.8",

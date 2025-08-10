@@ -1,16 +1,22 @@
 {
-  // Wrangler configuration for remote-bundler
+  "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "remote-bundler",
   "main": "src/index.ts",
   "compatibility_date": "2025-08-10",
   "compatibility_flags": ["nodejs_compat"],
-  
-  // Rules for including WASM modules
+
+  "routes": [
+    {
+      "zone_name": "fumabase.com",
+      "custom_domain": true,
+      "pattern": "remote-bundler.fumabase.com",
+    },
+  ],
   "rules": [
     {
       "type": "CompiledWasm",
       "globs": ["**/*.wasm"],
-      "fallthrough": true
-    }
-  ]
+      "fallthrough": true,
+    },
+  ],
 }
