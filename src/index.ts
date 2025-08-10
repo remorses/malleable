@@ -2,6 +2,7 @@ import { Hono } from 'hono'
 import { html } from 'hono/html'
 import * as esbuild from 'esbuild-wasm'
 import wasm from '../node_modules/esbuild-wasm/esbuild.wasm'
+import { getTailwindClasses } from './get-tailwind-classes'
 
 const script = `/// <reference lib="DOM" />
 
@@ -61,6 +62,62 @@ app.get('/', (c) => {
       </body>
     </html>
   `)
+})
+
+app.post('/api/bundle', async (c) => {
+  if (!init) {
+    await esbuild.initialize({
+      wasmModule: wasm,
+      worker: false
+    })
+    init = true
+  }
+
+  try {
+    const body = await c.req.json()
+    const { code: inputCode, loader = 'tsx', extractCSS = true } = body
+
+    if (!inputCode) {
+      return c.json({ error: 'No code provided' }, 400)
+    }
+
+    const { code, warnings } = await esbuild.transform(inputCode, {
+      loader: loader as esbuild.Loader,
+      target: 'es2020',
+      format: 'esm'
+    })
+
+    let css = ''
+    if (extractCSS) {
+      try {
+        // Extract Tailwind classes using the WASM scanner
+        const classes = await getTailwindClasses({
+          content: inputCode,
+          extension: loader === 'tsx' || loader === 'jsx' ? 'jsx' : 'js'
+        })
+        
+        // Return the extracted classes
+        // Note: @tailwindcss/oxide doesn't work in Cloudflare Workers (requires .node files)
+        // Full CSS generation would require bundling Tailwind's CSS files
+        css = `/* Extracted Tailwind classes: ${classes.join(', ')} */`
+      } catch (cssError: any) {
+        console.warn('CSS extraction failed:', cssError)
+        css = `/* CSS extraction failed: ${cssError.message} */`
+      }
+    }
+
+    return c.json({
+      code,
+      css,
+      warnings,
+      success: true
+    })
+  } catch (error) {
+    return c.json({
+      error: error.message,
+      success: false
+    }, 500)
+  }
 })
 
 export default app
