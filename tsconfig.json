@@ -9,7 +9,9 @@
     "strict": true,
     "noImplicitAny": false,
     "lib": [
-      "esnext"
+      "esnext",
+      "DOM",
+      "DOM.Iterable"
     ],
     "skipLibCheck": true,
     "useUnknownInCatchVariables": false,
