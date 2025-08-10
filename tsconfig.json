@@ -7,9 +7,11 @@
     "noEmit": true,
     "allowImportingTsExtensions": true,
     "strict": true,
+    "noImplicitAny": false,
     "lib": [
       "esnext"
     ],
+    "useUnknownInCatchVariables": false,
     "types": [
       "@cloudflare/workers-types"
     ],
