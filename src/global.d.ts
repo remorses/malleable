@@ -1,2 +1,2 @@
 declare module '*.wasm'
-declare module '*script.tsx'
+declare module '*scripts.tsx'

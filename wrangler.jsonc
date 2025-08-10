@@ -1,0 +1,16 @@
+{
+  // Wrangler configuration for remote-bundler
+  "name": "remote-bundler",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-08-10",
+  "compatibility_flags": ["nodejs_compat"],
+  
+  // Rules for including WASM modules
+  "rules": [
+    {
+      "type": "CompiledWasm",
+      "globs": ["**/*.wasm"],
+      "fallthrough": true
+    }
+  ]
+}
