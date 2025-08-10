@@ -11,6 +11,7 @@
     "lib": [
       "esnext"
     ],
+    "skipLibCheck": true,
     "useUnknownInCatchVariables": false,
     "types": [
       "@cloudflare/workers-types"

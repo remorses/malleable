@@ -16,7 +16,8 @@ describe("Remote Bundler Worker", () => {
     const result = await response.json();
     expect(result).toMatchInlineSnapshot(`
       {
-        "code": "const App = () => /* @__PURE__ */ React.createElement("div", { className: "p-4 bg-blue-500 text-white" }, "Hello");
+        "code": "import { jsx } from "react/jsx-runtime";
+      const App = () => /* @__PURE__ */ jsx("div", { className: "p-4 bg-blue-500 text-white", children: "Hello" });
       ",
         "css": ".bg-blue-500 {
           --tw-bg-opacity: 1;
@@ -48,7 +49,8 @@ describe("Remote Bundler Worker", () => {
     const result = await response.json();
     expect(result).toMatchInlineSnapshot(`
       {
-        "code": "const Button = () => /* @__PURE__ */ React.createElement("button", { className: "p-4 bg-blue-500 text-white hover:bg-blue-600 md:p-6" }, "Click");
+        "code": "import { jsx } from "react/jsx-runtime";
+      const Button = () => /* @__PURE__ */ jsx("button", { className: "p-4 bg-blue-500 text-white hover:bg-blue-600 md:p-6", children: "Click" });
       ",
         "css": ".bg-blue-500 {
           --tw-bg-opacity: 1;
@@ -92,9 +94,10 @@ describe("Remote Bundler Worker", () => {
     const result = await response.json();
     expect(result).toMatchInlineSnapshot(`
       {
-        "code": "const Card = ({ isActive }) => {
+        "code": "import { jsx } from "react/jsx-runtime";
+      const Card = ({ isActive }) => {
         const baseClass = "p-6 rounded-xl shadow-lg";
-        return /* @__PURE__ */ React.createElement("div", { className: \`\${baseClass} \${isActive ? "bg-green-500" : "bg-gray-200"}\` }, "Content");
+        return /* @__PURE__ */ jsx("div", { className: \`\${baseClass} \${isActive ? "bg-green-500" : "bg-gray-200"}\`, children: "Content" });
       };
       ",
         "css": ".rounded-xl {
@@ -186,7 +189,8 @@ describe("Remote Bundler Worker", () => {
     const result = await response.json();
     expect(result).toMatchInlineSnapshot(`
       {
-        "code": "const Hero = () => /* @__PURE__ */ React.createElement("div", { className: "bg-gradient-to-r from-purple-400 via-pink-500 to-red-500 animate-pulse transition-all duration-300" }, /* @__PURE__ */ React.createElement("h1", { className: "text-4xl font-bold text-transparent bg-clip-text" }, "Gradient Text"));
+        "code": "import { jsx } from "react/jsx-runtime";
+      const Hero = () => /* @__PURE__ */ jsx("div", { className: "bg-gradient-to-r from-purple-400 via-pink-500 to-red-500 animate-pulse transition-all duration-300", children: /* @__PURE__ */ jsx("h1", { className: "text-4xl font-bold text-transparent bg-clip-text", children: "Gradient Text" }) });
       ",
         "css": "@keyframes pulse {
           50% {

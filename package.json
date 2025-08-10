@@ -2,15 +2,18 @@
   "scripts": {
     "dev": "wrangler dev src/index.ts",
     "test": "pnpm vitest -u",
-    "deployment": "wrangler deploy --minify src/index.ts"
+    "deployment": "pnpm tsc && wrangler deploy --minify src/index.ts"
   },
   "dependencies": {
+    "@types/path-browserify": "^1.0.3",
     "autoprefixer": "^10.4.21",
     "esbuild-wasm": "^0.25.8",
-    "hono": "^4.9.0",
+    "path-browserify": "^1.0.1",
     "postcss": "^8.5.6",
+    "spiceflow": "^1.17.8",
     "tailwindcss": "^3.4.17",
-    "vitest": "^3.2.4"
+    "vitest": "^3.2.4",
+    "zod": "^4.0.17"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20250810.0",
