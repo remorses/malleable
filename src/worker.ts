@@ -183,25 +183,48 @@ const app = new Spiceflow()
 
         // Store all output files in KV
         const ttl = 60 * 60 * 24 * 7 // 7 days in seconds
-        const kvPromises: Promise<void>[] = []
         const fileUrls: Record<string, string> = {}
 
-        // Store JS/sourcemap files from esbuild
+        // Prepare files for storage
+        const filesToStore: Array<{ filename: string, text: string, isJs: boolean }> = []
+        
         for (const file of outputFiles) {
           // Extract filename from path (remove leading ./)
           const filename = file.path.replace(/^\.?\//, '')
-          kvPromises.push(state.env.jsCache.put(filename, file.text, { expirationTtl: ttl }))
+          filesToStore.push({ 
+            filename, 
+            text: file.text, 
+            isJs: filename.endsWith('.js') 
+          })
           fileUrls[filename] = `${new URL(request.url).origin}/bundle/${filename}`
         }
 
+        // Complete all timing before generating the header
+        reqLogger.timeEnd(`total`)
+        
+        // Generate Server-Timing header after all timing is complete
+        const serverTimingHeader = reqLogger.getServerTimingHeader()
+        
+        // Now store all files with metadata
+        const kvPromises: Promise<void>[] = []
+        
         // Store CSS file
         kvPromises.push(state.env.jsCache.put(cssKey, css, { expirationTtl: ttl }))
-
-        reqLogger.time(`kv-store`)
+        
+        // Store other files with metadata for JS files
+        for (const file of filesToStore) {
+          const metadata = file.isJs 
+            ? { serverTiming: serverTimingHeader }
+            : undefined
+            
+          kvPromises.push(state.env.jsCache.put(file.filename, file.text, { 
+            expirationTtl: ttl,
+            metadata
+          }))
+        }
+        
+        // Store all files in parallel (not timed since it happens after response)
         await Promise.all(kvPromises)
-        reqLogger.timeEnd(`kv-store`)
-
-        reqLogger.timeEnd(`total`)
 
         // The main entry file will be named with our hash
         const mainJsUrl = fileUrls[`${entryHash}.js`] || undefined
@@ -258,10 +281,10 @@ const app = new Spiceflow()
         return new Response('Not found', { status: 404 })
       }
 
-      // Get content from KV
-      const content = await state.env.jsCache.get(key)
+      // Get content and metadata from KV
+      const kvResult = await state.env.jsCache.getWithMetadata<{ serverTiming?: string }>(key)
 
-      if (!content) {
+      if (!kvResult.value) {
         return new Response('Not found', { status: 404 })
       }
 
@@ -275,13 +298,19 @@ const app = new Spiceflow()
         contentType = 'application/json'
       }
 
-      return new Response(content, {
-        headers: {
-          'Content-Type': contentType,
-          'Cache-Control': 'public, max-age=604800', // Browser cache for 7 days
-          'Access-Control-Allow-Origin': '*',
-        }
-      })
+      // Build headers
+      const headers: Record<string, string> = {
+        'Content-Type': contentType,
+        'Cache-Control': 'public, max-age=604800', // Browser cache for 7 days
+        'Access-Control-Allow-Origin': '*',
+      }
+      
+      // Add Server-Timing header if available in metadata
+      if (kvResult.metadata?.serverTiming) {
+        headers['Server-Timing'] = kvResult.metadata.serverTiming
+      }
+
+      return new Response(kvResult.value, { headers })
     }
   })
   .route({

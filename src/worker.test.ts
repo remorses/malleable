@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import type { BundleResult } from "./types.js";
+import { evaluateBundleExportsWithDeno } from "./test-utils.js";
 
 const WORKER_URL = "https://remote-bundler.fumabase.com";
 
@@ -335,6 +336,177 @@ describe("Remote Bundler Worker", () => {
     `);
   });
 
+  it("should handle dynamic imports and React.lazy with code splitting", async () => {
+    const response = await fetch(`${WORKER_URL}/api/bundle`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        files: [
+          {
+            path: "LazyComponent.tsx",
+            content: `
+              import React from 'react';
+              
+              const LazyComponent = () => {
+                return (
+                  <div className="p-8 bg-purple-500 text-white rounded-lg">
+                    <h2 className="text-2xl font-bold mb-4">Lazy Loaded Component</h2>
+                    <p className="text-lg">This component was loaded dynamically!</p>
+                  </div>
+                );
+              };
+              
+              export default LazyComponent;
+            `
+          },
+          {
+            path: "DynamicModule.ts",
+            content: `
+              export const dynamicFunction = (x: number, y: number) => {
+                return x * y + 100;
+              };
+              
+              export const dynamicData = {
+                message: "This is from a dynamically imported module",
+                timestamp: Date.now()
+              };
+              
+              export default function processDynamic(input: string) {
+                return input.toUpperCase() + " - PROCESSED";
+              }
+            `
+          },
+          {
+            path: "app.tsx",
+            content: `
+              import React, { Suspense, lazy, useState, useEffect } from 'react';
+              
+              // React.lazy for component code splitting
+              const LazyComponent = lazy(() => import('./LazyComponent'));
+              
+              export const App = () => {
+                const [dynamicModule, setDynamicModule] = useState(null);
+                const [showLazy, setShowLazy] = useState(false);
+                
+                useEffect(() => {
+                  // Dynamic import for code splitting
+                  import('./DynamicModule').then(module => {
+                    setDynamicModule(module);
+                    console.log('Dynamic module loaded:', module);
+                  });
+                }, []);
+                
+                return (
+                  <div className="p-8 bg-gray-100 min-h-screen">
+                    <h1 className="text-3xl font-bold mb-6">Code Splitting Demo</h1>
+                    
+                    <div className="space-y-4">
+                      <button 
+                        onClick={() => setShowLazy(!showLazy)}
+                        className="px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
+                      >
+                        {showLazy ? 'Hide' : 'Show'} Lazy Component
+                      </button>
+                      
+                      {showLazy && (
+                        <Suspense fallback={<div className="p-4 bg-gray-200">Loading...</div>}>
+                          <LazyComponent />
+                        </Suspense>
+                      )}
+                      
+                      {dynamicModule && (
+                        <div className="p-4 bg-green-100 rounded">
+                          <p>Dynamic module loaded successfully!</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              };
+              
+              // Also test a dynamic import function
+              export async function loadDynamicData() {
+                const module = await import('./DynamicModule');
+                return module.dynamicData;
+              }
+              
+              export default App;
+            `
+          }
+        ],
+        entryPoint: "app.tsx"
+      }),
+    });
+
+    const result = await response.json() as BundleResult;
+    expect(result.success).toBe(true);
+    
+    if (result.success) {
+      // Check if multiple files were generated (main bundle + chunks)
+      const fileCount = Object.keys(result.files).length;
+      console.log('Generated files:', Object.keys(result.files));
+      
+      // We expect at least the main JS file and its source map
+      expect(fileCount).toBeGreaterThanOrEqual(2);
+      
+      // Check raw outputs for chunks
+      const hasChunks = result.rawOutputs.some(output => output.type === 'chunk');
+      console.log('Has chunks:', hasChunks);
+      console.log('Raw outputs:', result.rawOutputs.map(o => ({ path: o.path, type: o.type })));
+      
+      // Skip Deno evaluation for this test since React is external
+      // The bundle successfully demonstrates code splitting with chunks
+    }
+    
+    expect(result).toMatchInlineSnapshot(`
+      {
+        "files": {
+          "2b544c001e6c8be9.js": "https://remote-bundler.fumabase.com/bundle/2b544c001e6c8be9.js",
+          "2b544c001e6c8be9.js.map": "https://remote-bundler.fumabase.com/bundle/2b544c001e6c8be9.js.map",
+          "chunks/DynamicModule-S6WJH4XV.js": "https://remote-bundler.fumabase.com/bundle/chunks/DynamicModule-S6WJH4XV.js",
+          "chunks/DynamicModule-S6WJH4XV.js.map": "https://remote-bundler.fumabase.com/bundle/chunks/DynamicModule-S6WJH4XV.js.map",
+          "chunks/LazyComponent-VKE7BSKE.js": "https://remote-bundler.fumabase.com/bundle/chunks/LazyComponent-VKE7BSKE.js",
+          "chunks/LazyComponent-VKE7BSKE.js.map": "https://remote-bundler.fumabase.com/bundle/chunks/LazyComponent-VKE7BSKE.js.map",
+        },
+        "jsUrl": "https://remote-bundler.fumabase.com/bundle/2b544c001e6c8be9.js",
+        "rawOutputs": [
+          {
+            "path": "/2b544c001e6c8be9.js.map",
+            "size": 4051,
+            "type": "sourcemap",
+          },
+          {
+            "path": "/2b544c001e6c8be9.js",
+            "size": 2290,
+            "type": "entry",
+          },
+          {
+            "path": "/chunks/LazyComponent-VKE7BSKE.js.map",
+            "size": 830,
+            "type": "sourcemap",
+          },
+          {
+            "path": "/chunks/LazyComponent-VKE7BSKE.js",
+            "size": 580,
+            "type": "chunk",
+          },
+          {
+            "path": "/chunks/DynamicModule-S6WJH4XV.js.map",
+            "size": 803,
+            "type": "sourcemap",
+          },
+          {
+            "path": "/chunks/DynamicModule-S6WJH4XV.js",
+            "size": 402,
+            "type": "chunk",
+          },
+        ],
+        "success": true,
+        "warnings": [],
+      }
+    `);
+  });
+
   it("should execute bundled code with Deno", async () => {
     // First, bundle a React component
     const response = await fetch(`${WORKER_URL}/api/bundle`, {
@@ -386,26 +558,14 @@ describe("Remote Bundler Worker", () => {
     `);
     expect(result.success).toBe(true);
 
-    // Execute the bundled code using Deno and log the module exports
+    // Execute the bundled code using Deno and check the exports
     if (!result.success) {
       throw new Error('Bundle failed');
     }
-    const jsUrl = result.jsUrl;
-    const { execSync } = await import('child_process');
-
-    try {
-      const output = execSync(
-        `deno eval "import('${jsUrl}').then(m => console.log(m))"`,
-        { encoding: 'utf-8' }
-      );
-
-      console.log(output)
-      // Just check that it executed without error and has output
-      expect(output).toBeTruthy();
-
-    } catch (error: any) {
-      console.error("Failed to execute bundled code:", error.message);
-      throw error;
-    }
+    
+    const exports = await evaluateBundleExportsWithDeno(result.jsUrl);
+    expect(exports).toContain('default');
+    expect(exports).toContain('add');
+    expect(exports).toContain('multiply');
   });
 });
