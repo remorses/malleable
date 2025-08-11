@@ -5,7 +5,7 @@ import { importMapPlugin } from 'importmap-vite-plugin'
 export default defineConfig({
   plugins: [
     react(),
-    importMapPlugin({
+    !process.env.VITEST && importMapPlugin({
       imports: {
         // Map to local modules (these will be bundled)
         'react': './demo/import-map/react',

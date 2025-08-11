@@ -18,13 +18,23 @@ describe("Remote Bundler Worker", () => {
     const result = await response.json();
     expect(result).toMatchInlineSnapshot(`
       {
-        "cssUrl": "https://remote-bundler.fumabase.com/bundle/0c39b72ef182cba0.css",
         "files": {
           "0c39b72ef182cba0.js": "https://remote-bundler.fumabase.com/bundle/0c39b72ef182cba0.js",
           "0c39b72ef182cba0.js.map": "https://remote-bundler.fumabase.com/bundle/0c39b72ef182cba0.js.map",
-          "styles.css": "https://remote-bundler.fumabase.com/bundle/0c39b72ef182cba0.css",
         },
         "jsUrl": "https://remote-bundler.fumabase.com/bundle/0c39b72ef182cba0.js",
+        "rawOutputs": [
+          {
+            "path": "/0c39b72ef182cba0.js.map",
+            "size": 20086,
+            "type": "sourcemap",
+          },
+          {
+            "path": "/0c39b72ef182cba0.js",
+            "size": 15289,
+            "type": "entry",
+          },
+        ],
         "success": true,
         "warnings": [],
       }
@@ -46,13 +56,23 @@ describe("Remote Bundler Worker", () => {
     const result = await response.json();
     expect(result).toMatchInlineSnapshot(`
       {
-        "cssUrl": "https://remote-bundler.fumabase.com/bundle/518d16db8496ff1f.css",
         "files": {
-          "button-XWV7WR3J.js": "https://remote-bundler.fumabase.com/bundle/button-XWV7WR3J.js",
-          "button-XWV7WR3J.js.map": "https://remote-bundler.fumabase.com/bundle/button-XWV7WR3J.js.map",
-          "styles.css": "https://remote-bundler.fumabase.com/bundle/518d16db8496ff1f.css",
+          "518d16db8496ff1f.js": "https://remote-bundler.fumabase.com/bundle/518d16db8496ff1f.js",
+          "518d16db8496ff1f.js.map": "https://remote-bundler.fumabase.com/bundle/518d16db8496ff1f.js.map",
         },
-        "jsUrl": "https://remote-bundler.fumabase.com/bundle/button-XWV7WR3J.js",
+        "jsUrl": "https://remote-bundler.fumabase.com/bundle/518d16db8496ff1f.js",
+        "rawOutputs": [
+          {
+            "path": "/518d16db8496ff1f.js.map",
+            "size": 20129,
+            "type": "sourcemap",
+          },
+          {
+            "path": "/518d16db8496ff1f.js",
+            "size": 15304,
+            "type": "entry",
+          },
+        ],
         "success": true,
         "warnings": [],
       }
@@ -77,13 +97,23 @@ describe("Remote Bundler Worker", () => {
     const result = await response.json();
     expect(result).toMatchInlineSnapshot(`
       {
-        "cssUrl": "https://remote-bundler.fumabase.com/bundle/e42dae69905f1802.css",
         "files": {
-          "card-ZZ5RTS2A.js": "https://remote-bundler.fumabase.com/bundle/card-ZZ5RTS2A.js",
-          "card-ZZ5RTS2A.js.map": "https://remote-bundler.fumabase.com/bundle/card-ZZ5RTS2A.js.map",
-          "styles.css": "https://remote-bundler.fumabase.com/bundle/e42dae69905f1802.css",
+          "e42dae69905f1802.js": "https://remote-bundler.fumabase.com/bundle/e42dae69905f1802.js",
+          "e42dae69905f1802.js.map": "https://remote-bundler.fumabase.com/bundle/e42dae69905f1802.js.map",
         },
-        "jsUrl": "https://remote-bundler.fumabase.com/bundle/card-ZZ5RTS2A.js",
+        "jsUrl": "https://remote-bundler.fumabase.com/bundle/e42dae69905f1802.js",
+        "rawOutputs": [
+          {
+            "path": "/e42dae69905f1802.js.map",
+            "size": 20229,
+            "type": "sourcemap",
+          },
+          {
+            "path": "/e42dae69905f1802.js",
+            "size": 15294,
+            "type": "entry",
+          },
+        ],
         "success": true,
         "warnings": [],
       }
@@ -150,13 +180,23 @@ describe("Remote Bundler Worker", () => {
     const result = await response.json();
     expect(result).toMatchInlineSnapshot(`
       {
-        "cssUrl": "https://remote-bundler.fumabase.com/bundle/eaf566c7918e4919.css",
         "files": {
-          "hero-AOSZIDM5.js": "https://remote-bundler.fumabase.com/bundle/hero-AOSZIDM5.js",
-          "hero-AOSZIDM5.js.map": "https://remote-bundler.fumabase.com/bundle/hero-AOSZIDM5.js.map",
-          "styles.css": "https://remote-bundler.fumabase.com/bundle/eaf566c7918e4919.css",
+          "eaf566c7918e4919.js": "https://remote-bundler.fumabase.com/bundle/eaf566c7918e4919.js",
+          "eaf566c7918e4919.js.map": "https://remote-bundler.fumabase.com/bundle/eaf566c7918e4919.js.map",
         },
-        "jsUrl": "https://remote-bundler.fumabase.com/bundle/hero-AOSZIDM5.js",
+        "jsUrl": "https://remote-bundler.fumabase.com/bundle/eaf566c7918e4919.js",
+        "rawOutputs": [
+          {
+            "path": "/eaf566c7918e4919.js.map",
+            "size": 20290,
+            "type": "sourcemap",
+          },
+          {
+            "path": "/eaf566c7918e4919.js",
+            "size": 15294,
+            "type": "entry",
+          },
+        ],
         "success": true,
         "warnings": [],
       }

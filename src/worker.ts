@@ -5,6 +5,7 @@ import wasm from "../node_modules/esbuild-wasm/esbuild.wasm"
 import { generateTailwindCSS, shadcnTheme } from "./generate-tailwind.js"
 import { createEsmShPlugin } from "./plugins.js"
 import { createLocalResolverPlugin } from "./local-resolver-plugin.js"
+import { createVirtualEntryPlugin } from "./virtual-entry-plugin.js"
 import { logger, createRequestLogger } from "./logger.js"
 
 interface Env {
@@ -126,41 +127,65 @@ const app = new Spiceflow()
           ? undefined
           : 'https://unpkg.com/react'
 
-        // Always use build API with bundling and code splitting
-        reqLogger.time(`esbuild-build`)
-        const result = await esbuild.build({
-          entryPoints: { [entryHash]: actualEntryPoint },
-          outdir: './',
-          bundle: true,
-          format: 'esm',
-          splitting: true,
-          sourcemap: true,
-          target: 'es2020',
-          platform: 'browser',
-          write: false,
-          minify: false,
-          jsx: 'automatic',
-          jsxImportSource,
-          plugins,
-          absWorkingDir: '/',
-          loader: { '.tsx': 'tsx', '.ts': 'tsx', '.jsx': 'tsx', '.js': 'tsx' },
-          // Configure output filenames - [name] will be our hash
-          entryNames: '[name]',                   // entry outputs use hash as name
-          chunkNames: 'chunks/[name]-[hash]',     // shared/lazy chunks
-          assetNames: 'assets/[name]-[hash]',     // emitted assets
-        })
-        reqLogger.timeEnd(`esbuild-build`)
+        // Prepare CSS URL for the virtual entry
+        const baseUrl = new URL(request.url).origin
+        const cssUrl = `${baseUrl}/bundle/${entryHash}.css`
 
-        const outputFiles = result.outputFiles || []
-        const warnings = result.warnings
+        // Create plugins including virtual entry
+        const allPlugins: esbuild.Plugin[] = [
+          createVirtualEntryPlugin({ 
+            actualEntryPath: actualEntryPoint,
+            cssUrl,
+            baseUrl
+          }),
+          ...plugins
+        ]
 
         // Collect all code for CSS extraction
         const allCode = files.map(f => f.content).join('\n')
 
-        // Always generate Tailwind CSS
-        reqLogger.time(`tailwind-css`)
-        const css = await generateTailwindCSS(allCode)
-        reqLogger.timeEnd(`tailwind-css`)
+        // Run esbuild and Tailwind CSS extraction concurrently
+        reqLogger.time(`parallel-build`)
+        const [result, css] = await Promise.all([
+          // Build with esbuild using virtual entry
+          (async () => {
+            reqLogger.time(`esbuild-build`)
+            const res = await esbuild.build({
+              entryPoints: { [entryHash]: 'virtual:entry' },
+              outdir: './',
+              bundle: true,
+              format: 'esm',
+              splitting: true,
+              sourcemap: true,
+              target: 'es2020',
+              platform: 'browser',
+              write: false,
+              minify: false,
+              jsx: 'automatic',
+              jsxImportSource,
+              plugins: allPlugins,
+              absWorkingDir: '/',
+              loader: { '.tsx': 'tsx', '.ts': 'tsx', '.jsx': 'tsx', '.js': 'tsx' },
+              // Configure output filenames - [name] will be our hash
+              entryNames: '[name]',                   // entry outputs use hash as name
+              chunkNames: 'chunks/[name]-[hash]',     // shared/lazy chunks
+              assetNames: 'assets/[name]-[hash]',     // emitted assets
+            })
+            reqLogger.timeEnd(`esbuild-build`)
+            return res
+          })(),
+          // Generate Tailwind CSS
+          (async () => {
+            reqLogger.time(`tailwind-css`)
+            const styles = await generateTailwindCSS(allCode)
+            reqLogger.timeEnd(`tailwind-css`)
+            return styles
+          })()
+        ])
+        reqLogger.timeEnd(`parallel-build`)
+
+        const outputFiles = result.outputFiles || []
+        const warnings = result.warnings
 
         // Use same hash for CSS file
         const cssKey = `${entryHash}.css`
@@ -180,7 +205,6 @@ const app = new Spiceflow()
         
         // Store CSS file
         kvPromises.push(state.env.jsCache.put(cssKey, css, { expirationTtl: ttl }))
-        fileUrls['styles.css'] = `${new URL(request.url).origin}/bundle/${cssKey}`
         
         reqLogger.time(`kv-store`)
         await Promise.all(kvPromises)
@@ -191,13 +215,19 @@ const app = new Spiceflow()
         // The main entry file will be named with our hash
         const mainJsUrl = fileUrls[`${entryHash}.js`] || undefined
 
-        // Return URLs for all files
+        // Create raw esbuild output metadata (without text content)
+        const rawOutputs = outputFiles.map(file => ({
+          path: file.path,
+          size: file.contents.byteLength,
+          type: file.path.endsWith('.map') ? 'sourcemap' : 
+                file.path.includes('chunks/') ? 'chunk' : 'entry'
+        }))
+
+        // Return URLs for all files (CSS is now injected via JS)
         return Response.json({
-          // Legacy fields for backwards compatibility
           jsUrl: mainJsUrl,
-          cssUrl: fileUrls['styles.css'],
-          // New field with all files
           files: fileUrls,
+          rawOutputs,
           warnings,
           success: true
         }, {
@@ -395,9 +425,10 @@ const app = new Spiceflow()
                         html += '</div>';
                     }
                     
-                    if (result.jsUrl && result.cssUrl) {
+                    if (result.jsUrl) {
                         html += '<h4>Include in your HTML:</h4>';
-                        html += '<pre>' + escapeHtml('<link rel="stylesheet" href="' + result.cssUrl + '">\\n<script type="module" src="' + result.jsUrl + '"></script>') + '</pre>';
+                        html += '<pre>' + escapeHtml('<script type="module" src="' + result.jsUrl + '"></script>') + '</pre>';
+                        html += '<p><small>CSS is automatically loaded by the JavaScript bundle</small></p>';
                     }
                     
                     output.innerHTML = html;
