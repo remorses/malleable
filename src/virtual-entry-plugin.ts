@@ -1,4 +1,5 @@
 import type { Plugin } from 'esbuild-wasm'
+import dedent from 'string-dedent'
 
 export function createVirtualEntryPlugin({
   actualEntryPath,
@@ -18,33 +19,70 @@ export function createVirtualEntryPlugin({
         namespace: 'virtual-entry',
       }))
 
-      // Load the virtual entry module
+      // Load the virtual entry module with shadow root support by default
       build.onLoad({ filter: /.*/, namespace: 'virtual-entry' }, () => {
-        // Create a virtual module that:
-        // 1. Imports React
-        // 2. Wraps the default export with a Fragment containing the link tag
-        // 3. Re-exports other exports from the actual entry
-        const content = `
-import React from 'react';
-import * as ActualEntry from './${actualEntryPath}';
+        const content = dedent`
+          import React, { useLayoutEffect, useRef, useState } from 'react';
+          import { createPortal } from 'react-dom';
+          import * as ActualEntry from './${actualEntryPath}';
 
-// Re-export all named exports
-export * from './${actualEntryPath}';
+          // Re-export all named exports
+          export * from './${actualEntryPath}';
 
-// Wrap the default export to include CSS link
-const OriginalDefault = ActualEntry.default;
+          // ScopedIsland component for shadow root isolation
+          function ScopedIsland({ href, children, className }) {
+            const hostRef = useRef(null);
+            const [shadow, setShadow] = useState(null);
+            const [ready, setReady] = useState(false);
 
-const WrappedComponent = (props) => {
-  return (
-    <>
-      <link rel="stylesheet" href="${cssUrl}" />
-      {OriginalDefault ? <OriginalDefault {...props} /> : null}
-    </>
-  );
-};
+            useLayoutEffect(() => {
+              if (!hostRef.current || shadow) return;
+              setShadow(hostRef.current.attachShadow({ mode: 'open' }));
+            }, [shadow]);
 
-export default WrappedComponent;
-`
+            return (
+              <div ref={hostRef} className={className} style={{ visibility: ready ? 'visible' : 'hidden' }}>
+                {shadow &&
+                  createPortal(
+                    <>
+                      <link
+                        rel="stylesheet"
+                        href={href}
+                        onLoad={() => setReady(true)}
+                        onError={() => setReady(true)} // fail open so UI still appears
+                      />
+                      {ready ? children : null}
+                    </>,
+                    shadow
+                  )}
+              </div>
+            );
+          }
+
+          // Original default export
+          const OriginalDefault = ActualEntry.default;
+
+          // Default export with shadow root isolation
+          const WrappedComponent = (props) => {
+            return (
+              <ScopedIsland href="${cssUrl}" className={props.className}>
+                {OriginalDefault ? <OriginalDefault {...props} /> : null}
+              </ScopedIsland>
+            );
+          };
+
+          export default WrappedComponent;
+
+          // Export version without shadow root
+          export const WithoutShadowRoot = (props) => {
+            return (
+              <>
+                <link rel="stylesheet" href="${cssUrl}" />
+                {OriginalDefault ? <OriginalDefault {...props} /> : null}
+              </>
+            );
+          };
+        `
 
         return {
           contents: content,

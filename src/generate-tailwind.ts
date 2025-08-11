@@ -66,7 +66,7 @@ export async function generateTailwindCSS(content: string): Promise<string> {
   try {
     // Dynamically import typography plugin
     const typography = await import('@tailwindcss/typography')
-    
+
     // Build Tailwind CSS using PostCSS
     // Let Tailwind's built-in scanner extract the classes
     const result = await postcss([
@@ -82,10 +82,10 @@ export async function generateTailwindCSS(content: string): Promise<string> {
       }),
       autoprefixer({ remove: false }),
     ]).process(
-      '@tailwind components; @tailwind utilities;', // Components and utilities, no base to avoid global resets
+      '@tailwind base; @tailwind components; @tailwind utilities;', // Include base, components, and utilities
       { from: undefined }
     )
-    
+
     return result.css
   } catch (error: any) {
     console.error('Failed to generate Tailwind CSS:', error)

@@ -27,7 +27,7 @@ describe("Remote Bundler Worker", () => {
 
     const result = await response.json() as BundleResult;
     const serverTiming = response.headers.get('Server-Timing');
-    expect(serverTiming).toMatchInlineSnapshot(`"esbuild-init;dur=0, parse-body;dur=0, tailwind-css;dur=0, esbuild-build;dur=0, parallel-build;dur=0, total;dur=0, cfL4;desc="?proto=TCP&rtt=21228&min_rtt=20704&rtt_var=8813&sent=4&recv=5&lost=0&retrans=0&sent_bytes=2856&recv_bytes=956&delivery_rate=116295&cwnd=251&unsent_bytes=0&cid=4e0c122bd65f6004&ts=2501&x=0""`);
+    expect(serverTiming).toMatchInlineSnapshot(`"esbuild-init;dur=0, parse-body;dur=1, tailwind-css;dur=0, esbuild-build;dur=0, parallel-build;dur=0, total;dur=1, cfL4;desc="?proto=TCP&rtt=21770&min_rtt=20831&rtt_var=7488&sent=4&recv=6&lost=0&retrans=0&sent_bytes=2857&recv_bytes=956&delivery_rate=116576&cwnd=251&unsent_bytes=0&cid=a45670e1a3a089fc&ts=1338&x=0""`);
     expect(result).toMatchInlineSnapshot(`
       {
         "files": {
@@ -38,12 +38,12 @@ describe("Remote Bundler Worker", () => {
         "rawOutputs": [
           {
             "path": "/1e665c28eb1f93be.js.map",
-            "size": 1069,
+            "size": 3138,
             "type": "sourcemap",
           },
           {
             "path": "/1e665c28eb1f93be.js",
-            "size": 2526,
+            "size": 3758,
             "type": "entry",
           },
         ],
@@ -68,7 +68,7 @@ describe("Remote Bundler Worker", () => {
 
     const result = await response.json() as BundleResult;
     const serverTiming = response.headers.get('Server-Timing');
-    expect(serverTiming).toMatchInlineSnapshot(`"parse-body;dur=0, tailwind-css;dur=0, esbuild-build;dur=0, parallel-build;dur=0, total;dur=0, cfL4;desc="?proto=TCP&rtt=21209&min_rtt=20704&rtt_var=6649&sent=9&recv=7&lost=0&retrans=0&sent_bytes=4689&recv_bytes=1469&delivery_rate=274854&cwnd=255&unsent_bytes=0&cid=4e0c122bd65f6004&ts=3995&x=0""`);
+    expect(serverTiming).toMatchInlineSnapshot(`"parse-body;dur=0, tailwind-css;dur=0, esbuild-build;dur=0, parallel-build;dur=0, total;dur=0, cfL4;desc="?proto=TCP&rtt=22219&min_rtt=20831&rtt_var=6512&sent=9&recv=8&lost=0&retrans=0&sent_bytes=4690&recv_bytes=1469&delivery_rate=228427&cwnd=255&unsent_bytes=0&cid=a45670e1a3a089fc&ts=2093&x=0""`);
     expect(result).toMatchInlineSnapshot(`
       {
         "files": {
@@ -79,12 +79,12 @@ describe("Remote Bundler Worker", () => {
         "rawOutputs": [
           {
             "path": "/bdcc81f7bfa93073.js.map",
-            "size": 1112,
+            "size": 3181,
             "type": "sourcemap",
           },
           {
             "path": "/bdcc81f7bfa93073.js",
-            "size": 2541,
+            "size": 3773,
             "type": "entry",
           },
         ],
@@ -112,7 +112,7 @@ describe("Remote Bundler Worker", () => {
 
     const result = await response.json() as BundleResult;
     const serverTiming = response.headers.get('Server-Timing');
-    expect(serverTiming).toMatchInlineSnapshot(`"parse-body;dur=0, tailwind-css;dur=0, esbuild-build;dur=0, parallel-build;dur=0, total;dur=0, cfL4;desc="?proto=TCP&rtt=21230&min_rtt=20704&rtt_var=5029&sent=13&recv=9&lost=0&retrans=0&sent_bytes=6011&recv_bytes=2086&delivery_rate=274854&cwnd=255&unsent_bytes=0&cid=4e0c122bd65f6004&ts=5449&x=0""`);
+    expect(serverTiming).toMatchInlineSnapshot(`"parse-body;dur=0, tailwind-css;dur=0, esbuild-build;dur=0, parallel-build;dur=0, total;dur=0, cfL4;desc="?proto=TCP&rtt=22879&min_rtt=20831&rtt_var=6204&sent=12&recv=10&lost=0&retrans=0&sent_bytes=6004&recv_bytes=2086&delivery_rate=228427&cwnd=257&unsent_bytes=0&cid=a45670e1a3a089fc&ts=3420&x=0""`);
     expect(result).toMatchInlineSnapshot(`
       {
         "files": {
@@ -123,12 +123,12 @@ describe("Remote Bundler Worker", () => {
         "rawOutputs": [
           {
             "path": "/0139960554aae246.js.map",
-            "size": 1212,
+            "size": 3281,
             "type": "sourcemap",
           },
           {
             "path": "/0139960554aae246.js",
-            "size": 2531,
+            "size": 3763,
             "type": "entry",
           },
         ],
@@ -156,7 +156,7 @@ describe("Remote Bundler Worker", () => {
 
       const result = await response.json() as BundleResult;
       const serverTiming = response.headers.get('Server-Timing');
-      expect(serverTiming).toMatchInlineSnapshot(`"parse-body;dur=0, tailwind-css;dur=0, total;dur=72, cfL4;desc="?proto=TCP&rtt=22145&min_rtt=20704&rtt_var=5602&sent=18&recv=11&lost=0&retrans=0&sent_bytes=7366&recv_bytes=2626&delivery_rate=274854&cwnd=255&unsent_bytes=0&cid=4e0c122bd65f6004&ts=6151&x=0""`);
+      expect(serverTiming).toMatchInlineSnapshot(`"parse-body;dur=0, tailwind-css;dur=0, total;dur=673, cfL4;desc="?proto=TCP&rtt=23315&min_rtt=20831&rtt_var=5527&sent=17&recv=12&lost=0&retrans=0&sent_bytes=7359&recv_bytes=2626&delivery_rate=228427&cwnd=257&unsent_bytes=0&cid=a45670e1a3a089fc&ts=4282&x=0""`);
       expect(result.success).toMatchInlineSnapshot(`false`);
     },
     { timeout: 60000 },
@@ -173,7 +173,7 @@ describe("Remote Bundler Worker", () => {
 
     const result = await response.json() as BundleResult;
     const serverTiming = response.headers.get('Server-Timing');
-    expect(serverTiming).toMatchInlineSnapshot(`"cfL4;desc="?proto=TCP&rtt=30736&min_rtt=26626&rtt_var=12921&sent=4&recv=5&lost=0&retrans=0&sent_bytes=2857&recv_bytes=1034&delivery_rate=108765&cwnd=238&unsent_bytes=0&cid=2c2a58c25da117e3&ts=389&x=0""`);
+    expect(serverTiming).toMatchInlineSnapshot(`"cfL4;desc="?proto=TCP&rtt=29019&min_rtt=26839&rtt_var=11622&sent=3&recv=5&lost=0&retrans=0&sent_bytes=234&recv_bytes=1034&delivery_rate=53951&cwnd=250&unsent_bytes=0&cid=f67ba94100e055b8&ts=377&x=0""`);
     expect(response.status).toMatchInlineSnapshot(`400`);
     expect(result).toMatchInlineSnapshot(`
       {
@@ -202,7 +202,7 @@ describe("Remote Bundler Worker", () => {
 
     const result = await response.json() as BundleResult;
     const serverTiming = response.headers.get('Server-Timing');
-    expect(serverTiming).toMatchInlineSnapshot(`"parse-body;dur=0, tailwind-css;dur=0, esbuild-build;dur=0, parallel-build;dur=0, total;dur=0, cfL4;desc="?proto=TCP&rtt=22083&min_rtt=20704&rtt_var=4326&sent=20&recv=13&lost=0&retrans=0&sent_bytes=8641&recv_bytes=3306&delivery_rate=274854&cwnd=255&unsent_bytes=0&cid=4e0c122bd65f6004&ts=8184&x=0""`);
+    expect(serverTiming).toMatchInlineSnapshot(`"parse-body;dur=0, tailwind-css;dur=0, esbuild-build;dur=0, parallel-build;dur=0, total;dur=0, cfL4;desc="?proto=TCP&rtt=23790&min_rtt=20831&rtt_var=5095&sent=19&recv=14&lost=0&retrans=0&sent_bytes=8635&recv_bytes=3306&delivery_rate=228427&cwnd=257&unsent_bytes=0&cid=a45670e1a3a089fc&ts=6048&x=0""`);
     expect(result).toMatchInlineSnapshot(`
       {
         "files": {
@@ -213,12 +213,12 @@ describe("Remote Bundler Worker", () => {
         "rawOutputs": [
           {
             "path": "/2cc353d4f0682dad.js.map",
-            "size": 1273,
+            "size": 3342,
             "type": "sourcemap",
           },
           {
             "path": "/2cc353d4f0682dad.js",
-            "size": 2531,
+            "size": 3763,
             "type": "entry",
           },
         ],
@@ -325,7 +325,7 @@ describe("Remote Bundler Worker", () => {
 
     const result = await response.json() as BundleResult;
     const serverTiming = response.headers.get('Server-Timing');
-    expect(serverTiming).toMatchInlineSnapshot(`"parse-body;dur=0, tailwind-css;dur=0, esbuild-build;dur=439, parallel-build;dur=439, total;dur=439, cfL4;desc="?proto=TCP&rtt=30443&min_rtt=26626&rtt_var=10276&sent=7&recv=9&lost=0&retrans=0&sent_bytes=4210&recv_bytes=3855&delivery_rate=108765&cwnd=239&unsent_bytes=0&cid=2c2a58c25da117e3&ts=3436&x=0""`);
+    expect(serverTiming).toMatchInlineSnapshot(`"parse-body;dur=0, tailwind-css;dur=0, esbuild-build;dur=372, parallel-build;dur=372, total;dur=372, cfL4;desc="?proto=TCP&rtt=28027&min_rtt=21086&rtt_var=10700&sent=7&recv=9&lost=0&retrans=0&sent_bytes=1589&recv_bytes=3855&delivery_rate=68671&cwnd=251&unsent_bytes=0&cid=f67ba94100e055b8&ts=3585&x=0""`);
     expect(result.success).toBe(true);
 
     if (result.success) {
@@ -353,12 +353,12 @@ describe("Remote Bundler Worker", () => {
         "rawOutputs": [
           {
             "path": "/c9025520583ffc11.js.map",
-            "size": 7017,
+            "size": 41566,
             "type": "sourcemap",
           },
           {
             "path": "/c9025520583ffc11.js",
-            "size": 3890,
+            "size": 24951,
             "type": "entry",
           },
         ],
@@ -473,7 +473,7 @@ describe("Remote Bundler Worker", () => {
 
     const result = await response.json() as BundleResult;
     const serverTiming = response.headers.get('Server-Timing');
-    expect(serverTiming).toMatchInlineSnapshot(`"parse-body;dur=0, tailwind-css;dur=0, esbuild-build;dur=0, parallel-build;dur=0, total;dur=0, cfL4;desc="?proto=TCP&rtt=21485&min_rtt=18235&rtt_var=3397&sent=28&recv=20&lost=0&retrans=0&sent_bytes=10925&recv_bytes=7273&delivery_rate=274854&cwnd=255&unsent_bytes=0&cid=4e0c122bd65f6004&ts=12082&x=0""`);
+    expect(serverTiming).toMatchInlineSnapshot(`"parse-body;dur=0, tailwind-css;dur=0, esbuild-build;dur=0, parallel-build;dur=0, total;dur=0, cfL4;desc="?proto=TCP&rtt=23158&min_rtt=19139&rtt_var=3847&sent=25&recv=20&lost=0&retrans=0&sent_bytes=10914&recv_bytes=7273&delivery_rate=228427&cwnd=257&unsent_bytes=0&cid=a45670e1a3a089fc&ts=8892&x=0""`);
     expect(result.success).toBe(true);
 
     if (result.success) {
@@ -507,12 +507,12 @@ describe("Remote Bundler Worker", () => {
         "rawOutputs": [
           {
             "path": "/6bad1d1e32f23fb9.js.map",
-            "size": 3898,
+            "size": 6005,
             "type": "sourcemap",
           },
           {
             "path": "/6bad1d1e32f23fb9.js",
-            "size": 2290,
+            "size": 3524,
             "type": "entry",
           },
           {
@@ -578,12 +578,12 @@ describe("Remote Bundler Worker", () => {
         "rawOutputs": [
           {
             "path": "/9efb087fd86defd0.js.map",
-            "size": 4252,
+            "size": 38753,
             "type": "sourcemap",
           },
           {
             "path": "/9efb087fd86defd0.js",
-            "size": 2454,
+            "size": 23511,
             "type": "entry",
           },
         ],
