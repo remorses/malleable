@@ -6,7 +6,7 @@ after changes run `pnpm tsc`. after every big change run `pnpm deployment` to de
 
 When writing vitest tests, always run with -u (to update snapshots) and always use toMatchInlineSnapshot. Never use any other expect methods.
 
-To run tests use `pnpm test -u --run` and to target tests add `-t name` or pass the file path of the test.
+To run tests use `pnpm test --run` and to target tests add `-t name` or pass the file path of the test. `-u` is already passed by default
 
 
 - Tests should focus on meaningful functionality that produces CSS
