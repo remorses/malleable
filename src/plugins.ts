@@ -1,13 +1,6 @@
 import type { Plugin, OnResolveArgs } from 'esbuild-wasm'
 import { logger } from "./logger.js"
 
-const DEFAULT_EXTERNAL_PACKAGES = [
-  'react',
-  'react-dom',
-  'react/jsx-runtime',
-  'react/jsx-dev-runtime',
-]
-
 export interface PluginOptions {
   externalPackages?: string[]
   cdnUrl?: string
@@ -23,8 +16,6 @@ export function createEsmShPlugin(options: PluginOptions = {}): Plugin {
     // Use esm.sh for ESM module resolution
     cdnUrl = 'https://esm.sh',
   } = options
-
-  const allExternalPackages = [...DEFAULT_EXTERNAL_PACKAGES, ...externalPackages]
 
   return {
     name: 'esm-sh-plugin',
@@ -60,7 +51,7 @@ export function createEsmShPlugin(options: PluginOptions = {}): Plugin {
 
         // Check if package should be external
         const packageName = getPackageName(args.path)
-        if (allExternalPackages.some(pkg => 
+        if (externalPackages.some(pkg => 
           pkg === packageName || args.path.startsWith(pkg + '/')
         )) {
           return {
@@ -70,8 +61,8 @@ export function createEsmShPlugin(options: PluginOptions = {}): Plugin {
         }
 
         // Resolve npm packages through esm.sh with external query params
-        const externalsQuery = allExternalPackages.length > 0 
-          ? `?external=${allExternalPackages.join(',')}` 
+        const externalsQuery = externalPackages.length > 0 
+          ? `?external=${externalPackages.join(',')}` 
           : ''
         const url = `${cdnUrl}/${args.path}${externalsQuery}`
         return {
@@ -84,7 +75,7 @@ export function createEsmShPlugin(options: PluginOptions = {}): Plugin {
       build.onResolve({ filter: /^[^./]/ }, (args) => {
         // Check if package should be external
         const packageName = getPackageName(args.path)
-        if (allExternalPackages.some(pkg => 
+        if (externalPackages.some(pkg => 
           pkg === packageName || args.path.startsWith(pkg + '/')
         )) {
           return {
@@ -94,8 +85,8 @@ export function createEsmShPlugin(options: PluginOptions = {}): Plugin {
         }
 
         // Resolve through esm.sh with external query params
-        const externalsQuery = allExternalPackages.length > 0 
-          ? `?external=${allExternalPackages.join(',')}` 
+        const externalsQuery = externalPackages.length > 0 
+          ? `?external=${externalPackages.join(',')}` 
           : ''
         const url = `${cdnUrl}/${args.path}${externalsQuery}`
         return {

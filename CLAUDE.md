@@ -2,6 +2,8 @@ use pnpm to install dependencies
 
 after changes run `pnpm tsc`. after every big change run `pnpm deployment` to deploy the script and `pnpm test -u --run` to update snapshots
 
+IMPORTANT: tests must be run after deployment. the tests use the deployed worker!
+
 ## Testing Preferences
 
 When writing vitest tests, always run with -u (to update snapshots) and always use toMatchInlineSnapshot. Never use any other expect methods.

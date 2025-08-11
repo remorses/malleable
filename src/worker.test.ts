@@ -4,6 +4,13 @@ import { evaluateBundleExportsWithDeno } from "./test-utils.js";
 
 const WORKER_URL = "https://remote-bundler.fumabase.com";
 
+const DEFAULT_EXTERNAL_PACKAGES = [
+  'react',
+  'react-dom',
+  'react/jsx-runtime',
+  'react/jsx-dev-runtime',
+];
+
 describe("Remote Bundler Worker", () => {
   it("should transform TSX code with React and generate Tailwind CSS", async () => {
     const response = await fetch(`${WORKER_URL}/api/bundle`, {
@@ -14,6 +21,7 @@ describe("Remote Bundler Worker", () => {
           path: "app.tsx",
           content: 'const App = () => <div className="p-4 bg-blue-500 text-white">Hello</div>;'
         }],
+        externalPackages: DEFAULT_EXTERNAL_PACKAGES,
       }),
     });
 
@@ -21,18 +29,18 @@ describe("Remote Bundler Worker", () => {
     expect(result).toMatchInlineSnapshot(`
       {
         "files": {
-          "0c39b72ef182cba0.js": "https://remote-bundler.fumabase.com/bundle/0c39b72ef182cba0.js",
-          "0c39b72ef182cba0.js.map": "https://remote-bundler.fumabase.com/bundle/0c39b72ef182cba0.js.map",
+          "1e665c28eb1f93be.js": "https://remote-bundler.fumabase.com/bundle/1e665c28eb1f93be.js",
+          "1e665c28eb1f93be.js.map": "https://remote-bundler.fumabase.com/bundle/1e665c28eb1f93be.js.map",
         },
-        "jsUrl": "https://remote-bundler.fumabase.com/bundle/0c39b72ef182cba0.js",
+        "jsUrl": "https://remote-bundler.fumabase.com/bundle/1e665c28eb1f93be.js",
         "rawOutputs": [
           {
-            "path": "/0c39b72ef182cba0.js.map",
+            "path": "/1e665c28eb1f93be.js.map",
             "size": 1069,
             "type": "sourcemap",
           },
           {
-            "path": "/0c39b72ef182cba0.js",
+            "path": "/1e665c28eb1f93be.js",
             "size": 2526,
             "type": "entry",
           },
@@ -52,6 +60,7 @@ describe("Remote Bundler Worker", () => {
           path: "button.tsx",
           content: 'const Button = () => <button className="p-4 bg-blue-500 text-white hover:bg-blue-600 md:p-6">Click</button>;'
         }],
+        externalPackages: DEFAULT_EXTERNAL_PACKAGES,
       }),
     });
 
@@ -59,18 +68,18 @@ describe("Remote Bundler Worker", () => {
     expect(result).toMatchInlineSnapshot(`
       {
         "files": {
-          "518d16db8496ff1f.js": "https://remote-bundler.fumabase.com/bundle/518d16db8496ff1f.js",
-          "518d16db8496ff1f.js.map": "https://remote-bundler.fumabase.com/bundle/518d16db8496ff1f.js.map",
+          "bdcc81f7bfa93073.js": "https://remote-bundler.fumabase.com/bundle/bdcc81f7bfa93073.js",
+          "bdcc81f7bfa93073.js.map": "https://remote-bundler.fumabase.com/bundle/bdcc81f7bfa93073.js.map",
         },
-        "jsUrl": "https://remote-bundler.fumabase.com/bundle/518d16db8496ff1f.js",
+        "jsUrl": "https://remote-bundler.fumabase.com/bundle/bdcc81f7bfa93073.js",
         "rawOutputs": [
           {
-            "path": "/518d16db8496ff1f.js.map",
+            "path": "/bdcc81f7bfa93073.js.map",
             "size": 1112,
             "type": "sourcemap",
           },
           {
-            "path": "/518d16db8496ff1f.js",
+            "path": "/bdcc81f7bfa93073.js",
             "size": 2541,
             "type": "entry",
           },
@@ -93,6 +102,7 @@ describe("Remote Bundler Worker", () => {
           return <div className={\`\${baseClass} \${isActive ? "bg-green-500" : "bg-gray-200"}\`}>Content</div>;
         }`
         }],
+        externalPackages: DEFAULT_EXTERNAL_PACKAGES,
       }),
     });
 
@@ -100,18 +110,18 @@ describe("Remote Bundler Worker", () => {
     expect(result).toMatchInlineSnapshot(`
       {
         "files": {
-          "e42dae69905f1802.js": "https://remote-bundler.fumabase.com/bundle/e42dae69905f1802.js",
-          "e42dae69905f1802.js.map": "https://remote-bundler.fumabase.com/bundle/e42dae69905f1802.js.map",
+          "0139960554aae246.js": "https://remote-bundler.fumabase.com/bundle/0139960554aae246.js",
+          "0139960554aae246.js.map": "https://remote-bundler.fumabase.com/bundle/0139960554aae246.js.map",
         },
-        "jsUrl": "https://remote-bundler.fumabase.com/bundle/e42dae69905f1802.js",
+        "jsUrl": "https://remote-bundler.fumabase.com/bundle/0139960554aae246.js",
         "rawOutputs": [
           {
-            "path": "/e42dae69905f1802.js.map",
+            "path": "/0139960554aae246.js.map",
             "size": 1212,
             "type": "sourcemap",
           },
           {
-            "path": "/e42dae69905f1802.js",
+            "path": "/0139960554aae246.js",
             "size": 2531,
             "type": "entry",
           },
@@ -134,6 +144,7 @@ describe("Remote Bundler Worker", () => {
             content: `import { format } from 'date-fns';
         const App = () => <div className="text-lg font-bold">{format(new Date(), 'yyyy-MM-dd')}</div>;`
           }],
+          externalPackages: DEFAULT_EXTERNAL_PACKAGES,
         }),
       });
 
@@ -175,6 +186,7 @@ describe("Remote Bundler Worker", () => {
           </div>
         );`
         }],
+        externalPackages: DEFAULT_EXTERNAL_PACKAGES,
       }),
     });
 
@@ -182,18 +194,18 @@ describe("Remote Bundler Worker", () => {
     expect(result).toMatchInlineSnapshot(`
       {
         "files": {
-          "eaf566c7918e4919.js": "https://remote-bundler.fumabase.com/bundle/eaf566c7918e4919.js",
-          "eaf566c7918e4919.js.map": "https://remote-bundler.fumabase.com/bundle/eaf566c7918e4919.js.map",
+          "2cc353d4f0682dad.js": "https://remote-bundler.fumabase.com/bundle/2cc353d4f0682dad.js",
+          "2cc353d4f0682dad.js.map": "https://remote-bundler.fumabase.com/bundle/2cc353d4f0682dad.js.map",
         },
-        "jsUrl": "https://remote-bundler.fumabase.com/bundle/eaf566c7918e4919.js",
+        "jsUrl": "https://remote-bundler.fumabase.com/bundle/2cc353d4f0682dad.js",
         "rawOutputs": [
           {
-            "path": "/eaf566c7918e4919.js.map",
+            "path": "/2cc353d4f0682dad.js.map",
             "size": 1273,
             "type": "sourcemap",
           },
           {
-            "path": "/eaf566c7918e4919.js",
+            "path": "/2cc353d4f0682dad.js",
             "size": 2531,
             "type": "entry",
           },
@@ -235,7 +247,7 @@ describe("Remote Bundler Worker", () => {
                   currency: 'USD'
                 }).format(price);
               };
-              
+
               export const truncateText = (text: string, maxLength: number) => {
                 if (text.length <= maxLength) return text;
                 return text.slice(0, maxLength) + '...';
@@ -246,15 +258,15 @@ describe("Remote Bundler Worker", () => {
             path: "components/Button.tsx",
             content: `
               import React from 'react';
-              
+
               export const Button = ({ children, onClick, variant = 'primary' }) => {
                 const baseClasses = "px-4 py-2 rounded-lg font-semibold transition-colors";
-                const variantClasses = variant === 'primary' 
-                  ? "bg-blue-500 text-white hover:bg-blue-600" 
+                const variantClasses = variant === 'primary'
+                  ? "bg-blue-500 text-white hover:bg-blue-600"
                   : "bg-gray-200 text-gray-800 hover:bg-gray-300";
-                
+
                 return (
-                  <button 
+                  <button
                     className={\`\${baseClasses} \${variantClasses}\`}
                     onClick={onClick}
                   >
@@ -270,11 +282,11 @@ describe("Remote Bundler Worker", () => {
               import React from 'react';
               import { Button } from './components/Button';
               import { formatPrice, truncateText } from './utils';
-              
+
               const App = () => {
                 const price = 99.99;
                 const description = "This is a very long product description that needs to be truncated";
-                
+
                 return (
                   <div className="p-8 bg-gray-100 min-h-screen">
                     <div className="max-w-2xl mx-auto bg-white rounded-xl shadow-lg p-6">
@@ -289,27 +301,33 @@ describe("Remote Bundler Worker", () => {
                   </div>
                 );
               };
-              
+
               export default App;
             `
           }
         ],
         entryPoint: "app.tsx"
+        // No external packages so it can be evaluated with Deno
       }),
     });
 
     const result = await response.json() as BundleResult;
     expect(result.success).toBe(true);
-    
+
     if (result.success) {
       expect(result.jsUrl).toBeDefined();
       expect(result.files).toBeDefined();
-      
+
       // Check that multiple files were processed
       expect(result.rawOutputs).toBeDefined();
       expect(result.rawOutputs.length).toBeGreaterThan(0);
+
+      // Evaluate with Deno to verify the bundle works
+      const exports = await evaluateBundleExportsWithDeno(result.jsUrl);
+      console.log(exports)
+      expect(exports).toContain('default');
     }
-    
+
     // Verify the output contains expected content
     expect(result).toMatchInlineSnapshot(`
       {
@@ -321,12 +339,12 @@ describe("Remote Bundler Worker", () => {
         "rawOutputs": [
           {
             "path": "/0a3d91a4456a515c.js.map",
-            "size": 4384,
+            "size": 7108,
             "type": "sourcemap",
           },
           {
             "path": "/0a3d91a4456a515c.js",
-            "size": 2423,
+            "size": 3890,
             "type": "entry",
           },
         ],
@@ -346,7 +364,7 @@ describe("Remote Bundler Worker", () => {
             path: "LazyComponent.tsx",
             content: `
               import React from 'react';
-              
+
               const LazyComponent = () => {
                 return (
                   <div className="p-8 bg-purple-500 text-white rounded-lg">
@@ -355,7 +373,7 @@ describe("Remote Bundler Worker", () => {
                   </div>
                 );
               };
-              
+
               export default LazyComponent;
             `
           },
@@ -365,12 +383,12 @@ describe("Remote Bundler Worker", () => {
               export const dynamicFunction = (x: number, y: number) => {
                 return x * y + 100;
               };
-              
+
               export const dynamicData = {
                 message: "This is from a dynamically imported module",
                 timestamp: Date.now()
               };
-              
+
               export default function processDynamic(input: string) {
                 return input.toUpperCase() + " - PROCESSED";
               }
@@ -380,14 +398,14 @@ describe("Remote Bundler Worker", () => {
             path: "app.tsx",
             content: `
               import React, { Suspense, lazy, useState, useEffect } from 'react';
-              
+
               // React.lazy for component code splitting
               const LazyComponent = lazy(() => import('./LazyComponent'));
-              
+
               export const App = () => {
                 const [dynamicModule, setDynamicModule] = useState(null);
                 const [showLazy, setShowLazy] = useState(false);
-                
+
                 useEffect(() => {
                   // Dynamic import for code splitting
                   import('./DynamicModule').then(module => {
@@ -395,25 +413,25 @@ describe("Remote Bundler Worker", () => {
                     console.log('Dynamic module loaded:', module);
                   });
                 }, []);
-                
+
                 return (
                   <div className="p-8 bg-gray-100 min-h-screen">
                     <h1 className="text-3xl font-bold mb-6">Code Splitting Demo</h1>
-                    
+
                     <div className="space-y-4">
-                      <button 
+                      <button
                         onClick={() => setShowLazy(!showLazy)}
                         className="px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
                       >
                         {showLazy ? 'Hide' : 'Show'} Lazy Component
                       </button>
-                      
+
                       {showLazy && (
                         <Suspense fallback={<div className="p-4 bg-gray-200">Loading...</div>}>
                           <LazyComponent />
                         </Suspense>
                       )}
-                      
+
                       {dynamicModule && (
                         <div className="p-4 bg-green-100 rounded">
                           <p>Dynamic module loaded successfully!</p>
@@ -423,60 +441,61 @@ describe("Remote Bundler Worker", () => {
                   </div>
                 );
               };
-              
+
               // Also test a dynamic import function
               export async function loadDynamicData() {
                 const module = await import('./DynamicModule');
                 return module.dynamicData;
               }
-              
+
               export default App;
             `
           }
         ],
-        entryPoint: "app.tsx"
+        entryPoint: "app.tsx",
+        externalPackages: DEFAULT_EXTERNAL_PACKAGES
       }),
     });
 
     const result = await response.json() as BundleResult;
     expect(result.success).toBe(true);
-    
+
     if (result.success) {
       // Check if multiple files were generated (main bundle + chunks)
       const fileCount = Object.keys(result.files).length;
       console.log('Generated files:', Object.keys(result.files));
-      
+
       // We expect at least the main JS file and its source map
       expect(fileCount).toBeGreaterThanOrEqual(2);
-      
+
       // Check raw outputs for chunks
       const hasChunks = result.rawOutputs.some(output => output.type === 'chunk');
       console.log('Has chunks:', hasChunks);
       console.log('Raw outputs:', result.rawOutputs.map(o => ({ path: o.path, type: o.type })));
-      
+
       // Skip Deno evaluation for this test since React is external
       // The bundle successfully demonstrates code splitting with chunks
     }
-    
+
     expect(result).toMatchInlineSnapshot(`
       {
         "files": {
-          "2b544c001e6c8be9.js": "https://remote-bundler.fumabase.com/bundle/2b544c001e6c8be9.js",
-          "2b544c001e6c8be9.js.map": "https://remote-bundler.fumabase.com/bundle/2b544c001e6c8be9.js.map",
+          "421be5d7df37e445.js": "https://remote-bundler.fumabase.com/bundle/421be5d7df37e445.js",
+          "421be5d7df37e445.js.map": "https://remote-bundler.fumabase.com/bundle/421be5d7df37e445.js.map",
           "chunks/DynamicModule-S6WJH4XV.js": "https://remote-bundler.fumabase.com/bundle/chunks/DynamicModule-S6WJH4XV.js",
           "chunks/DynamicModule-S6WJH4XV.js.map": "https://remote-bundler.fumabase.com/bundle/chunks/DynamicModule-S6WJH4XV.js.map",
           "chunks/LazyComponent-VKE7BSKE.js": "https://remote-bundler.fumabase.com/bundle/chunks/LazyComponent-VKE7BSKE.js",
           "chunks/LazyComponent-VKE7BSKE.js.map": "https://remote-bundler.fumabase.com/bundle/chunks/LazyComponent-VKE7BSKE.js.map",
         },
-        "jsUrl": "https://remote-bundler.fumabase.com/bundle/2b544c001e6c8be9.js",
+        "jsUrl": "https://remote-bundler.fumabase.com/bundle/421be5d7df37e445.js",
         "rawOutputs": [
           {
-            "path": "/2b544c001e6c8be9.js.map",
+            "path": "/421be5d7df37e445.js.map",
             "size": 4051,
             "type": "sourcemap",
           },
           {
-            "path": "/2b544c001e6c8be9.js",
+            "path": "/421be5d7df37e445.js",
             "size": 2290,
             "type": "entry",
           },
@@ -543,12 +562,12 @@ describe("Remote Bundler Worker", () => {
         "rawOutputs": [
           {
             "path": "/9efb087fd86defd0.js.map",
-            "size": 1432,
+            "size": 4252,
             "type": "sourcemap",
           },
           {
             "path": "/9efb087fd86defd0.js",
-            "size": 896,
+            "size": 2454,
             "type": "entry",
           },
         ],
@@ -562,7 +581,7 @@ describe("Remote Bundler Worker", () => {
     if (!result.success) {
       throw new Error('Bundle failed');
     }
-    
+
     const exports = await evaluateBundleExportsWithDeno(result.jsUrl);
     expect(exports).toContain('default');
     expect(exports).toContain('add');
