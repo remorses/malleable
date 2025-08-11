@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import type { BundleResult } from "./types";
 
 const WORKER_URL = "https://remote-bundler.fumabase.com";
 
@@ -26,12 +27,12 @@ describe("Remote Bundler Worker", () => {
         "rawOutputs": [
           {
             "path": "/0c39b72ef182cba0.js.map",
-            "size": 4367,
+            "size": 1069,
             "type": "sourcemap",
           },
           {
             "path": "/0c39b72ef182cba0.js",
-            "size": 4668,
+            "size": 2526,
             "type": "entry",
           },
         ],
@@ -64,12 +65,12 @@ describe("Remote Bundler Worker", () => {
         "rawOutputs": [
           {
             "path": "/518d16db8496ff1f.js.map",
-            "size": 4410,
+            "size": 1112,
             "type": "sourcemap",
           },
           {
             "path": "/518d16db8496ff1f.js",
-            "size": 4683,
+            "size": 2541,
             "type": "entry",
           },
         ],
@@ -105,12 +106,12 @@ describe("Remote Bundler Worker", () => {
         "rawOutputs": [
           {
             "path": "/e42dae69905f1802.js.map",
-            "size": 4510,
+            "size": 1212,
             "type": "sourcemap",
           },
           {
             "path": "/e42dae69905f1802.js",
-            "size": 4673,
+            "size": 2531,
             "type": "entry",
           },
         ],
@@ -188,12 +189,12 @@ describe("Remote Bundler Worker", () => {
         "rawOutputs": [
           {
             "path": "/eaf566c7918e4919.js.map",
-            "size": 4571,
+            "size": 1273,
             "type": "sourcemap",
           },
           {
             "path": "/eaf566c7918e4919.js",
-            "size": 4673,
+            "size": 2531,
             "type": "entry",
           },
         ],
@@ -217,6 +218,119 @@ describe("Remote Bundler Worker", () => {
     expect(response.headers.get("Access-Control-Allow-Origin")).toMatchInlineSnapshot(`"*"`);
     expect(response.headers.get("Access-Control-Allow-Methods")).toMatchInlineSnapshot(`"OPTIONS, GET, POST, PUT, PATCH, DELETE"`);
     expect(response.headers.get("Access-Control-Allow-Headers")).toMatchInlineSnapshot(`"*"`);
+  });
+
+  it("should handle multiple input files with imports between them", async () => {
+    const response = await fetch(`${WORKER_URL}/api/bundle`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        files: [
+          {
+            path: "utils.ts",
+            content: `
+              export const formatPrice = (price: number) => {
+                return new Intl.NumberFormat('en-US', {
+                  style: 'currency',
+                  currency: 'USD'
+                }).format(price);
+              };
+              
+              export const truncateText = (text: string, maxLength: number) => {
+                if (text.length <= maxLength) return text;
+                return text.slice(0, maxLength) + '...';
+              };
+            `
+          },
+          {
+            path: "components/Button.tsx",
+            content: `
+              import React from 'react';
+              
+              export const Button = ({ children, onClick, variant = 'primary' }) => {
+                const baseClasses = "px-4 py-2 rounded-lg font-semibold transition-colors";
+                const variantClasses = variant === 'primary' 
+                  ? "bg-blue-500 text-white hover:bg-blue-600" 
+                  : "bg-gray-200 text-gray-800 hover:bg-gray-300";
+                
+                return (
+                  <button 
+                    className={\`\${baseClasses} \${variantClasses}\`}
+                    onClick={onClick}
+                  >
+                    {children}
+                  </button>
+                );
+              };
+            `
+          },
+          {
+            path: "app.tsx",
+            content: `
+              import React from 'react';
+              import { Button } from './components/Button';
+              import { formatPrice, truncateText } from './utils';
+              
+              const App = () => {
+                const price = 99.99;
+                const description = "This is a very long product description that needs to be truncated";
+                
+                return (
+                  <div className="p-8 bg-gray-100 min-h-screen">
+                    <div className="max-w-2xl mx-auto bg-white rounded-xl shadow-lg p-6">
+                      <h1 className="text-3xl font-bold mb-4">Product Card</h1>
+                      <p className="text-gray-600 mb-2">{truncateText(description, 30)}</p>
+                      <p className="text-2xl font-semibold text-green-600 mb-4">{formatPrice(price)}</p>
+                      <div className="flex gap-4">
+                        <Button variant="primary">Buy Now</Button>
+                        <Button variant="secondary">Add to Cart</Button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              };
+              
+              export default App;
+            `
+          }
+        ],
+        entryPoint: "app.tsx"
+      }),
+    });
+
+    const result = await response.json();
+    expect(result.success).toBe(true);
+    expect(result.jsUrl).toBeDefined();
+    expect(result.files).toBeDefined();
+    
+    // Check that multiple files were processed
+    expect(result.rawOutputs).toBeDefined();
+    expect(result.rawOutputs.length).toBeGreaterThan(0);
+    
+    // Verify the output contains expected content
+    expect(result).toMatchInlineSnapshot(`
+      {
+        "files": {
+          "0a3d91a4456a515c.js": "https://remote-bundler.fumabase.com/bundle/0a3d91a4456a515c.js",
+          "0a3d91a4456a515c.js.map": "https://remote-bundler.fumabase.com/bundle/0a3d91a4456a515c.js.map",
+        },
+        "jsUrl": "https://remote-bundler.fumabase.com/bundle/0a3d91a4456a515c.js",
+        "rawOutputs": [
+          {
+            "path": "/0a3d91a4456a515c.js.map",
+            "size": 4384,
+            "type": "sourcemap",
+          },
+          {
+            "path": "/0a3d91a4456a515c.js",
+            "size": 2423,
+            "type": "entry",
+          },
+        ],
+        "success": true,
+        "warnings": [],
+      }
+    `);
   });
 
   it("should execute bundled code with Deno", async () => {
@@ -255,12 +369,12 @@ describe("Remote Bundler Worker", () => {
         "rawOutputs": [
           {
             "path": "/9efb087fd86defd0.js.map",
-            "size": 4267,
+            "size": 1432,
             "type": "sourcemap",
           },
           {
             "path": "/9efb087fd86defd0.js",
-            "size": 2454,
+            "size": 896,
             "type": "entry",
           },
         ],

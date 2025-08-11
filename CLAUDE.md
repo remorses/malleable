@@ -8,6 +8,7 @@ When writing vitest tests, always run with -u (to update snapshots) and always u
 
 To run tests use `pnpm test --run` and to target tests add `-t name` or pass the file path of the test. `-u` is already passed by default
 
+If you are not able to make a test pass do not revert it and change the test to make it pass changing the requirements. instead leave it failing and call the think tool to try to use an approach to make the test pass withthe same requirements. if that does not help ask help to the user.
 
 - Tests should focus on meaningful functionality that produces CSS
 - Simple transformation tests without CSS generation should be avoided
