@@ -1,7 +1,7 @@
 {
   "scripts": {
     "dev": "wrangler dev",
-    "dev:app": "vite",
+    "demo": "vite",
     "test": "pnpm vitest -u",
     "deployment": "wrangler deploy --minify"
   },

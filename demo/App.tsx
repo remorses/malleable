@@ -1,4 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react'
+
+import type { BundleResult } from "../src/types.js";
 import importMap from 'virtual:importmap'
 import { createOpenAI } from '@ai-sdk/openai'
 import { streamText, tool } from 'ai'
@@ -18,8 +20,7 @@ function setupImportMap() {
 export default function App() {
   const [prompt, setPrompt] = useState('')
   const [code, setCode] = useState('')
-  const [bundledCode, setBundledCode] = useState('')
-  const [css, setCss] = useState('')
+
   const [isGenerating, setIsGenerating] = useState(false)
   const [apiKey, setApiKey] = useState(() => localStorage.getItem('openai-api-key') || '')
   const [PreviewComponent, setPreviewComponent] = useState<React.ComponentType | null>(null)
@@ -108,19 +109,17 @@ the goal is to create beautiful components following user query. do not create t
         })
       })
 
-      const result = await response.json() as any
+      const result = await response.json() as BundleResult
 
       if (result.success) {
-        setBundledCode(result.code)
-        setCss(result.css)
+
 
         try {
-          // Create a data URL for the module
-          const moduleCode = result.code
-          const dataUrl = `data:text/javascript;charset=utf-8,${encodeURIComponent(moduleCode)}`
+
+          const importUrl = result.jsUrl
 
           // Dynamically import the module
-          const module = await import(/* @vite-ignore */ dataUrl)
+          const module = await import(/* @vite-ignore */ importUrl)
           const Component = module.default
 
           // Set the component to render in preview
@@ -129,7 +128,7 @@ the goal is to create beautiful components following user query. do not create t
           }
         } catch (evalError) {
           console.error('Import error:', evalError)
-          console.log('Bundled code:', result.code)
+
         }
       } else {
         console.error('Bundle error:', result.error)
@@ -190,25 +189,14 @@ the goal is to create beautiful components following user query. do not create t
           <div className="space-y-4">
             <div>
               <h3 className="text-lg font-semibold mb-2 text-foreground">Preview</h3>
-                {css && (
-                  <style dangerouslySetInnerHTML={{ __html: css }} />
-                )}
+
               <div className="border border-border rounded-md p-4 min-h-[400px] bg-card flex flex-col items-center justify-center">
 
                 {PreviewComponent && <PreviewComponent />}
               </div>
             </div>
 
-            {bundledCode && (
-              <details>
-                <summary className="cursor-pointer text-sm text-muted-foreground">
-                  Bundled Code
-                </summary>
-                <pre className="p-4 bg-muted rounded-md overflow-auto max-h-64 mt-2">
-                  <code className="text-xs">{bundledCode}</code>
-                </pre>
-              </details>
-            )}
+
           </div>
         </div>
       </div>
