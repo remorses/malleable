@@ -43,7 +43,7 @@ export default function App() {
       })
 
       const { textStream } = await streamText({
-        model: openai('gpt-4o'),
+        model: openai('gpt-5-mini'),
         system: `
 
 You are an expert React developer. When asked to create a component, use the generate_component tool to output the code.
