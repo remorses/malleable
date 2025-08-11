@@ -5,7 +5,7 @@ import wasm from "../node_modules/esbuild-wasm/esbuild.wasm"
 import { generateTailwindCSS, shadcnTheme } from "./generate-tailwind.js"
 import { createEsmShPlugin } from "./plugins.js"
 import { createLocalResolverPlugin } from "./local-resolver-plugin.js"
-import { logger } from "./logger.js"
+import { logger, createRequestLogger } from "./logger.js"
 
 interface Env {
   jsCache: KVNamespace
@@ -62,25 +62,25 @@ const app = new Spiceflow()
     path: '/api/bundle',
     request: bundleSchema,
     async handler({ request, state }) {
-      // Generate unique request ID for logging
-      const reqId = Math.random().toString(36).substring(2, 9)
-
-      logger.time(`${reqId} total request`)
+      // Create request-scoped logger
+      const reqLogger = createRequestLogger()
+      
+      reqLogger.time(`total`)
 
       if (!init) {
-        logger.time(`${reqId} esbuild init`)
+        reqLogger.time(`esbuild-init`)
         await esbuild.initialize({
           wasmModule: wasm,
           worker: false
         })
         init = true
-        logger.timeEnd(`${reqId} esbuild init`)
+        reqLogger.timeEnd(`esbuild-init`)
       }
 
       try {
-        logger.time(`${reqId} parse body`)
+        reqLogger.time(`parse-body`)
         const body = await request.json()
-        logger.timeEnd(`${reqId} parse body`)
+        reqLogger.timeEnd(`parse-body`)
         const {
           files,
           entryPoint,
@@ -112,17 +112,29 @@ const app = new Spiceflow()
           createEsmShPlugin({ externalPackages })
         ]
 
+        // Generate hash for the entry point name
+        const hashInput = JSON.stringify({
+          files: files.sort((a, b) => a.path.localeCompare(b.path)),
+          entryPoint: actualEntryPoint,
+          externalPackages: externalPackages.sort(),
+          tailwindConfig: JSON.stringify(shadcnTheme)
+        })
+        const entryHash = await generateHash(hashInput)
+
         // Determine jsxImportSource based on external packages
         const jsxImportSource = externalPackages.includes('react')
           ? undefined
           : 'https://unpkg.com/react'
 
-        // Always use build API with bundling
-        logger.time(`${reqId} esbuild build`)
+        // Always use build API with bundling and code splitting
+        reqLogger.time(`esbuild-build`)
         const result = await esbuild.build({
-          entryPoints: [actualEntryPoint],
+          entryPoints: { [entryHash]: actualEntryPoint },
+          outdir: './',
           bundle: true,
           format: 'esm',
+          splitting: true,
+          sourcemap: true,
           target: 'es2020',
           platform: 'browser',
           write: false,
@@ -131,48 +143,61 @@ const app = new Spiceflow()
           jsxImportSource,
           plugins,
           absWorkingDir: '/',
-          loader: { '.tsx': 'tsx', '.ts': 'tsx', '.jsx': 'tsx', '.js': 'tsx' }
+          loader: { '.tsx': 'tsx', '.ts': 'tsx', '.jsx': 'tsx', '.js': 'tsx' },
+          // Configure output filenames - [name] will be our hash
+          entryNames: '[name]',                   // entry outputs use hash as name
+          chunkNames: 'chunks/[name]-[hash]',     // shared/lazy chunks
+          assetNames: 'assets/[name]-[hash]',     // emitted assets
         })
-        logger.timeEnd(`${reqId} esbuild build`)
+        reqLogger.timeEnd(`esbuild-build`)
 
-        const code = result.outputFiles?.[0]?.text || ''
+        const outputFiles = result.outputFiles || []
         const warnings = result.warnings
 
         // Collect all code for CSS extraction
         const allCode = files.map(f => f.content).join('\n')
 
         // Always generate Tailwind CSS
-        logger.time(`${reqId} tailwind css`)
+        reqLogger.time(`tailwind-css`)
         const css = await generateTailwindCSS(allCode)
-        logger.timeEnd(`${reqId} tailwind css`)
+        reqLogger.timeEnd(`tailwind-css`)
 
-        // Generate hash for cache key including file contents, external packages, and tailwind config
-        const hashInput = JSON.stringify({
-          files: files.sort((a, b) => a.path.localeCompare(b.path)),
-          entryPoint: actualEntryPoint,
-          externalPackages: externalPackages.sort(),
-          tailwindConfig: JSON.stringify(shadcnTheme)
-        })
-        const hash = await generateHash(hashInput)
-
-        // Store in KV with .js and .css extensions
-        const jsKey = `${hash}.js`
-        const cssKey = `${hash}.css`
+        // Use same hash for CSS file
+        const cssKey = `${entryHash}.css`
         
-        // Store with 7 days TTL
+        // Store all output files in KV
         const ttl = 60 * 60 * 24 * 7 // 7 days in seconds
-        await Promise.all([
-          state.env.jsCache.put(jsKey, code, { expirationTtl: ttl }),
-          state.env.jsCache.put(cssKey, css, { expirationTtl: ttl })
-        ])
+        const kvPromises: Promise<void>[] = []
+        const fileUrls: Record<string, string> = {}
+        
+        // Store JS/sourcemap files from esbuild
+        for (const file of outputFiles) {
+          // Extract filename from path (remove leading ./)
+          const filename = file.path.replace(/^\.?\//, '')
+          kvPromises.push(state.env.jsCache.put(filename, file.text, { expirationTtl: ttl }))
+          fileUrls[filename] = `${new URL(request.url).origin}/bundle/${filename}`
+        }
+        
+        // Store CSS file
+        kvPromises.push(state.env.jsCache.put(cssKey, css, { expirationTtl: ttl }))
+        fileUrls['styles.css'] = `${new URL(request.url).origin}/bundle/${cssKey}`
+        
+        reqLogger.time(`kv-store`)
+        await Promise.all(kvPromises)
+        reqLogger.timeEnd(`kv-store`)
 
-        logger.timeEnd(`${reqId} total request`)
+        reqLogger.timeEnd(`total`)
 
-        // Return URLs instead of content
-        const baseUrl = new URL(request.url).origin
+        // The main entry file will be named with our hash
+        const mainJsUrl = fileUrls[`${entryHash}.js`] || undefined
+
+        // Return URLs for all files
         return Response.json({
-          jsUrl: `${baseUrl}/bundle/${jsKey}`,
-          cssUrl: `${baseUrl}/bundle/${cssKey}`,
+          // Legacy fields for backwards compatibility
+          jsUrl: mainJsUrl,
+          cssUrl: fileUrls['styles.css'],
+          // New field with all files
+          files: fileUrls,
           warnings,
           success: true
         }, {
@@ -180,11 +205,12 @@ const app = new Spiceflow()
             'Access-Control-Allow-Origin': '*',
             'Access-Control-Allow-Methods': 'OPTIONS, GET, POST, PUT, PATCH, DELETE',
             'Access-Control-Allow-Headers': '*',
+            'Server-Timing': reqLogger.getServerTimingHeader()
           }
         })
       } catch (error: any) {
-        logger.timeEnd(`${reqId} total request`)
-        logger.error(`${reqId} error:`, error)
+        reqLogger.timeEnd(`total`)
+        logger.error(`Request error:`, error)
 
         return Response.json({
           error: error.message,
@@ -195,6 +221,7 @@ const app = new Spiceflow()
             'Access-Control-Allow-Origin': '*',
             'Access-Control-Allow-Methods': 'OPTIONS, GET, POST, PUT, PATCH, DELETE',
             'Access-Control-Allow-Headers': '*',
+            'Server-Timing': reqLogger.getServerTimingHeader()
           }
         })
       }
@@ -218,7 +245,14 @@ const app = new Spiceflow()
       }
       
       // Determine content type based on file extension
-      const contentType = key.endsWith('.css') ? 'text/css' : 'application/javascript'
+      let contentType = 'application/octet-stream'
+      if (key.endsWith('.css')) {
+        contentType = 'text/css'
+      } else if (key.endsWith('.js')) {
+        contentType = 'application/javascript'
+      } else if (key.endsWith('.map')) {
+        contentType = 'application/json'
+      }
       
       return new Response(content, {
         headers: {
@@ -349,12 +383,22 @@ const app = new Spiceflow()
 
                 if (result.success) {
                     let html = '<h3>✨ Bundle URLs</h3>';
-                    html += '<div style="margin: 20px 0;">';
-                    html += '<p><strong>JavaScript URL:</strong> <a href="' + result.jsUrl + '" target="_blank">' + result.jsUrl + '</a></p>';
-                    html += '<p><strong>CSS URL:</strong> <a href="' + result.cssUrl + '" target="_blank">' + result.cssUrl + '</a></p>';
-                    html += '</div>';
-                    html += '<h4>Include in your HTML:</h4>';
-                    html += '<pre>' + escapeHtml('<link rel="stylesheet" href="' + result.cssUrl + '">\\n<script type="module" src="' + result.jsUrl + '"></script>') + '</pre>';
+                    
+                    if (result.files && Object.keys(result.files).length > 0) {
+                        html += '<div style="margin: 20px 0;">';
+                        html += '<h4>Generated Files:</h4>';
+                        html += '<ul>';
+                        for (const [filename, url] of Object.entries(result.files)) {
+                            html += '<li><a href="' + url + '" target="_blank">' + filename + '</a></li>';
+                        }
+                        html += '</ul>';
+                        html += '</div>';
+                    }
+                    
+                    if (result.jsUrl && result.cssUrl) {
+                        html += '<h4>Include in your HTML:</h4>';
+                        html += '<pre>' + escapeHtml('<link rel="stylesheet" href="' + result.cssUrl + '">\\n<script type="module" src="' + result.jsUrl + '"></script>') + '</pre>';
+                    }
                     
                     output.innerHTML = html;
                 } else {

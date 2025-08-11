@@ -1,5 +1,12 @@
+export interface Timing {
+  name: string
+  duration: number
+  description?: string
+}
+
 export class Logger {
   private timers: Map<string, number> = new Map()
+  private completedTimings: Map<string, Timing> = new Map()
 
   time(label: string): void {
     this.timers.set(label, Date.now())
@@ -10,8 +17,41 @@ export class Logger {
     if (startTime) {
       const duration = Date.now() - startTime
       console.log(`[TIMER] ${label}: ${duration}ms`)
+      
+      // Store completed timing
+      const cleanLabel = label.replace(/^[a-z0-9]+ /, '') // Remove request ID prefix
+      this.completedTimings.set(label, {
+        name: cleanLabel.replace(/ /g, '-'),
+        duration
+      })
+      
       this.timers.delete(label)
     }
+  }
+
+  getTimings(): Timing[] {
+    return Array.from(this.completedTimings.values())
+  }
+
+  clearTimings(): void {
+    this.completedTimings.clear()
+  }
+
+  // Generate Server-Timing header value
+  getServerTimingHeader(): string {
+    const timings = this.getTimings()
+    return timings
+      .map(t => {
+        let value = t.name
+        if (t.duration !== undefined) {
+          value += `;dur=${t.duration}`
+        }
+        if (t.description) {
+          value += `;desc="${t.description}"`
+        }
+        return value
+      })
+      .join(', ')
   }
 
   error(message: string, error?: any): void {
@@ -25,3 +65,8 @@ export class Logger {
 
 // Create a singleton logger instance
 export const logger = new Logger()
+
+// Create scoped logger for request-specific timings
+export function createRequestLogger(): Logger {
+  return new Logger()
+}

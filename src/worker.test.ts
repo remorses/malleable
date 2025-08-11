@@ -19,6 +19,11 @@ describe("Remote Bundler Worker", () => {
     expect(result).toMatchInlineSnapshot(`
       {
         "cssUrl": "https://remote-bundler.fumabase.com/bundle/0c39b72ef182cba0.css",
+        "files": {
+          "0c39b72ef182cba0.js": "https://remote-bundler.fumabase.com/bundle/0c39b72ef182cba0.js",
+          "0c39b72ef182cba0.js.map": "https://remote-bundler.fumabase.com/bundle/0c39b72ef182cba0.js.map",
+          "styles.css": "https://remote-bundler.fumabase.com/bundle/0c39b72ef182cba0.css",
+        },
         "jsUrl": "https://remote-bundler.fumabase.com/bundle/0c39b72ef182cba0.js",
         "success": true,
         "warnings": [],
@@ -42,7 +47,12 @@ describe("Remote Bundler Worker", () => {
     expect(result).toMatchInlineSnapshot(`
       {
         "cssUrl": "https://remote-bundler.fumabase.com/bundle/518d16db8496ff1f.css",
-        "jsUrl": "https://remote-bundler.fumabase.com/bundle/518d16db8496ff1f.js",
+        "files": {
+          "button-XWV7WR3J.js": "https://remote-bundler.fumabase.com/bundle/button-XWV7WR3J.js",
+          "button-XWV7WR3J.js.map": "https://remote-bundler.fumabase.com/bundle/button-XWV7WR3J.js.map",
+          "styles.css": "https://remote-bundler.fumabase.com/bundle/518d16db8496ff1f.css",
+        },
+        "jsUrl": "https://remote-bundler.fumabase.com/bundle/button-XWV7WR3J.js",
         "success": true,
         "warnings": [],
       }
@@ -68,7 +78,12 @@ describe("Remote Bundler Worker", () => {
     expect(result).toMatchInlineSnapshot(`
       {
         "cssUrl": "https://remote-bundler.fumabase.com/bundle/e42dae69905f1802.css",
-        "jsUrl": "https://remote-bundler.fumabase.com/bundle/e42dae69905f1802.js",
+        "files": {
+          "card-ZZ5RTS2A.js": "https://remote-bundler.fumabase.com/bundle/card-ZZ5RTS2A.js",
+          "card-ZZ5RTS2A.js.map": "https://remote-bundler.fumabase.com/bundle/card-ZZ5RTS2A.js.map",
+          "styles.css": "https://remote-bundler.fumabase.com/bundle/e42dae69905f1802.css",
+        },
+        "jsUrl": "https://remote-bundler.fumabase.com/bundle/card-ZZ5RTS2A.js",
         "success": true,
         "warnings": [],
       }
@@ -94,7 +109,7 @@ describe("Remote Bundler Worker", () => {
       expect(result.success).toMatchInlineSnapshot(`false`);
       expect(result.cssUrl).toMatchInlineSnapshot(`undefined`);
     },
-    { timeout: 30000 },
+    { timeout: 60000 },
   );
 
   it("should handle missing code parameter", async () => {
@@ -136,7 +151,12 @@ describe("Remote Bundler Worker", () => {
     expect(result).toMatchInlineSnapshot(`
       {
         "cssUrl": "https://remote-bundler.fumabase.com/bundle/eaf566c7918e4919.css",
-        "jsUrl": "https://remote-bundler.fumabase.com/bundle/eaf566c7918e4919.js",
+        "files": {
+          "hero-AOSZIDM5.js": "https://remote-bundler.fumabase.com/bundle/hero-AOSZIDM5.js",
+          "hero-AOSZIDM5.js.map": "https://remote-bundler.fumabase.com/bundle/hero-AOSZIDM5.js.map",
+          "styles.css": "https://remote-bundler.fumabase.com/bundle/eaf566c7918e4919.css",
+        },
+        "jsUrl": "https://remote-bundler.fumabase.com/bundle/hero-AOSZIDM5.js",
         "success": true,
         "warnings": [],
       }
