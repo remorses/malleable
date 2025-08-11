@@ -107,11 +107,7 @@ const app = new Spiceflow()
           }, { status: 400 })
         }
 
-        // Static plugins array
-        const plugins: esbuild.Plugin[] = [
-          createLocalResolverPlugin({ files }),
-          createEsmShPlugin({ externalPackages })
-        ]
+
 
         // Generate hash for the entry point name
         const hashInput = JSON.stringify({
@@ -128,15 +124,6 @@ const app = new Spiceflow()
         const baseUrl = new URL(request.url).origin
         const cssUrl = `${baseUrl}/bundle/${entryHash}.css`
 
-        // Always add virtual entry plugin for React component support
-        const allPlugins: esbuild.Plugin[] = [
-          createVirtualEntryPlugin({
-            actualEntryPath: actualEntryPoint,
-            cssUrl,
-            baseUrl
-          }),
-          ...plugins
-        ]
 
         // Collect all code for CSS extraction
         const allCode = files.map(f => f.content).join('\n')
@@ -159,7 +146,15 @@ const app = new Spiceflow()
               write: false,
               minify: false,
               jsx: 'automatic',
-              plugins: allPlugins,
+              plugins: [
+                createVirtualEntryPlugin({
+                  actualEntryPath: actualEntryPoint,
+                  cssUrl,
+                  baseUrl
+                }),
+                createLocalResolverPlugin({ files }),
+                createEsmShPlugin({ externalPackages })
+              ],
               absWorkingDir: '/',
               loader: { '.tsx': 'tsx', '.ts': 'tsx', '.jsx': 'tsx', '.js': 'tsx' },
               // Configure output filenames - [name] will be our hash
