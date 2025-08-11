@@ -19,5 +19,9 @@
       "@cloudflare/workers-types"
     ],
     "jsx": "react"
-  }
+  },
+  "exclude": [
+    "demo/**/*",
+    "src/live.ts"
+  ]
 }

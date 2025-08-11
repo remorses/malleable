@@ -1,9 +1,9 @@
 {
   "scripts": {
-    "dev": "wrangler dev src/index.ts",
+    "dev": "wrangler dev",
     "dev:app": "vite",
     "test": "pnpm vitest -u",
-    "deployment": "pnpm tsc && wrangler deploy --minify src/index.ts"
+    "deployment": "wrangler deploy --minify"
   },
   "dependencies": {
     "@ai-sdk/openai": "^2.0.8",

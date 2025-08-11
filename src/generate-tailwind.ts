@@ -2,13 +2,8 @@ import postcss from 'postcss'
 import autoprefixer from 'autoprefixer'
 import tailwindcss from 'tailwindcss'
 
-export async function generateTailwindCSS(content: string): Promise<string> {
-  try {
-    // Dynamically import typography plugin
-    const typography = await import('@tailwindcss/typography')
-    
-    // shadcn/ui default theme configuration with fallback values
-    const shadcnTheme = {
+// Export the theme configuration for use in other files
+export const shadcnTheme = {
       extend: {
         colors: {
           border: "hsl(var(--border, 214.3 31.8% 91.4%))",
@@ -65,7 +60,12 @@ export async function generateTailwindCSS(content: string): Promise<string> {
           "accordion-up": "accordion-up 0.2s ease-out",
         },
       },
-    }
+}
+
+export async function generateTailwindCSS(content: string): Promise<string> {
+  try {
+    // Dynamically import typography plugin
+    const typography = await import('@tailwindcss/typography')
     
     // Build Tailwind CSS using PostCSS
     // Let Tailwind's built-in scanner extract the classes
