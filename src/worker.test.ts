@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import type { BundleResult } from "./types";
+import type { BundleResult } from "./types.js";
 
 const WORKER_URL = "https://remote-bundler.fumabase.com";
 
@@ -16,7 +16,7 @@ describe("Remote Bundler Worker", () => {
       }),
     });
 
-    const result = await response.json();
+    const result = await response.json() as BundleResult;
     expect(result).toMatchInlineSnapshot(`
       {
         "files": {
@@ -54,7 +54,7 @@ describe("Remote Bundler Worker", () => {
       }),
     });
 
-    const result = await response.json();
+    const result = await response.json() as BundleResult;
     expect(result).toMatchInlineSnapshot(`
       {
         "files": {
@@ -95,7 +95,7 @@ describe("Remote Bundler Worker", () => {
       }),
     });
 
-    const result = await response.json();
+    const result = await response.json() as BundleResult;
     expect(result).toMatchInlineSnapshot(`
       {
         "files": {
@@ -136,9 +136,8 @@ describe("Remote Bundler Worker", () => {
         }),
       });
 
-      const result = (await response.json()) as any;
+      const result = await response.json() as BundleResult;
       expect(result.success).toMatchInlineSnapshot(`false`);
-      expect(result.cssUrl).toMatchInlineSnapshot(`undefined`);
     },
     { timeout: 60000 },
   );
@@ -152,7 +151,7 @@ describe("Remote Bundler Worker", () => {
       }),
     });
 
-    const result = await response.json();
+    const result = await response.json() as BundleResult;
     expect(response.status).toMatchInlineSnapshot(`400`);
     expect(result).toMatchInlineSnapshot(`
       {
@@ -178,7 +177,7 @@ describe("Remote Bundler Worker", () => {
       }),
     });
 
-    const result = await response.json();
+    const result = await response.json() as BundleResult;
     expect(result).toMatchInlineSnapshot(`
       {
         "files": {
@@ -298,14 +297,17 @@ describe("Remote Bundler Worker", () => {
       }),
     });
 
-    const result = await response.json();
+    const result = await response.json() as BundleResult;
     expect(result.success).toBe(true);
-    expect(result.jsUrl).toBeDefined();
-    expect(result.files).toBeDefined();
     
-    // Check that multiple files were processed
-    expect(result.rawOutputs).toBeDefined();
-    expect(result.rawOutputs.length).toBeGreaterThan(0);
+    if (result.success) {
+      expect(result.jsUrl).toBeDefined();
+      expect(result.files).toBeDefined();
+      
+      // Check that multiple files were processed
+      expect(result.rawOutputs).toBeDefined();
+      expect(result.rawOutputs.length).toBeGreaterThan(0);
+    }
     
     // Verify the output contains expected content
     expect(result).toMatchInlineSnapshot(`
@@ -358,7 +360,7 @@ describe("Remote Bundler Worker", () => {
     });
 
 
-    const result = await response.json() as any;
+    const result = await response.json() as BundleResult;
     expect(result).toMatchInlineSnapshot(`
       {
         "files": {
@@ -385,6 +387,9 @@ describe("Remote Bundler Worker", () => {
     expect(result.success).toBe(true);
 
     // Execute the bundled code using Deno and log the module exports
+    if (!result.success) {
+      throw new Error('Bundle failed');
+    }
     const jsUrl = result.jsUrl;
     const { execSync } = await import('child_process');
 
