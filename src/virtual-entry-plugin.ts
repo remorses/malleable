@@ -25,7 +25,7 @@ export function createVirtualEntryPlugin({
         // 2. Wraps the default export with a Fragment containing the link tag
         // 3. Re-exports other exports from the actual entry
         const content = `
-import React from 'react';
+import React from 'https://esm.sh/react';
 import * as ActualEntry from './${actualEntryPath}';
 
 // Re-export all named exports
@@ -35,14 +35,11 @@ export * from './${actualEntryPath}';
 const OriginalDefault = ActualEntry.default;
 
 const WrappedComponent = (props) => {
-  return React.createElement(
-    React.Fragment,
-    null,
-    React.createElement('link', {
-      rel: 'stylesheet',
-      href: '${cssUrl}'
-    }),
-    OriginalDefault ? React.createElement(OriginalDefault, props) : null
+  return (
+    <>
+      <link rel="stylesheet" href="${cssUrl}" />
+      {OriginalDefault ? <OriginalDefault {...props} /> : null}
+    </>
   );
 };
 

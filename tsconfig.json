@@ -8,20 +8,11 @@
     "allowImportingTsExtensions": true,
     "strict": true,
     "noImplicitAny": false,
-    "lib": [
-      "esnext",
-      "DOM",
-      "DOM.Iterable"
-    ],
+    "lib": ["esnext", "DOM", "DOM.Iterable"],
     "skipLibCheck": true,
     "useUnknownInCatchVariables": false,
-    "types": [
-      "@cloudflare/workers-types"
-    ],
+    "types": ["@cloudflare/workers-types", "@types/node"],
     "jsx": "react"
   },
-  "exclude": [
-    "demo/**/*",
-    "src/live.ts"
-  ]
+  "exclude": ["demo/**/*", ]
 }

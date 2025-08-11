@@ -1,4 +1,4 @@
-/* @ts-nocheck */
+// @ts-nocheck
 /* eslint-disable */
 // To run this code you need to install the following dependencies:
 // npm install @google/genai mime

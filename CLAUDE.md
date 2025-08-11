@@ -1,6 +1,6 @@
 use pnpm to install dependencies
 
-after every big change run `pnpm deployment` to deploy the script and `pnpm test -u --run` to update snapshots
+after changes run `pnpm tsc`. after every big change run `pnpm deployment` to deploy the script and `pnpm test -u --run` to update snapshots
 
 ## Testing Preferences
 

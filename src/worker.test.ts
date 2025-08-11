@@ -26,12 +26,12 @@ describe("Remote Bundler Worker", () => {
         "rawOutputs": [
           {
             "path": "/0c39b72ef182cba0.js.map",
-            "size": 20086,
+            "size": 4367,
             "type": "sourcemap",
           },
           {
             "path": "/0c39b72ef182cba0.js",
-            "size": 15289,
+            "size": 4668,
             "type": "entry",
           },
         ],
@@ -64,12 +64,12 @@ describe("Remote Bundler Worker", () => {
         "rawOutputs": [
           {
             "path": "/518d16db8496ff1f.js.map",
-            "size": 20129,
+            "size": 4410,
             "type": "sourcemap",
           },
           {
             "path": "/518d16db8496ff1f.js",
-            "size": 15304,
+            "size": 4683,
             "type": "entry",
           },
         ],
@@ -105,12 +105,12 @@ describe("Remote Bundler Worker", () => {
         "rawOutputs": [
           {
             "path": "/e42dae69905f1802.js.map",
-            "size": 20229,
+            "size": 4510,
             "type": "sourcemap",
           },
           {
             "path": "/e42dae69905f1802.js",
-            "size": 15294,
+            "size": 4673,
             "type": "entry",
           },
         ],
@@ -188,12 +188,12 @@ describe("Remote Bundler Worker", () => {
         "rawOutputs": [
           {
             "path": "/eaf566c7918e4919.js.map",
-            "size": 20290,
+            "size": 4571,
             "type": "sourcemap",
           },
           {
             "path": "/eaf566c7918e4919.js",
-            "size": 15294,
+            "size": 4673,
             "type": "entry",
           },
         ],
@@ -217,5 +217,76 @@ describe("Remote Bundler Worker", () => {
     expect(response.headers.get("Access-Control-Allow-Origin")).toMatchInlineSnapshot(`"*"`);
     expect(response.headers.get("Access-Control-Allow-Methods")).toMatchInlineSnapshot(`"OPTIONS, GET, POST, PUT, PATCH, DELETE"`);
     expect(response.headers.get("Access-Control-Allow-Headers")).toMatchInlineSnapshot(`"*"`);
+  });
+
+  it("should execute bundled code with Deno", async () => {
+    // First, bundle a React component
+    const response = await fetch(`${WORKER_URL}/api/bundle`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        files: [{
+          path: "app.tsx",
+          content: `
+            import React from 'react';
+
+            export const add = (a, b) => a + b;
+            export const multiply = (a, b) => a * b;
+
+            const App = ({ name = "World" }) => {
+              return <div className="p-4">Hello {name}!</div>;
+            };
+
+            export default App;
+          `
+        }],
+      }),
+    });
+
+
+    const result = await response.json() as any;
+    expect(result).toMatchInlineSnapshot(`
+      {
+        "files": {
+          "9efb087fd86defd0.js": "https://remote-bundler.fumabase.com/bundle/9efb087fd86defd0.js",
+          "9efb087fd86defd0.js.map": "https://remote-bundler.fumabase.com/bundle/9efb087fd86defd0.js.map",
+        },
+        "jsUrl": "https://remote-bundler.fumabase.com/bundle/9efb087fd86defd0.js",
+        "rawOutputs": [
+          {
+            "path": "/9efb087fd86defd0.js.map",
+            "size": 4267,
+            "type": "sourcemap",
+          },
+          {
+            "path": "/9efb087fd86defd0.js",
+            "size": 2454,
+            "type": "entry",
+          },
+        ],
+        "success": true,
+        "warnings": [],
+      }
+    `);
+    expect(result.success).toBe(true);
+
+    // Execute the bundled code using Deno and log the module exports
+    const jsUrl = result.jsUrl;
+    const { execSync } = await import('child_process');
+
+    try {
+      const output = execSync(
+        `deno eval "import('${jsUrl}').then(m => console.log(m))"`,
+        { encoding: 'utf-8' }
+      );
+
+      console.log(output)
+      // Just check that it executed without error and has output
+      expect(output).toBeTruthy();
+
+    } catch (error: any) {
+      console.error("Failed to execute bundled code:", error.message);
+      throw error;
+    }
   });
 });

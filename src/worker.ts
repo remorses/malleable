@@ -65,7 +65,7 @@ const app = new Spiceflow()
     async handler({ request, state }) {
       // Create request-scoped logger
       const reqLogger = createRequestLogger()
-      
+
       reqLogger.time(`total`)
 
       if (!init) {
@@ -122,18 +122,15 @@ const app = new Spiceflow()
         })
         const entryHash = await generateHash(hashInput)
 
-        // Determine jsxImportSource based on external packages
-        const jsxImportSource = externalPackages.includes('react')
-          ? undefined
-          : 'https://unpkg.com/react'
+
 
         // Prepare CSS URL for the virtual entry
         const baseUrl = new URL(request.url).origin
         const cssUrl = `${baseUrl}/bundle/${entryHash}.css`
 
-        // Create plugins including virtual entry
+        // Always add virtual entry plugin for React component support
         const allPlugins: esbuild.Plugin[] = [
-          createVirtualEntryPlugin({ 
+          createVirtualEntryPlugin({
             actualEntryPath: actualEntryPoint,
             cssUrl,
             baseUrl
@@ -162,7 +159,6 @@ const app = new Spiceflow()
               write: false,
               minify: false,
               jsx: 'automatic',
-              jsxImportSource,
               plugins: allPlugins,
               absWorkingDir: '/',
               loader: { '.tsx': 'tsx', '.ts': 'tsx', '.jsx': 'tsx', '.js': 'tsx' },
@@ -189,12 +185,12 @@ const app = new Spiceflow()
 
         // Use same hash for CSS file
         const cssKey = `${entryHash}.css`
-        
+
         // Store all output files in KV
         const ttl = 60 * 60 * 24 * 7 // 7 days in seconds
         const kvPromises: Promise<void>[] = []
         const fileUrls: Record<string, string> = {}
-        
+
         // Store JS/sourcemap files from esbuild
         for (const file of outputFiles) {
           // Extract filename from path (remove leading ./)
@@ -202,10 +198,10 @@ const app = new Spiceflow()
           kvPromises.push(state.env.jsCache.put(filename, file.text, { expirationTtl: ttl }))
           fileUrls[filename] = `${new URL(request.url).origin}/bundle/${filename}`
         }
-        
+
         // Store CSS file
         kvPromises.push(state.env.jsCache.put(cssKey, css, { expirationTtl: ttl }))
-        
+
         reqLogger.time(`kv-store`)
         await Promise.all(kvPromises)
         reqLogger.timeEnd(`kv-store`)
@@ -219,7 +215,7 @@ const app = new Spiceflow()
         const rawOutputs = outputFiles.map(file => ({
           path: file.path,
           size: file.contents.byteLength,
-          type: file.path.endsWith('.map') ? 'sourcemap' : 
+          type: file.path.endsWith('.map') ? 'sourcemap' :
                 file.path.includes('chunks/') ? 'chunk' : 'entry'
         }))
 
@@ -245,7 +241,7 @@ const app = new Spiceflow()
         return Response.json({
           error: error.message,
           success: false
-        }, { 
+        }, {
           status: 500,
           headers: {
             'Access-Control-Allow-Origin': '*',
@@ -262,18 +258,18 @@ const app = new Spiceflow()
     path: '/bundle/:key',
     async handler({ params, state }) {
       const key = params.key
-      
+
       if (!key) {
         return new Response('Not found', { status: 404 })
       }
-      
+
       // Get content from KV
       const content = await state.env.jsCache.get(key)
-      
+
       if (!content) {
         return new Response('Not found', { status: 404 })
       }
-      
+
       // Determine content type based on file extension
       let contentType = 'application/octet-stream'
       if (key.endsWith('.css')) {
@@ -283,7 +279,7 @@ const app = new Spiceflow()
       } else if (key.endsWith('.map')) {
         contentType = 'application/json'
       }
-      
+
       return new Response(content, {
         headers: {
           'Content-Type': contentType,
@@ -413,7 +409,7 @@ const app = new Spiceflow()
 
                 if (result.success) {
                     let html = '<h3>✨ Bundle URLs</h3>';
-                    
+
                     if (result.files && Object.keys(result.files).length > 0) {
                         html += '<div style="margin: 20px 0;">';
                         html += '<h4>Generated Files:</h4>';
@@ -424,13 +420,13 @@ const app = new Spiceflow()
                         html += '</ul>';
                         html += '</div>';
                     }
-                    
+
                     if (result.jsUrl) {
                         html += '<h4>Include in your HTML:</h4>';
                         html += '<pre>' + escapeHtml('<script type="module" src="' + result.jsUrl + '"></script>') + '</pre>';
                         html += '<p><small>CSS is automatically loaded by the JavaScript bundle</small></p>';
                     }
-                    
+
                     output.innerHTML = html;
                 } else {
                     output.innerHTML = '<div class="error">❌ Error: ' + escapeHtml(result.error) + '</div>';
