@@ -20,8 +20,8 @@ const globalRedirectCache = new Map<string, string>()
 export function createEsmShPlugin(options: PluginOptions = {}): Plugin {
   const {
     externalPackages = [],
-    // Use unpkg (Cloudflare-hosted) for better performance when we're also on Cloudflare
-    cdnUrl = 'https://unpkg.com',
+    // Use esm.sh for ESM module resolution
+    cdnUrl = 'https://esm.sh',
   } = options
 
   const allExternalPackages = [...DEFAULT_EXTERNAL_PACKAGES, ...externalPackages]
@@ -69,8 +69,11 @@ export function createEsmShPlugin(options: PluginOptions = {}): Plugin {
           }
         }
 
-        // Resolve npm packages through CDN
-        const url = `${cdnUrl}/${args.path}`
+        // Resolve npm packages through esm.sh with external query params
+        const externalsQuery = allExternalPackages.length > 0 
+          ? `?external=${allExternalPackages.join(',')}` 
+          : ''
+        const url = `${cdnUrl}/${args.path}${externalsQuery}`
         return {
           path: url,
           namespace,
@@ -90,15 +93,18 @@ export function createEsmShPlugin(options: PluginOptions = {}): Plugin {
           }
         }
 
-        // Resolve through CDN
-        const url = `${cdnUrl}/${args.path}`
+        // Resolve through esm.sh with external query params
+        const externalsQuery = allExternalPackages.length > 0 
+          ? `?external=${allExternalPackages.join(',')}` 
+          : ''
+        const url = `${cdnUrl}/${args.path}${externalsQuery}`
         return {
           path: url,
           namespace,
         }
       })
 
-      // Load files from esm.sh
+      // Load files from CDN
       build.onLoad({ filter: /.*/, namespace }, async (args) => {
         const url = args.path
 

@@ -25,7 +25,7 @@ export function createVirtualEntryPlugin({
         // 2. Wraps the default export with a Fragment containing the link tag
         // 3. Re-exports other exports from the actual entry
         const content = `
-import React from 'https://esm.sh/react';
+import React from 'react';
 import * as ActualEntry from './${actualEntryPath}';
 
 // Re-export all named exports
