@@ -22,7 +22,8 @@ export const createVirtualEntryPlugin = createUnplugin<VirtualEntryOptions>((opt
         if (id === resolvedVirtualModuleId) {
           return 'jsx'
         }
-        return undefined
+        // Return tsx as default for other files
+        return 'tsx'
       }
     },
     
