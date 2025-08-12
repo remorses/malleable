@@ -1,5 +1,5 @@
 import type { Tool, jsonSchema as JsonSchemaType } from 'ai';
-import type { FunctionDeclaration, Schema, Type as GenAIType, Tool as GenAITool } from '@google/genai';
+import type { FunctionDeclaration, Schema, Type as GenAIType, Tool as GenAITool, CallableTool, FunctionCall, Part } from '@google/genai';
 import { Type } from '@google/genai';
 import { z, toJSONSchema } from 'zod';
 
@@ -155,7 +155,74 @@ export function aiToolToGenAIFunctionWithName(
 }
 
 /**
- * Convert multiple AI SDK tools to GenAI Tool format
+ * Convert AI SDK Tool to GenAI CallableTool
+ */
+export function aiToolToCallableTool(
+  tool: Tool<any, any>,
+  name?: string
+): CallableTool {
+  const toolName = name || 'tool';
+  
+  return {
+    async tool(): Promise<GenAITool> {
+      const functionDeclaration = name 
+        ? aiToolToGenAIFunctionWithName(tool, name)
+        : aiToolToGenAIFunction(tool);
+      
+      return {
+        functionDeclarations: [functionDeclaration]
+      };
+    },
+    
+    async callTool(functionCalls: FunctionCall[]): Promise<Part[]> {
+      const parts: Part[] = [];
+      
+      for (const functionCall of functionCalls) {
+        // Check if this function call matches our tool
+        if (functionCall.name !== toolName && name && functionCall.name !== name) {
+          continue;
+        }
+        
+        // Execute the tool if it has an execute function
+        if (tool.execute) {
+          try {
+            const result = await tool.execute(functionCall.args || {}, {
+              toolCallId: functionCall.id || '',
+              messages: []
+            });
+            
+            // Convert the result to a Part
+            parts.push({
+              functionResponse: {
+                id: functionCall.id,
+                name: functionCall.name || toolName,
+                response: {
+                  output: result
+                }
+              }
+            } as Part);
+          } catch (error) {
+            // Handle errors
+            parts.push({
+              functionResponse: {
+                id: functionCall.id,
+                name: functionCall.name || toolName,
+                response: {
+                  error: error instanceof Error ? error.message : String(error)
+                }
+              }
+            } as Part);
+          }
+        }
+      }
+      
+      return parts;
+    }
+  };
+}
+
+/**
+ * Convert multiple AI SDK tools to GenAI Tool format (deprecated, use aiToolsToCallableTools)
  */
 export function aiToolsToGenAITools(
   tools: Record<string, Tool<any, any>>

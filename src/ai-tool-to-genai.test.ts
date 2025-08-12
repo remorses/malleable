@@ -2,11 +2,12 @@ import { describe, it, expect } from 'vitest';
 import { tool } from 'ai';
 import { z } from 'zod';
 import { Type } from '@google/genai';
-import type { FunctionDeclaration } from '@google/genai';
+import type { FunctionDeclaration, FunctionCall } from '@google/genai';
 import { 
   aiToolToGenAIFunction, 
   aiToolToGenAIFunctionWithName,
   aiToolsToGenAITools,
+  aiToolToCallableTool,
   extractSchemaFromTool
 } from './ai-tool-to-genai.js';
 
@@ -281,6 +282,106 @@ describe('AI Tool to GenAI Conversion', () => {
           },
         ],
       }
+    `);
+  });
+
+  it('should create a CallableTool', async () => {
+    const weatherTool = tool({
+      description: 'Get weather',
+      inputSchema: z.object({
+        location: z.string()
+      }),
+      execute: async ({ location }) => ({ 
+        temperature: 72,
+        location 
+      })
+    });
+    
+    const callableTool = aiToolToCallableTool(weatherTool, 'weather');
+    
+    // Test tool() method
+    const genAITool = await callableTool.tool();
+    expect(genAITool.functionDeclarations).toMatchInlineSnapshot(`
+      [
+        {
+          "description": "Get weather",
+          "name": "weather",
+          "parameters": {
+            "properties": {
+              "location": {
+                "type": "STRING",
+              },
+            },
+            "required": [
+              "location",
+            ],
+            "type": "OBJECT",
+          },
+        },
+      ]
+    `);
+    
+    // Test callTool() method
+    const functionCall: FunctionCall = {
+      id: 'call_123',
+      name: 'weather',
+      args: { location: 'San Francisco' }
+    };
+    
+    const parts = await callableTool.callTool([functionCall]);
+    expect(parts).toMatchInlineSnapshot(`
+      [
+        {
+          "functionResponse": {
+            "id": "call_123",
+            "name": "weather",
+            "response": {
+              "output": {
+                "location": "San Francisco",
+                "temperature": 72,
+              },
+            },
+          },
+        },
+      ]
+    `);
+  });
+
+  it('should handle tool execution errors', async () => {
+    const errorTool = tool({
+      description: 'Tool that throws',
+      inputSchema: z.object({
+        trigger: z.boolean()
+      }),
+      execute: async ({ trigger }) => {
+        if (trigger) {
+          throw new Error('Tool execution failed');
+        }
+        return { success: true };
+      }
+    });
+    
+    const callableTool = aiToolToCallableTool(errorTool, 'error_tool');
+    
+    const functionCall: FunctionCall = {
+      id: 'call_error',
+      name: 'error_tool',
+      args: { trigger: true }
+    };
+    
+    const parts = await callableTool.callTool([functionCall]);
+    expect(parts).toMatchInlineSnapshot(`
+      [
+        {
+          "functionResponse": {
+            "id": "call_error",
+            "name": "error_tool",
+            "response": {
+              "error": "Tool execution failed",
+            },
+          },
+        },
+      ]
     `);
   });
 });
