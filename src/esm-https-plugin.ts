@@ -1,5 +1,5 @@
 import { createUnplugin } from 'unplugin'
-import { logger } from "./logger.js"
+import { logger } from "./logger.ts"
 
 export interface PluginOptions {
   externalPackages?: string[]
@@ -18,74 +18,75 @@ export const createEsmShPlugin = createUnplugin<PluginOptions>((options = {}) =>
 
   return {
     name: 'esm-sh-plugin',
-    
+
     resolveId(id, importer) {
       // Handle https:// URLs directly
       if (id.startsWith('https://') || id.startsWith('http://')) {
         return id
       }
-      
+
       // Handle relative imports from remote modules
       if (importer?.startsWith('https://') && (id.startsWith('.') || id.startsWith('/'))) {
-        const url = new URL(id, importer).toString()
+        const url = new URL(id, importer).toString().trim()
         return url
       }
-      
+
       // Handle npm packages (not relative/absolute paths)
       if (!id.startsWith('.') && !id.startsWith('/') && !id.startsWith('\0')) {
         // Check if package should be external
         const packageName = getPackageName(id)
-        if (externalPackages.some(pkg => 
+        if (externalPackages.some(pkg =>
           pkg === packageName || id.startsWith(pkg + '/')
         )) {
           return { id, external: true }
         }
-        
+
         // Resolve through esm.sh with external query params
-        const externalsQuery = externalPackages.length > 0 
-          ? `?external=${externalPackages.join(',')}` 
+        const externalsQuery = externalPackages.length > 0
+          ? '?' + new URLSearchParams({ external: externalPackages.join(',') }).toString()
           : ''
-        const url = `${cdnUrl}/${id}${externalsQuery}`
+        const url = `${cdnUrl}/${id}${externalsQuery}`.trim()
         return url
       }
-      
+
       return null
     },
-    
+
     async load(id) {
       // Only handle https:// URLs
       if (!id.startsWith('https://') && !id.startsWith('http://')) {
         return null
       }
-      
+
       const url = id
-      
+
       // Check cache first
       if (globalCodeCache.has(url)) {
         logger.log(`Cache hit for ${url.substring(0, 50)}`)
         return globalCodeCache.get(url)
       }
-      
+
       try {
         // Follow redirects
         const resolvedUrl = await resolveRedirect(url, globalRedirectCache)
-        
+
         // Fetch the module
         const fetchId = Math.random().toString(36).substring(2, 9)
         logger.time(`${fetchId} fetch ${url.substring(0, 50)}`)
         const response = await fetch(resolvedUrl)
         logger.timeEnd(`${fetchId} fetch ${url.substring(0, 50)}`)
-        
+
         if (!response.ok) {
           throw new Error(`Failed to fetch ${resolvedUrl}: ${response.status} ${response.statusText}`)
         }
-        
+
         // Determine if it's JSON based on content type
         const contentType = response.headers.get('content-type') || ''
         const isJson = contentType.includes('application/json')
-        
+
         let contents = await response.text()
-        
+        if (!contents) throw new Error(`https url returned empty string ${url}`)
+
         // Transform import.meta.url references
         if (contents.includes('import.meta.url')) {
           contents = contents.replace(
@@ -93,17 +94,17 @@ export const createEsmShPlugin = createUnplugin<PluginOptions>((options = {}) =>
             JSON.stringify(resolvedUrl)
           )
         }
-        
+
         // For JSON files, export as default
         if (isJson) {
           contents = `export default ${contents}`
         }
-        
+
         // Cache JavaScript modules
         if (!isJson) {
           globalCodeCache.set(url, contents)
         }
-        
+
         return contents
       } catch (error: any) {
         this.error({

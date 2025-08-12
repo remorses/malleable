@@ -11,29 +11,28 @@ export const createVirtualEntryPlugin = createUnplugin<VirtualEntryOptions>((opt
   const { actualEntryPath, cssUrl, baseUrl } = options
   const virtualModuleId = 'virtual:entry'
   const resolvedVirtualModuleId = '\0' + virtualModuleId
-  
+
   return {
     name: 'virtual-entry',
-    
+
     // Configure esbuild-specific loader
     esbuild: {
       loader: (code, id) => {
         // Use JSX loader for our virtual entry
         if (id === resolvedVirtualModuleId) {
-          return 'jsx'
+          return 'jsx' as const
         }
-        // Return tsx as default for other files
-        return 'tsx'
+        return 'tsx' as const
       }
     },
-    
+
     resolveId(id) {
       if (id === virtualModuleId) {
         return resolvedVirtualModuleId
       }
       return null
     },
-    
+
     load(id) {
       if (id === resolvedVirtualModuleId) {
         const content = dedent`
@@ -101,7 +100,7 @@ export const createVirtualEntryPlugin = createUnplugin<VirtualEntryOptions>((opt
 
         return {
           code: content,
-          
+
           map: null
         }
       }

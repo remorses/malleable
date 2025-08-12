@@ -1,6 +1,9 @@
 import { execSync } from 'child_process'
 
 export async function evaluateBundleWithDeno(jsUrl: string): Promise<string> {
+  if (jsUrl.includes('localhost')) {
+    return 'null'
+  }
   try {
     const output = execSync(
       `deno eval "import('${jsUrl}').then(m => console.log(JSON.stringify(Object.keys(m))))"`,

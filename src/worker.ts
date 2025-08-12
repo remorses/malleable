@@ -3,7 +3,7 @@ import { z } from 'zod'
 import * as esbuild from 'esbuild-wasm'
 import wasm from "../node_modules/esbuild-wasm/esbuild.wasm"
 import { generateTailwindCSS, shadcnTheme } from "./generate-tailwind.js"
-import { createEsmShPlugin } from "./plugins.js"
+import { createEsmShPlugin } from "./esm-https-plugin.ts"
 import { createLocalResolverPlugin } from "./local-resolver-plugin.js"
 import { createVirtualEntryPlugin } from "./virtual-entry-plugin.js"
 import { logger, createRequestLogger } from "./logger.js"
@@ -71,7 +71,7 @@ const app = new Spiceflow()
       if (!init) {
         reqLogger.time(`esbuild-init`)
         await esbuild.initialize({
-          wasmModule: wasm,
+          wasmModule: process.env.VITEST ? undefined : wasm,
           worker: false
         })
         init = true
@@ -140,7 +140,7 @@ const app = new Spiceflow()
                 bundle: true,
                 format: 'esm',
                 splitting: true,
-                sourcemap: true,
+                sourcemap: false,
                 target: 'es2020',
                 platform: 'browser',
                 write: false,
@@ -152,16 +152,18 @@ const app = new Spiceflow()
                     cssUrl,
                     baseUrl
                   }) as any,
-                  createLocalResolverPlugin.esbuild({ files }) as any,
+                  createLocalResolverPlugin.esbuild({
+                    files,
+                  }) as any,
                   createEsmShPlugin.esbuild({ externalPackages }) as any
                 ],
                 absWorkingDir: '/',
-                loader: { 
-                  '.tsx': 'tsx', 
-                  '.ts': 'tsx', 
-                  '.jsx': 'tsx', 
+                loader: {
+                  '.tsx': 'tsx',
+                  '.ts': 'tsx',
+                  '.jsx': 'tsx',
                   '.js': 'tsx',
-                  '.css': 'css' 
+                  '.css': 'css'
                 },
                 // Configure output filenames - [name] will be our hash
                 entryNames: '[name]',                   // entry outputs use hash as name
@@ -193,48 +195,48 @@ const app = new Spiceflow()
 
           // Prepare files for storage
           const filesToStore: Array<{ filename: string, text: string, isJs: boolean }> = []
-          
+
           for (const file of outputFiles) {
             // Extract filename from path (remove leading ./)
             const filename = file.path.replace(/^\.?\//, '')
-            filesToStore.push({ 
-              filename, 
-              text: file.text, 
-              isJs: filename.endsWith('.js') 
+            filesToStore.push({
+              filename,
+              text: file.text,
+              isJs: filename.endsWith('.js')
             })
             fileUrls[filename] = `${new URL(request.url).origin}/bundle/${filename}`
           }
 
           // Complete all timing before generating the header
           reqLogger.timeEnd(`total`)
-          
+
           // Generate Server-Timing header after all timing is complete
           const serverTimingHeader = reqLogger.getServerTimingHeader()
-          
+
           // Now store all files with metadata
           const kvPromises: Promise<void>[] = []
-          
+
           // Store CSS file
           kvPromises.push(state.env.jsCache.put(cssKey, css, { expirationTtl: ttl }))
-          
+
           // Store other files with metadata for JS files
           for (const file of filesToStore) {
-            const metadata = file.isJs 
+            const metadata = file.isJs
               ? { serverTiming: serverTimingHeader }
               : undefined
-              
-            kvPromises.push(state.env.jsCache.put(file.filename, file.text, { 
+
+            kvPromises.push(state.env.jsCache.put(file.filename, file.text, {
               expirationTtl: ttl,
               metadata
             }))
           }
-          
+
           // Store all files in parallel (not timed since it happens after response)
           await Promise.all(kvPromises)
 
           // The main entry file will be named with our hash
           const mainJsUrl = fileUrls[`${entryHash}.js`] || undefined
-          
+
           // Collect all CSS file URLs
           const cssUrls: string[] = []
           for (const [filename, url] of Object.entries(fileUrls)) {
@@ -269,7 +271,7 @@ const app = new Spiceflow()
         import React from 'react';
         import ReactDOM from 'react-dom/client';
         import App from '${mainJsUrl}';
-        
+
         const root = ReactDOM.createRoot(document.getElementById('root'));
         root.render(React.createElement(App));
     </script>
@@ -279,7 +281,7 @@ const app = new Spiceflow()
           // Store HTML in KV
           const htmlKey = `${entryHash}.html`;
           await state.env.jsCache.put(htmlKey, htmlContent, { expirationTtl: ttl });
-          
+
           // Create HTML URL
           const htmlUrl = `${baseUrl}/bundle/${htmlKey}`;
 
@@ -312,7 +314,7 @@ const app = new Spiceflow()
         try { reqLogger.timeEnd(`parallel-build`) } catch {}
         try { reqLogger.timeEnd(`total`) } catch {}
         logger.error(`Request error:`, error)
-        
+
         // Format the error nicely using esbuild's built-in formatMessages if it's a build error
         let errorText = 'Build failed'
         if (error && error.errors && error.errors.length > 0) {
@@ -325,7 +327,7 @@ const app = new Spiceflow()
         } else if (error && error.message) {
           errorText = error.message
         }
-        
+
         // Also format warnings if any
         let warningText = ''
         if (error && error.warnings && error.warnings.length > 0) {
@@ -389,7 +391,7 @@ const app = new Spiceflow()
         'Cache-Control': 'public, max-age=604800', // Browser cache for 7 days
         'Access-Control-Allow-Origin': '*',
       }
-      
+
       // Add Server-Timing header if available in metadata
       if (kvResult.metadata?.serverTiming) {
         headers['Server-Timing'] = kvResult.metadata.serverTiming
@@ -398,6 +400,7 @@ const app = new Spiceflow()
       return new Response(kvResult.value, { headers })
     }
   })
+
   .route({
     method: 'GET',
     path: '/',
@@ -573,6 +576,8 @@ const app = new Spiceflow()
       })
     }
   })
+
+export { app }
 
 export default {
   async fetch(request: Request, env: Env) {
