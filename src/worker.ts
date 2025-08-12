@@ -131,136 +131,164 @@ const app = new Spiceflow()
         // Run esbuild and Tailwind CSS extraction concurrently
         reqLogger.time(`parallel-build`)
         const [result, css] = await Promise.all([
-          // Build with esbuild using virtual entry
-          (async () => {
-            reqLogger.time(`esbuild-build`)
-            const res = await esbuild.build({
-              entryPoints: { [entryHash]: 'virtual:entry' },
-              outdir: './',
-              bundle: true,
-              format: 'esm',
-              splitting: true,
-              sourcemap: true,
-              target: 'es2020',
-              platform: 'browser',
-              write: false,
-              minify: false,
-              jsx: 'automatic',
-              plugins: [
-                createVirtualEntryPlugin({
-                  actualEntryPath: actualEntryPoint,
-                  cssUrl,
-                  baseUrl
-                }),
-                createLocalResolverPlugin({ files }),
-                createEsmShPlugin({ externalPackages })
-              ],
-              absWorkingDir: '/',
-              loader: { '.tsx': 'tsx', '.ts': 'tsx', '.jsx': 'tsx', '.js': 'tsx' },
-              // Configure output filenames - [name] will be our hash
-              entryNames: '[name]',                   // entry outputs use hash as name
-              chunkNames: 'chunks/[name]-[hash]',     // shared/lazy chunks
-              assetNames: 'assets/[name]-[hash]',     // emitted assets
+            // Build with esbuild using virtual entry
+            (async () => {
+              reqLogger.time(`esbuild-build`)
+              const res = await esbuild.build({
+                entryPoints: { [entryHash]: 'virtual:entry' },
+                outdir: './',
+                bundle: true,
+                format: 'esm',
+                splitting: true,
+                sourcemap: true,
+                target: 'es2020',
+                platform: 'browser',
+                write: false,
+                minify: false,
+                jsx: 'automatic',
+                plugins: [
+                  createVirtualEntryPlugin({
+                    actualEntryPath: actualEntryPoint,
+                    cssUrl,
+                    baseUrl
+                  }),
+                  createLocalResolverPlugin({ files }),
+                  createEsmShPlugin({ externalPackages })
+                ],
+                absWorkingDir: '/',
+                loader: { '.tsx': 'tsx', '.ts': 'tsx', '.jsx': 'tsx', '.js': 'tsx' },
+                // Configure output filenames - [name] will be our hash
+                entryNames: '[name]',                   // entry outputs use hash as name
+                chunkNames: 'chunks/[name]-[hash]',     // shared/lazy chunks
+                assetNames: 'assets/[name]-[hash]',     // emitted assets
+              })
+              reqLogger.timeEnd(`esbuild-build`)
+              return res
+            })(),
+            // Generate Tailwind CSS
+            (async () => {
+              reqLogger.time(`tailwind-css`)
+              const styles = await generateTailwindCSS(allCode)
+              reqLogger.timeEnd(`tailwind-css`)
+              return styles
+            })()
+          ])
+          reqLogger.timeEnd(`parallel-build`)
+
+          const outputFiles = result.outputFiles || []
+          const warnings = result.warnings
+
+          // Use same hash for CSS file
+          const cssKey = `${entryHash}.css`
+
+          // Store all output files in KV
+          const ttl = 60 * 60 * 24 * 7 // 7 days in seconds
+          const fileUrls: Record<string, string> = {}
+
+          // Prepare files for storage
+          const filesToStore: Array<{ filename: string, text: string, isJs: boolean }> = []
+          
+          for (const file of outputFiles) {
+            // Extract filename from path (remove leading ./)
+            const filename = file.path.replace(/^\.?\//, '')
+            filesToStore.push({ 
+              filename, 
+              text: file.text, 
+              isJs: filename.endsWith('.js') 
             })
-            reqLogger.timeEnd(`esbuild-build`)
-            return res
-          })(),
-          // Generate Tailwind CSS
-          (async () => {
-            reqLogger.time(`tailwind-css`)
-            const styles = await generateTailwindCSS(allCode)
-            reqLogger.timeEnd(`tailwind-css`)
-            return styles
-          })()
-        ])
-        reqLogger.timeEnd(`parallel-build`)
-
-        const outputFiles = result.outputFiles || []
-        const warnings = result.warnings
-
-        // Use same hash for CSS file
-        const cssKey = `${entryHash}.css`
-
-        // Store all output files in KV
-        const ttl = 60 * 60 * 24 * 7 // 7 days in seconds
-        const fileUrls: Record<string, string> = {}
-
-        // Prepare files for storage
-        const filesToStore: Array<{ filename: string, text: string, isJs: boolean }> = []
-        
-        for (const file of outputFiles) {
-          // Extract filename from path (remove leading ./)
-          const filename = file.path.replace(/^\.?\//, '')
-          filesToStore.push({ 
-            filename, 
-            text: file.text, 
-            isJs: filename.endsWith('.js') 
-          })
-          fileUrls[filename] = `${new URL(request.url).origin}/bundle/${filename}`
-        }
-
-        // Complete all timing before generating the header
-        reqLogger.timeEnd(`total`)
-        
-        // Generate Server-Timing header after all timing is complete
-        const serverTimingHeader = reqLogger.getServerTimingHeader()
-        
-        // Now store all files with metadata
-        const kvPromises: Promise<void>[] = []
-        
-        // Store CSS file
-        kvPromises.push(state.env.jsCache.put(cssKey, css, { expirationTtl: ttl }))
-        
-        // Store other files with metadata for JS files
-        for (const file of filesToStore) {
-          const metadata = file.isJs 
-            ? { serverTiming: serverTimingHeader }
-            : undefined
-            
-          kvPromises.push(state.env.jsCache.put(file.filename, file.text, { 
-            expirationTtl: ttl,
-            metadata
-          }))
-        }
-        
-        // Store all files in parallel (not timed since it happens after response)
-        await Promise.all(kvPromises)
-
-        // The main entry file will be named with our hash
-        const mainJsUrl = fileUrls[`${entryHash}.js`] || undefined
-
-        // Create raw esbuild output metadata (without text content)
-        const rawOutputs = outputFiles.map(file => ({
-          path: file.path,
-          size: file.contents.byteLength,
-          type: file.path.endsWith('.map') ? 'sourcemap' :
-                file.path.includes('chunks/') ? 'chunk' : 'entry'
-        }))
-
-        // Return URLs for all files (CSS is now injected via JS)
-        return Response.json({
-          jsUrl: mainJsUrl,
-          files: fileUrls,
-          rawOutputs,
-          warnings,
-          success: true
-        }, {
-          headers: {
-            'Access-Control-Allow-Origin': '*',
-            'Access-Control-Allow-Methods': 'OPTIONS, GET, POST, PUT, PATCH, DELETE',
-            'Access-Control-Allow-Headers': '*',
-            'Server-Timing': reqLogger.getServerTimingHeader()
+            fileUrls[filename] = `${new URL(request.url).origin}/bundle/${filename}`
           }
-        })
+
+          // Complete all timing before generating the header
+          reqLogger.timeEnd(`total`)
+          
+          // Generate Server-Timing header after all timing is complete
+          const serverTimingHeader = reqLogger.getServerTimingHeader()
+          
+          // Now store all files with metadata
+          const kvPromises: Promise<void>[] = []
+          
+          // Store CSS file
+          kvPromises.push(state.env.jsCache.put(cssKey, css, { expirationTtl: ttl }))
+          
+          // Store other files with metadata for JS files
+          for (const file of filesToStore) {
+            const metadata = file.isJs 
+              ? { serverTiming: serverTimingHeader }
+              : undefined
+              
+            kvPromises.push(state.env.jsCache.put(file.filename, file.text, { 
+              expirationTtl: ttl,
+              metadata
+            }))
+          }
+          
+          // Store all files in parallel (not timed since it happens after response)
+          await Promise.all(kvPromises)
+
+          // The main entry file will be named with our hash
+          const mainJsUrl = fileUrls[`${entryHash}.js`] || undefined
+
+          // Create raw esbuild output metadata (without text content)
+          const rawOutputs = outputFiles.map(file => ({
+            path: file.path,
+            size: file.contents.byteLength,
+            type: file.path.endsWith('.map') ? 'sourcemap' :
+                  file.path.includes('chunks/') ? 'chunk' : 'entry'
+          }))
+
+          // Return URLs for all files (CSS is now injected via JS)
+          return Response.json({
+            jsUrl: mainJsUrl,
+            files: fileUrls,
+            rawOutputs,
+            warnings,
+            success: true
+          }, {
+            headers: {
+              'Access-Control-Allow-Origin': '*',
+              'Access-Control-Allow-Methods': 'OPTIONS, GET, POST, PUT, PATCH, DELETE',
+              'Access-Control-Allow-Headers': '*',
+              'Server-Timing': reqLogger.getServerTimingHeader()
+            }
+          })
       } catch (error: any) {
-        reqLogger.timeEnd(`total`)
+        // Make sure to end any timers that might still be running
+        try { reqLogger.timeEnd(`parallel-build`) } catch {}
+        try { reqLogger.timeEnd(`total`) } catch {}
         logger.error(`Request error:`, error)
+        
+        // Format the error nicely using esbuild's built-in formatMessages if it's a build error
+        let errorText = 'Build failed'
+        if (error && error.errors && error.errors.length > 0) {
+          const formatted = await esbuild.formatMessages(error.errors, {
+            kind: 'error',
+            color: false, // No ANSI colors for web output
+            terminalWidth: 100,
+          })
+          errorText = formatted.join('\n')
+        } else if (error && error.message) {
+          errorText = error.message
+        }
+        
+        // Also format warnings if any
+        let warningText = ''
+        if (error && error.warnings && error.warnings.length > 0) {
+          const formatted = await esbuild.formatMessages(error.warnings, {
+            kind: 'warning',
+            color: false, // No ANSI colors for web output
+            terminalWidth: 100,
+          })
+          warningText = formatted.join('\n')
+        }
 
         return Response.json({
-          error: error.message,
+          error: error?.message || 'Build failed',
+          errorText,
+          warningText: warningText || undefined,
           success: false
         }, {
-          status: 500,
+          status: error?.errors ? 400 : 500,
           headers: {
             'Access-Control-Allow-Origin': '*',
             'Access-Control-Allow-Methods': 'OPTIONS, GET, POST, PUT, PATCH, DELETE',

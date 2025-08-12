@@ -17,6 +17,8 @@ export interface BundleSuccessResult {
 export interface BundleErrorResult {
   success: false
   error: string
+  errorText?: string
+  warningText?: string
 }
 
 export type BundleResult = BundleSuccessResult | BundleErrorResult
