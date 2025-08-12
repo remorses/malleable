@@ -1,4 +1,4 @@
-import type { Plugin } from 'esbuild-wasm'
+import { createUnplugin } from 'unplugin'
 import * as path from 'path-browserify'
 
 export interface LocalFile {
@@ -11,7 +11,7 @@ export interface LocalResolverOptions {
   workingDir?: string
 }
 
-export function createLocalResolverPlugin(options: LocalResolverOptions): Plugin {
+export const createLocalResolverPlugin = createUnplugin<LocalResolverOptions>((options) => {
   const { files, workingDir = '/' } = options
   
   // Create a map for quick file lookup
@@ -29,78 +29,78 @@ export function createLocalResolverPlugin(options: LocalResolverOptions): Plugin
 
   return {
     name: 'local-resolver',
-    setup(build) {
-      // Handle entry points
-      build.onResolve({ filter: /.*/ }, (args) => {
-        // Only handle entry points and imports, not external modules
-        if (args.kind === 'entry-point') {
-          // Check if we have this file
-          if (fileMap.has(args.path)) {
-            return {
-              path: args.path,
-              namespace: 'local-file'
-            }
-          }
-        }
-        return undefined
-      })
+    enforce: 'pre', // Run before other plugins
+    
+    resolveId(id, importer) {
+      // Skip if already processed
+      if (id.startsWith('\0') || id.startsWith('https://')) {
+        return null
+      }
       
-      // Resolve relative imports
-      build.onResolve({ filter: /^\.\.?[/\\]/ }, (args) => {
-        const basedir = path.dirname(args.importer)
-        const resolvedPath = path.resolve(basedir, args.path)
+      // Handle entry points
+      if (!importer) {
+        if (fileMap.has(id)) {
+          return '\0local:' + id
+        }
+      }
+      
+      // Handle relative imports
+      if (id.startsWith('.') || id.startsWith('/')) {
+        const basedir = importer 
+          ? (importer.startsWith('\0local:') 
+              ? path.dirname(importer.slice(7)) // Remove '\0local:' prefix
+              : path.dirname(importer))
+          : workingDir
+        const resolvedPath = path.resolve(basedir, id)
         
         // Try with common extensions if no extension provided
         const extensions = ['', '.ts', '.tsx', '.js', '.jsx', '.mjs']
         for (const ext of extensions) {
           const fullPath = resolvedPath + ext
           if (fileMap.has(fullPath)) {
-            return {
-              path: fullPath,
-              namespace: 'local-file'
-            }
+            return '\0local:' + fullPath
           }
           
           // Also try index files
           const indexPath = path.join(resolvedPath, 'index' + ext)
           if (fileMap.has(indexPath)) {
-            return {
-              path: indexPath,
-              namespace: 'local-file'
-            }
+            return '\0local:' + indexPath
           }
         }
-        
-        // If not found locally, return undefined to let other plugins handle it
-        return undefined
-      })
+      }
+      
+      // If not found locally, return null to let other plugins handle it
+      return null
+    },
 
-      // Load local files
-      build.onLoad({ filter: /.*/, namespace: 'local-file' }, (args) => {
-        const content = fileMap.get(args.path)
-        if (!content) {
-          return {
-            errors: [{
-              text: `File not found: ${args.path}`,
-              location: null,
-            }]
-          }
-        }
-
-        // Determine loader based on extension
-        const ext = path.extname(args.path)
-        let loader: 'ts' | 'tsx' | 'js' | 'jsx' = 'tsx'
-        if (ext === '.ts') loader = 'ts'
-        else if (ext === '.tsx') loader = 'tsx'
-        else if (ext === '.js' || ext === '.mjs') loader = 'js'
-        else if (ext === '.jsx') loader = 'jsx'
-
-        return {
-          contents: content,
-          loader,
-          resolveDir: path.dirname(args.path)
-        }
-      })
+    load(id) {
+      // Only handle local files
+      if (!id.startsWith('\0local:')) {
+        return null
+      }
+      
+      const filePath = id.slice(7) // Remove '\0local:' prefix
+      const content = fileMap.get(filePath)
+      
+      if (!content) {
+        this.error({
+          message: `File not found: ${filePath}`,
+          id: filePath,
+        })
+        return null
+      }
+      
+      // Determine loader based on extension
+      const ext = path.extname(filePath)
+      let code = content
+      
+      // For TypeScript/JSX files, we just pass them through as-is
+      // since esbuild will handle the transformation
+      
+      return {
+        code,
+        map: null
+      }
     }
   }
-}
+})

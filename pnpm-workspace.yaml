@@ -1,0 +1,2 @@
+patchedDependencies:
+  unplugin@2.3.5: patches/unplugin@2.3.5.patch

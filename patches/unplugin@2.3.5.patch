@@ -1,0 +1,84 @@
+diff --git a/dist/context-BZKy5Nsn.js b/dist/context-BZKy5Nsn.js
+index 3186708e19f07486767d3ab469d3eee926a73b3a..4a289e5d42d8dbc57a3bdec13be39f6f78a46657 100644
+--- a/dist/context-BZKy5Nsn.js
++++ b/dist/context-BZKy5Nsn.js
+@@ -1,8 +1,13 @@
+ import { parse } from "./context-D49cMElb.js";
+-import { createRequire } from "node:module";
+-import { resolve } from "node:path";
+-import { Buffer } from "node:buffer";
+-import process from "node:process";
++// import { createRequire } from "node:module"; // Not available in Workers
++// import { resolve } from "node:path";
++// import { Buffer } from "node:buffer";
++// import process from "node:process";
++
++// Stubs for Node.js APIs
++const resolve = (...args) => args.join('/').replace(/\/+/g, '/');
++const Buffer = globalThis.Buffer || { from: () => new Uint8Array() };
++const process = { cwd: () => '/' };
+ 
+ //#region src/webpack/context.ts
+ function contextOptionsFromCompilation(compilation) {
+@@ -15,7 +20,8 @@ function contextOptionsFromCompilation(compilation) {
+ 		}
+ 	};
+ }
+-const require = createRequire(import.meta.url);
++// const require = createRequire(import.meta.url); // Not available in Workers
++const require = () => { throw new Error('require not available in Workers'); };
+ function getSource(fileSource) {
+ 	const webpack = require("webpack");
+ 	return new webpack.sources.RawSource(typeof fileSource === "string" ? fileSource : Buffer.from(fileSource.buffer));
+diff --git a/dist/index.js b/dist/index.js
+index 33ac01c9920c054eb70fba7fcf7bfef5544ec94b..4176cf31f58f813569dfe6587604f32c92636326 100644
+--- a/dist/index.js
++++ b/dist/index.js
+@@ -3,12 +3,27 @@ import { normalizeAbsolutePath, transformUse } from "./webpack-like-CSbnjTNU.js"
+ import { createBuildContext$1 as createBuildContext, normalizeMessage$1 as normalizeMessage } from "./context-DY6ggBKV.js";
+ import { FakeVirtualModulesPlugin, decodeVirtualModuleId, encodeVirtualModuleId, isVirtualModuleId } from "./utils-Cbrj-Du4.js";
+ import { contextOptionsFromCompilation, createBuildContext as createBuildContext$1, normalizeMessage as normalizeMessage$1 } from "./context-BZKy5Nsn.js";
+-import fs from "node:fs";
+-import path, { extname, resolve } from "node:path";
+-import { Buffer as Buffer$1 } from "node:buffer";
+-import * as querystring from "node:querystring";
+-import { fileURLToPath } from "node:url";
+-import process$1 from "node:process";
++// Removed Node.js imports that aren't available in Cloudflare Workers
++// import fs from "node:fs";
++// import path, { extname, resolve } from "node:path";
++// import { Buffer as Buffer$1 } from "node:buffer";
++// import * as querystring from "node:querystring";
++// import { fileURLToPath } from "node:url";
++// import process$1 from "node:process";
++
++// Provide stubs for Node.js APIs
++const fs = {};
++const path = { 
++  extname: (p) => { const i = p.lastIndexOf('.'); return i > 0 ? p.slice(i) : ''; },
++  resolve: (...args) => args.join('/').replace(/\/+/g, '/'),
++  dirname: (p) => p.substring(0, p.lastIndexOf('/')) || '/'
++};
++const extname = path.extname;
++const resolve = path.resolve;
++const Buffer$1 = { Buffer: globalThis.Buffer || {} };
++const querystring = { parse: () => ({}), stringify: () => '' };
++const fileURLToPath = (url) => url;
++const process$1 = { cwd: () => '/', env: {} };
+ import VirtualModulesPlugin from "webpack-virtual-modules";
+ 
+ //#region node_modules/.pnpm/@jridgewell+sourcemap-codec@1.5.0/node_modules/@jridgewell/sourcemap-codec/dist/sourcemap-codec.mjs
+@@ -1542,9 +1557,10 @@ function getRolldownPlugin(factory) {
+ 
+ //#endregion
+ //#region node_modules/.pnpm/tsdown@0.12.3_publint@0.3.5_typescript@5.8.3_unplugin-unused@0.5.0_vue-tsc@2.2.10_typescript@5.8.3_/node_modules/tsdown/esm-shims.js
+-const getFilename = () => fileURLToPath(import.meta.url);
+-const getDirname = () => path.dirname(getFilename());
+-const __dirname = /* @__PURE__ */ getDirname();
++// Stub for __dirname since import.meta.url is not available in Workers
++const getFilename = () => '/unplugin';
++const getDirname = () => '/';
++const __dirname = '/';
+ 
+ //#endregion
+ //#region src/rspack/index.ts

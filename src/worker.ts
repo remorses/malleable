@@ -147,13 +147,13 @@ const app = new Spiceflow()
                 minify: false,
                 jsx: 'automatic',
                 plugins: [
-                  createVirtualEntryPlugin({
+                  createVirtualEntryPlugin.esbuild({
                     actualEntryPath: actualEntryPoint,
                     cssUrl,
                     baseUrl
-                  }),
-                  createLocalResolverPlugin({ files }),
-                  createEsmShPlugin({ externalPackages })
+                  }) as any,
+                  createLocalResolverPlugin.esbuild({ files }) as any,
+                  createEsmShPlugin.esbuild({ externalPackages }) as any
                 ],
                 absWorkingDir: '/',
                 loader: { '.tsx': 'tsx', '.ts': 'tsx', '.jsx': 'tsx', '.js': 'tsx' },

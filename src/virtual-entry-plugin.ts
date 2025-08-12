@@ -1,26 +1,40 @@
-import type { Plugin } from 'esbuild-wasm'
+import { createUnplugin } from 'unplugin'
 import dedent from 'string-dedent'
 
-export function createVirtualEntryPlugin({
-  actualEntryPath,
-  cssUrl,
-  baseUrl
-}: {
+interface VirtualEntryOptions {
   actualEntryPath: string
   cssUrl: string
   baseUrl: string
-}): Plugin {
+}
+
+export const createVirtualEntryPlugin = createUnplugin<VirtualEntryOptions>((options) => {
+  const { actualEntryPath, cssUrl, baseUrl } = options
+  const virtualModuleId = 'virtual:entry'
+  const resolvedVirtualModuleId = '\0' + virtualModuleId
+  
   return {
     name: 'virtual-entry',
-    setup(build) {
-      // Resolve virtual:entry to our virtual module
-      build.onResolve({ filter: /^virtual:entry$/ }, () => ({
-        path: 'virtual:entry',
-        namespace: 'virtual-entry',
-      }))
-
-      // Load the virtual entry module with shadow root support by default
-      build.onLoad({ filter: /.*/, namespace: 'virtual-entry' }, () => {
+    
+    // Configure esbuild-specific loader
+    esbuild: {
+      loader: (code, id) => {
+        // Use JSX loader for our virtual entry
+        if (id === resolvedVirtualModuleId) {
+          return 'jsx'
+        }
+        return undefined
+      }
+    },
+    
+    resolveId(id) {
+      if (id === virtualModuleId) {
+        return resolvedVirtualModuleId
+      }
+      return null
+    },
+    
+    load(id) {
+      if (id === resolvedVirtualModuleId) {
         const content = dedent`
           import React, { useLayoutEffect, useRef, useState } from 'react';
           import { createPortal } from 'react-dom';
@@ -85,10 +99,12 @@ export function createVirtualEntryPlugin({
         `
 
         return {
-          contents: content,
-          loader: 'tsx',
+          code: content,
+          
+          map: null
         }
-      })
-    },
+      }
+      return null
+    }
   }
-}
+})

@@ -27,7 +27,7 @@ describe("Remote Bundler Worker", () => {
 
     const result = await response.json() as BundleResult;
     const serverTiming = response.headers.get('Server-Timing');
-    expect(serverTiming).toMatchInlineSnapshot(`"esbuild-init;dur=0, parse-body;dur=0, tailwind-css;dur=0, esbuild-build;dur=0, parallel-build;dur=0, total;dur=0, cfL4;desc="?proto=TCP&rtt=22052&min_rtt=20836&rtt_var=7973&sent=4&recv=6&lost=0&retrans=0&sent_bytes=2856&recv_bytes=956&delivery_rate=111004&cwnd=250&unsent_bytes=0&cid=99267441e5fc9a02&ts=1617&x=0""`);
+    expect(serverTiming).toMatchInlineSnapshot(`"esbuild-init;dur=0, parse-body;dur=0, tailwind-css;dur=0, esbuild-build;dur=0, parallel-build;dur=0, total;dur=0, cfL4;desc="?proto=TCP&rtt=20245&min_rtt=15915&rtt_var=9061&sent=4&recv=5&lost=0&retrans=0&sent_bytes=2856&recv_bytes=956&delivery_rate=181966&cwnd=251&unsent_bytes=0&cid=cdb11476175a8dbf&ts=1465&x=0""`);
     expect(result).toMatchInlineSnapshot(`
       {
         "files": {
@@ -38,12 +38,12 @@ describe("Remote Bundler Worker", () => {
         "rawOutputs": [
           {
             "path": "/1e665c28eb1f93be.js.map",
-            "size": 3138,
+            "size": 3164,
             "type": "sourcemap",
           },
           {
             "path": "/1e665c28eb1f93be.js",
-            "size": 3758,
+            "size": 3789,
             "type": "entry",
           },
         ],
@@ -68,7 +68,7 @@ describe("Remote Bundler Worker", () => {
 
     const result = await response.json() as BundleResult;
     const serverTiming = response.headers.get('Server-Timing');
-    expect(serverTiming).toMatchInlineSnapshot(`"parse-body;dur=0, tailwind-css;dur=0, esbuild-build;dur=0, parallel-build;dur=0, total;dur=0, cfL4;desc="?proto=TCP&rtt=22058&min_rtt=20836&rtt_var=5992&sent=9&recv=8&lost=0&retrans=0&sent_bytes=4683&recv_bytes=1469&delivery_rate=262057&cwnd=254&unsent_bytes=0&cid=99267441e5fc9a02&ts=2981&x=0""`);
+    expect(serverTiming).toMatchInlineSnapshot(`"parse-body;dur=0, tailwind-css;dur=0, esbuild-build;dur=0, parallel-build;dur=0, total;dur=0, cfL4;desc="?proto=TCP&rtt=19180&min_rtt=15688&rtt_var=6943&sent=8&recv=8&lost=0&retrans=0&sent_bytes=4666&recv_bytes=1469&delivery_rate=276265&cwnd=254&unsent_bytes=0&cid=cdb11476175a8dbf&ts=2867&x=0""`);
     expect(result).toMatchInlineSnapshot(`
       {
         "files": {
@@ -79,12 +79,12 @@ describe("Remote Bundler Worker", () => {
         "rawOutputs": [
           {
             "path": "/bdcc81f7bfa93073.js.map",
-            "size": 3181,
+            "size": 3207,
             "type": "sourcemap",
           },
           {
             "path": "/bdcc81f7bfa93073.js",
-            "size": 3773,
+            "size": 3804,
             "type": "entry",
           },
         ],
@@ -112,7 +112,7 @@ describe("Remote Bundler Worker", () => {
 
     const result = await response.json() as BundleResult;
     const serverTiming = response.headers.get('Server-Timing');
-    expect(serverTiming).toMatchInlineSnapshot(`"parse-body;dur=0, tailwind-css;dur=0, esbuild-build;dur=0, parallel-build;dur=0, total;dur=0, cfL4;desc="?proto=TCP&rtt=33051&min_rtt=20836&rtt_var=26480&sent=14&recv=11&lost=0&retrans=1&sent_bytes=6047&recv_bytes=2086&delivery_rate=262057&cwnd=254&unsent_bytes=0&cid=99267441e5fc9a02&ts=3839&x=0""`);
+    expect(serverTiming).toMatchInlineSnapshot(`"parse-body;dur=0, tailwind-css;dur=0, esbuild-build;dur=0, parallel-build;dur=0, total;dur=0, cfL4;desc="?proto=TCP&rtt=18398&min_rtt=12870&rtt_var=6772&sent=11&recv=10&lost=0&retrans=0&sent_bytes=5967&recv_bytes=2086&delivery_rate=276265&cwnd=256&unsent_bytes=0&cid=cdb11476175a8dbf&ts=3531&x=0""`);
     expect(result).toMatchInlineSnapshot(`
       {
         "files": {
@@ -123,12 +123,12 @@ describe("Remote Bundler Worker", () => {
         "rawOutputs": [
           {
             "path": "/0139960554aae246.js.map",
-            "size": 3281,
+            "size": 3307,
             "type": "sourcemap",
           },
           {
             "path": "/0139960554aae246.js",
-            "size": 3763,
+            "size": 3794,
             "type": "entry",
           },
         ],
@@ -156,7 +156,7 @@ describe("Remote Bundler Worker", () => {
 
       const result = await response.json() as BundleResult;
       const serverTiming = response.headers.get('Server-Timing');
-      expect(serverTiming).toMatchInlineSnapshot(`"parse-body;dur=0, tailwind-css;dur=0, esbuild-build;dur=195, parallel-build;dur=195, total;dur=195, cfL4;desc="?proto=TCP&rtt=31820&min_rtt=20836&rtt_var=22323&sent=17&recv=13&lost=0&retrans=1&sent_bytes=7353&recv_bytes=2626&delivery_rate=262057&cwnd=254&unsent_bytes=0&cid=99267441e5fc9a02&ts=4394&x=0""`);
+      expect(serverTiming).toMatchInlineSnapshot(`"parse-body;dur=0, tailwind-css;dur=0, parallel-build;dur=39, total;dur=39, cfL4;desc="?proto=TCP&rtt=18862&min_rtt=12870&rtt_var=6008&sent=15&recv=12&lost=0&retrans=0&sent_bytes=7299&recv_bytes=2626&delivery_rate=276265&cwnd=256&unsent_bytes=0&cid=cdb11476175a8dbf&ts=3870&x=0""`);
       expect(result.success).toMatchInlineSnapshot(`false`);
     },
     { timeout: 60000 },
@@ -173,7 +173,7 @@ describe("Remote Bundler Worker", () => {
 
     const result = await response.json() as BundleResult;
     const serverTiming = response.headers.get('Server-Timing');
-    expect(serverTiming).toMatchInlineSnapshot(`"cfL4;desc="?proto=TCP&rtt=21717&min_rtt=21170&rtt_var=9034&sent=3&recv=5&lost=0&retrans=0&sent_bytes=234&recv_bytes=1034&delivery_rate=56670&cwnd=250&unsent_bytes=0&cid=da136506ed9ed2f2&ts=777&x=0""`);
+    expect(serverTiming).toMatchInlineSnapshot(`"cfL4;desc="?proto=TCP&rtt=19914&min_rtt=14471&rtt_var=9314&sent=3&recv=5&lost=0&retrans=0&sent_bytes=234&recv_bytes=1034&delivery_rate=100062&cwnd=250&unsent_bytes=0&cid=1ac8232b2235c37a&ts=567&x=0""`);
     expect(response.status).toMatchInlineSnapshot(`400`);
     expect(result).toMatchInlineSnapshot(`
       {
@@ -202,7 +202,7 @@ describe("Remote Bundler Worker", () => {
 
     const result = await response.json() as BundleResult;
     const serverTiming = response.headers.get('Server-Timing');
-    expect(serverTiming).toMatchInlineSnapshot(`"parse-body;dur=0, tailwind-css;dur=0, esbuild-build;dur=0, parallel-build;dur=0, total;dur=0, cfL4;desc="?proto=TCP&rtt=30972&min_rtt=20836&rtt_var=18437&sent=20&recv=15&lost=0&retrans=1&sent_bytes=8986&recv_bytes=3306&delivery_rate=262057&cwnd=254&unsent_bytes=0&cid=99267441e5fc9a02&ts=6329&x=0""`);
+    expect(serverTiming).toMatchInlineSnapshot(`"parse-body;dur=0, tailwind-css;dur=0, esbuild-build;dur=0, parallel-build;dur=0, total;dur=0, cfL4;desc="?proto=TCP&rtt=19046&min_rtt=12870&rtt_var=4874&sent=18&recv=14&lost=0&retrans=0&sent_bytes=8919&recv_bytes=3306&delivery_rate=276265&cwnd=256&unsent_bytes=0&cid=cdb11476175a8dbf&ts=5193&x=0""`);
     expect(result).toMatchInlineSnapshot(`
       {
         "files": {
@@ -213,12 +213,12 @@ describe("Remote Bundler Worker", () => {
         "rawOutputs": [
           {
             "path": "/2cc353d4f0682dad.js.map",
-            "size": 3342,
+            "size": 3368,
             "type": "sourcemap",
           },
           {
             "path": "/2cc353d4f0682dad.js",
-            "size": 3763,
+            "size": 3794,
             "type": "entry",
           },
         ],
@@ -325,7 +325,7 @@ describe("Remote Bundler Worker", () => {
 
     const result = await response.json() as BundleResult;
     const serverTiming = response.headers.get('Server-Timing');
-    expect(serverTiming).toMatchInlineSnapshot(`"parse-body;dur=0, tailwind-css;dur=0, esbuild-build;dur=50, parallel-build;dur=50, total;dur=50, cfL4;desc="?proto=TCP&rtt=22725&min_rtt=21170&rtt_var=8790&sent=7&recv=9&lost=0&retrans=0&sent_bytes=1586&recv_bytes=3855&delivery_rate=56670&cwnd=251&unsent_bytes=0&cid=da136506ed9ed2f2&ts=3719&x=0""`);
+    expect(serverTiming).toMatchInlineSnapshot(`"parse-body;dur=0, tailwind-css;dur=0, esbuild-build;dur=165, parallel-build;dur=165, total;dur=165, cfL4;desc="?proto=TCP&rtt=19871&min_rtt=14471&rtt_var=7071&sent=7&recv=9&lost=0&retrans=0&sent_bytes=1587&recv_bytes=3855&delivery_rate=100062&cwnd=251&unsent_bytes=0&cid=1ac8232b2235c37a&ts=3042&x=0""`);
     expect(result.success).toBe(true);
 
     if (result.success) {
@@ -353,17 +353,63 @@ describe("Remote Bundler Worker", () => {
         "rawOutputs": [
           {
             "path": "/c9025520583ffc11.js.map",
-            "size": 41566,
+            "size": 41641,
             "type": "sourcemap",
           },
           {
             "path": "/c9025520583ffc11.js",
-            "size": 24951,
+            "size": 25006,
             "type": "entry",
           },
         ],
         "success": true,
-        "warnings": [],
+        "warnings": [
+          {
+            "id": "missing-source-map",
+            "location": {
+              "column": 21,
+              "file": "esm-sh-plugin:https://esm.sh/react-dom@19.1.1/es2022/react-dom.mjs",
+              "length": 17,
+              "line": 17,
+              "lineText": "//# sourceMappingURL=react-dom.mjs.map",
+              "namespace": "",
+              "suggestion": "",
+            },
+            "notes": [],
+            "pluginName": "",
+            "text": "Cannot read file "https:/esm.sh/react-dom@19.1.1/es2022/react-dom.mjs.map": not implemented on js",
+          },
+          {
+            "id": "missing-source-map",
+            "location": {
+              "column": 21,
+              "file": "esm-sh-plugin:https://esm.sh/react@19.1.1/es2022/jsx-runtime.mjs",
+              "length": 19,
+              "line": 16,
+              "lineText": "//# sourceMappingURL=jsx-runtime.mjs.map",
+              "namespace": "",
+              "suggestion": "",
+            },
+            "notes": [],
+            "pluginName": "",
+            "text": "Cannot read file "https:/esm.sh/react@19.1.1/es2022/jsx-runtime.mjs.map": not implemented on js",
+          },
+          {
+            "id": "missing-source-map",
+            "location": {
+              "column": 21,
+              "file": "esm-sh-plugin:https://esm.sh/react@19.1.1/es2022/react.mjs",
+              "length": 13,
+              "line": 16,
+              "lineText": "//# sourceMappingURL=react.mjs.map",
+              "namespace": "",
+              "suggestion": "",
+            },
+            "notes": [],
+            "pluginName": "",
+            "text": "Cannot read file "https:/esm.sh/react@19.1.1/es2022/react.mjs.map": not implemented on js",
+          },
+        ],
       }
     `);
   });
@@ -473,7 +519,7 @@ describe("Remote Bundler Worker", () => {
 
     const result = await response.json() as BundleResult;
     const serverTiming = response.headers.get('Server-Timing');
-    expect(serverTiming).toMatchInlineSnapshot(`"parse-body;dur=0, tailwind-css;dur=0, esbuild-build;dur=0, parallel-build;dur=0, total;dur=0, cfL4;desc="?proto=TCP&rtt=29889&min_rtt=20836&rtt_var=12216&sent=26&recv=21&lost=0&retrans=1&sent_bytes=11284&recv_bytes=7273&delivery_rate=262057&cwnd=254&unsent_bytes=0&cid=99267441e5fc9a02&ts=9613&x=0""`);
+    expect(serverTiming).toMatchInlineSnapshot(`"parse-body;dur=0, tailwind-css;dur=0, esbuild-build;dur=0, parallel-build;dur=0, total;dur=0, cfL4;desc="?proto=TCP&rtt=28795&min_rtt=11324&rtt_var=26100&sent=27&recv=22&lost=0&retrans=1&sent_bytes=11225&recv_bytes=7273&delivery_rate=276265&cwnd=256&unsent_bytes=0&cid=cdb11476175a8dbf&ts=7925&x=0""`);
     expect(result.success).toBe(true);
 
     if (result.success) {
@@ -498,41 +544,41 @@ describe("Remote Bundler Worker", () => {
         "files": {
           "6bad1d1e32f23fb9.js": "https://remote-bundler.fumabase.com/bundle/6bad1d1e32f23fb9.js",
           "6bad1d1e32f23fb9.js.map": "https://remote-bundler.fumabase.com/bundle/6bad1d1e32f23fb9.js.map",
-          "chunks/DynamicModule-QNLNK47X.js": "https://remote-bundler.fumabase.com/bundle/chunks/DynamicModule-QNLNK47X.js",
-          "chunks/DynamicModule-QNLNK47X.js.map": "https://remote-bundler.fumabase.com/bundle/chunks/DynamicModule-QNLNK47X.js.map",
-          "chunks/LazyComponent-QGGRFTBA.js": "https://remote-bundler.fumabase.com/bundle/chunks/LazyComponent-QGGRFTBA.js",
-          "chunks/LazyComponent-QGGRFTBA.js.map": "https://remote-bundler.fumabase.com/bundle/chunks/LazyComponent-QGGRFTBA.js.map",
+          "chunks/DynamicModule-KSLSO63E.js": "https://remote-bundler.fumabase.com/bundle/chunks/DynamicModule-KSLSO63E.js",
+          "chunks/DynamicModule-KSLSO63E.js.map": "https://remote-bundler.fumabase.com/bundle/chunks/DynamicModule-KSLSO63E.js.map",
+          "chunks/LazyComponent-SBZUGIIL.js": "https://remote-bundler.fumabase.com/bundle/chunks/LazyComponent-SBZUGIIL.js",
+          "chunks/LazyComponent-SBZUGIIL.js.map": "https://remote-bundler.fumabase.com/bundle/chunks/LazyComponent-SBZUGIIL.js.map",
         },
         "jsUrl": "https://remote-bundler.fumabase.com/bundle/6bad1d1e32f23fb9.js",
         "rawOutputs": [
           {
             "path": "/6bad1d1e32f23fb9.js.map",
-            "size": 6005,
+            "size": 6041,
             "type": "sourcemap",
           },
           {
             "path": "/6bad1d1e32f23fb9.js",
-            "size": 3524,
+            "size": 3545,
             "type": "entry",
           },
           {
-            "path": "/chunks/LazyComponent-QGGRFTBA.js.map",
-            "size": 802,
+            "path": "/chunks/LazyComponent-SBZUGIIL.js.map",
+            "size": 818,
             "type": "sourcemap",
           },
           {
-            "path": "/chunks/LazyComponent-QGGRFTBA.js",
-            "size": 580,
+            "path": "/chunks/LazyComponent-SBZUGIIL.js",
+            "size": 591,
             "type": "chunk",
           },
           {
-            "path": "/chunks/DynamicModule-QNLNK47X.js.map",
-            "size": 775,
+            "path": "/chunks/DynamicModule-KSLSO63E.js.map",
+            "size": 791,
             "type": "sourcemap",
           },
           {
-            "path": "/chunks/DynamicModule-QNLNK47X.js",
-            "size": 402,
+            "path": "/chunks/DynamicModule-KSLSO63E.js",
+            "size": 413,
             "type": "chunk",
           },
         ],
@@ -578,17 +624,63 @@ describe("Remote Bundler Worker", () => {
         "rawOutputs": [
           {
             "path": "/9efb087fd86defd0.js.map",
-            "size": 38753,
+            "size": 38796,
             "type": "sourcemap",
           },
           {
             "path": "/9efb087fd86defd0.js",
-            "size": 23511,
+            "size": 23544,
             "type": "entry",
           },
         ],
         "success": true,
-        "warnings": [],
+        "warnings": [
+          {
+            "id": "missing-source-map",
+            "location": {
+              "column": 21,
+              "file": "esm-sh-plugin:https://esm.sh/react-dom@19.1.1/es2022/react-dom.mjs",
+              "length": 17,
+              "line": 17,
+              "lineText": "//# sourceMappingURL=react-dom.mjs.map",
+              "namespace": "",
+              "suggestion": "",
+            },
+            "notes": [],
+            "pluginName": "",
+            "text": "Cannot read file "https:/esm.sh/react-dom@19.1.1/es2022/react-dom.mjs.map": not implemented on js",
+          },
+          {
+            "id": "missing-source-map",
+            "location": {
+              "column": 21,
+              "file": "esm-sh-plugin:https://esm.sh/react@19.1.1/es2022/jsx-runtime.mjs",
+              "length": 19,
+              "line": 16,
+              "lineText": "//# sourceMappingURL=jsx-runtime.mjs.map",
+              "namespace": "",
+              "suggestion": "",
+            },
+            "notes": [],
+            "pluginName": "",
+            "text": "Cannot read file "https:/esm.sh/react@19.1.1/es2022/jsx-runtime.mjs.map": not implemented on js",
+          },
+          {
+            "id": "missing-source-map",
+            "location": {
+              "column": 21,
+              "file": "esm-sh-plugin:https://esm.sh/react@19.1.1/es2022/react.mjs",
+              "length": 13,
+              "line": 16,
+              "lineText": "//# sourceMappingURL=react.mjs.map",
+              "namespace": "",
+              "suggestion": "",
+            },
+            "notes": [],
+            "pluginName": "",
+            "text": "Cannot read file "https:/esm.sh/react@19.1.1/es2022/react.mjs.map": not implemented on js",
+          },
+        ],
       }
     `);
     expect(result.success).toBe(true);
