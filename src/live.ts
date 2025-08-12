@@ -204,6 +204,7 @@ async function main() {
       },
       tools: [
         {
+
           functionDeclarations: [
             {
               name: "writeMarkdownDocument",

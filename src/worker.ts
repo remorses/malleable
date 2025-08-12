@@ -229,6 +229,45 @@ const app = new Spiceflow()
           // The main entry file will be named with our hash
           const mainJsUrl = fileUrls[`${entryHash}.js`] || undefined
 
+          // Generate HTML that renders the React component
+          const htmlContent = html`<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>React App</title>
+    <script type="importmap">
+    {
+      "imports": {
+        "react": "https://esm.sh/react",
+        "react-dom": "https://esm.sh/react-dom",
+        "react-dom/": "https://esm.sh/react-dom/",
+        "react/jsx-runtime": "https://esm.sh/react/jsx-runtime",
+        "react/jsx-dev-runtime": "https://esm.sh/react/jsx-dev-runtime"
+      }
+    }
+    </script>
+</head>
+<body>
+    <div id="root"></div>
+    <script type="module">
+        import React from 'react';
+        import ReactDOM from 'react-dom/client';
+        import App from '${mainJsUrl}';
+        
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(React.createElement(App));
+    </script>
+</body>
+</html>`;
+
+          // Store HTML in KV
+          const htmlKey = `${entryHash}.html`;
+          await state.env.jsCache.put(htmlKey, htmlContent, { expirationTtl: ttl });
+          
+          // Create HTML URL
+          const htmlUrl = `${baseUrl}/bundle/${htmlKey}`;
+
           // Create raw esbuild output metadata (without text content)
           const rawOutputs = outputFiles.map(file => ({
             path: file.path,
@@ -240,6 +279,7 @@ const app = new Spiceflow()
           // Return URLs for all files (CSS is now injected via JS)
           return Response.json({
             jsUrl: mainJsUrl,
+            htmlUrl,
             files: fileUrls,
             rawOutputs,
             warnings,
@@ -301,9 +341,9 @@ const app = new Spiceflow()
   })
   .route({
     method: 'GET',
-    path: '/bundle/:key',
+    path: '/bundle/*',
     async handler({ params, state }) {
-      const key = params.key
+      const key = params['*']
 
       if (!key) {
         return new Response('Not found', { status: 404 })
@@ -324,6 +364,8 @@ const app = new Spiceflow()
         contentType = 'application/javascript'
       } else if (key.endsWith('.map')) {
         contentType = 'application/json'
+      } else if (key.endsWith('.html')) {
+        contentType = 'text/html'
       }
 
       // Build headers
@@ -471,6 +513,12 @@ const app = new Spiceflow()
                         }
                         html += '</ul>';
                         html += '</div>';
+                    }
+
+                    if (result.htmlUrl) {
+                        html += '<h4>🎉 React App Preview:</h4>';
+                        html += '<p><a href="' + result.htmlUrl + '" target="_blank" style="font-size: 1.2em; font-weight: bold;">Open React App →</a></p>';
+                        html += '<p><small>This HTML page automatically renders your React component</small></p>';
                     }
 
                     if (result.jsUrl) {
