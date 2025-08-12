@@ -156,7 +156,13 @@ const app = new Spiceflow()
                   createEsmShPlugin.esbuild({ externalPackages }) as any
                 ],
                 absWorkingDir: '/',
-                loader: { '.tsx': 'tsx', '.ts': 'tsx', '.jsx': 'tsx', '.js': 'tsx' },
+                loader: { 
+                  '.tsx': 'tsx', 
+                  '.ts': 'tsx', 
+                  '.jsx': 'tsx', 
+                  '.js': 'tsx',
+                  '.css': 'css' 
+                },
                 // Configure output filenames - [name] will be our hash
                 entryNames: '[name]',                   // entry outputs use hash as name
                 chunkNames: 'chunks/[name]-[hash]',     // shared/lazy chunks
@@ -228,6 +234,14 @@ const app = new Spiceflow()
 
           // The main entry file will be named with our hash
           const mainJsUrl = fileUrls[`${entryHash}.js`] || undefined
+          
+          // Collect all CSS file URLs
+          const cssUrls: string[] = []
+          for (const [filename, url] of Object.entries(fileUrls)) {
+            if (filename.endsWith('.css')) {
+              cssUrls.push(url)
+            }
+          }
 
           // Generate HTML that renders the React component
           const htmlContent = html`<!DOCTYPE html>
@@ -236,6 +250,7 @@ const app = new Spiceflow()
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>React App</title>
+    ${cssUrls.map(url => `<link rel="stylesheet" href="${url}">`).join('\n    ')}
     <script type="importmap">
     {
       "imports": {
@@ -406,8 +421,8 @@ const app = new Spiceflow()
 
             <div class="form-group">
                 <div class="file-upload">
-                    <input type="file" id="fileInput" accept=".js,.jsx,.ts,.tsx" multiple>
-                    <label for="fileInput">📁 Or upload files (.js, .jsx, .ts, .tsx) - supports multiple files!</label>
+                    <input type="file" id="fileInput" accept=".js,.jsx,.ts,.tsx,.css" multiple>
+                    <label for="fileInput">📁 Or upload files (.js, .jsx, .ts, .tsx, .css) - supports multiple files!</label>
                 </div>
             </div>
 

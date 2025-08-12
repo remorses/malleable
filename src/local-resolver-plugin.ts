@@ -1,5 +1,6 @@
 import { createUnplugin } from 'unplugin'
 import * as path from 'path-browserify'
+import { processCSSFileWithTailwind } from './generate-tailwind.js'
 
 export interface LocalFile {
   path: string
@@ -26,6 +27,12 @@ export const createLocalResolverPlugin = createUnplugin<LocalResolverOptions>((o
       : path.join(workingDir, file.path)
     fileMap.set(absolutePath, file.content)
   })
+  
+  // Collect all JS/TS/JSX/TSX content for Tailwind scanning
+  const allJSContent = files
+    .filter(f => /\.(js|jsx|ts|tsx)$/.test(f.path))
+    .map(f => f.content)
+    .join('\n')
 
   return {
     name: 'local-resolver',
@@ -54,17 +61,19 @@ export const createLocalResolverPlugin = createUnplugin<LocalResolverOptions>((o
         const resolvedPath = path.resolve(basedir, id)
         
         // Try with common extensions if no extension provided
-        const extensions = ['', '.ts', '.tsx', '.js', '.jsx', '.mjs']
+        const extensions = ['', '.css', '.ts', '.tsx', '.js', '.jsx', '.mjs']
         for (const ext of extensions) {
           const fullPath = resolvedPath + ext
           if (fileMap.has(fullPath)) {
             return '\0local:' + fullPath
           }
           
-          // Also try index files
-          const indexPath = path.join(resolvedPath, 'index' + ext)
-          if (fileMap.has(indexPath)) {
-            return '\0local:' + indexPath
+          // Also try index files (not for CSS)
+          if (ext !== '.css') {
+            const indexPath = path.join(resolvedPath, 'index' + ext)
+            if (fileMap.has(indexPath)) {
+              return '\0local:' + indexPath
+            }
           }
         }
       }
@@ -73,7 +82,7 @@ export const createLocalResolverPlugin = createUnplugin<LocalResolverOptions>((o
       return null
     },
 
-    load(id) {
+    async load(id) {
       // Only handle local files
       if (!id.startsWith('\0local:')) {
         return null
@@ -92,13 +101,31 @@ export const createLocalResolverPlugin = createUnplugin<LocalResolverOptions>((o
       
       // Determine loader based on extension
       const ext = path.extname(filePath)
-      let code = content
+      
+      // Handle CSS files
+      if (ext === '.css') {
+        try {
+          // Process CSS with Tailwind, passing JS content for class extraction
+          const processedCSS = await processCSSFileWithTailwind(content, allJSContent)
+          
+          return {
+            code: processedCSS,
+            map: null
+          }
+        } catch (error: any) {
+          this.error({
+            message: `Failed to process CSS file ${filePath}: ${error.message}`,
+            id: filePath,
+          })
+          return null
+        }
+      }
       
       // For TypeScript/JSX files, we just pass them through as-is
       // since esbuild will handle the transformation
       
       return {
-        code,
+        code: content,
         map: null
       }
     }
