@@ -2,8 +2,8 @@
   "scripts": {
     "dev": "wrangler dev",
     "demo": "vite",
-    "test": "pnpm vitest -u",
-    "test:prod": "USE_PROD=1 pnpm vitest -u",
+    "test": "pnpm vitest -u --run",
+    "test:prod": "USE_PROD=1 pnpm vitest -u --run",
     "deployment": "wrangler deploy --minify"
   },
   "type": "module",

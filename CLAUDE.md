@@ -1,16 +1,17 @@
 use pnpm to install dependencies
 
-after changes run `pnpm tsc`. after every big change run `pnpm deployment` to deploy the script and `pnpm test -u --run` to update snapshots
+after changes run `pnpm tsc`. after every big change run `pnpm deployment` to deploy the script and `pnpm test:prod` to update snapshots (-u --run are already passed)
+
+`pnpm test` will run the tests against the local bundler instead of the remote worker
+
 
 IMPORTANT: tests must be run after deployment. the tests use the deployed worker!
 
 ## Testing Preferences
 
-When writing vitest tests, always run with -u (to update snapshots) and always use toMatchInlineSnapshot. Never use any other expect methods.
+When writing vitest tests, always use toMatchInlineSnapshot. Never use any other expect methods. these are difficult to update and slow us down. we are still in the idea phase.
 
-To run tests use `pnpm test --run` and to target tests add `-t name` or pass the file path of the test. `-u` is already passed by default
-
-If you are not able to make a test pass do not revert it and change the test to make it pass changing the requirements. instead leave it failing and call the think tool to try to use an approach to make the test pass withthe same requirements. if that does not help ask help to the user.
+If you are not able to make a test pass do not revert it and change the test to make it pass changing the requirements. instead leave it failing and call the think tool to try to use an approach to make the test pass with the same requirements. if that does not help ask help to the user.
 
 - Tests should focus on meaningful functionality that produces CSS
 - Simple transformation tests without CSS generation should be avoided
