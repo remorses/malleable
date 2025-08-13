@@ -21,4 +21,4 @@ export interface BundleErrorResult {
   warningText?: string
 }
 
-export type BundleResult = BundleSuccessResult &  BundleErrorResult
+export type BundleResult = BundleSuccessResult | BundleErrorResult

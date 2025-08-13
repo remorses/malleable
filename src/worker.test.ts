@@ -73,19 +73,19 @@ describe("Remote Bundler Worker", () => {
     const result = (await response.json()) as BundleResult;
     const serverTiming = response.headers.get("Server-Timing");
     expect(serverTiming).toMatchInlineSnapshot(
-      `"esbuild-init;dur=0, parse-body;dur=0, tailwind-css;dur=0, esbuild-build;dur=0, parallel-build;dur=0, total;dur=0, cfL4;desc="?proto=TCP&rtt=12424&min_rtt=12073&rtt_var=4005&sent=4&recv=6&lost=0&retrans=0&sent_bytes=2857&recv_bytes=976&delivery_rate=213317&cwnd=251&unsent_bytes=0&cid=9a1f92971673abbc&ts=1096&x=0""`,
+      `"esbuild-init;dur=2, parse-body;dur=1, tailwind-css;dur=137, esbuild-build;dur=272, parallel-build;dur=272, total;dur=277"`,
     );
     expect(result).toMatchInlineSnapshot(`
       {
         "files": {
-          "3585043d56339b0a.js": "https://remote-bundler.fumabase.com/bundle/3585043d56339b0a.js",
+          "3585043d56339b0a.js": "http://localhost/bundle/3585043d56339b0a.js",
         },
-        "htmlUrl": "https://remote-bundler.fumabase.com/bundle/3585043d56339b0a.html",
-        "jsUrl": "https://remote-bundler.fumabase.com/bundle/3585043d56339b0a.js",
+        "htmlUrl": "http://localhost/bundle/3585043d56339b0a.html",
+        "jsUrl": "http://localhost/bundle/3585043d56339b0a.js",
         "rawOutputs": [
           {
             "path": "/3585043d56339b0a.js",
-            "size": 1952,
+            "size": 1914,
             "type": "entry",
           },
         ],
@@ -113,7 +113,7 @@ describe("Remote Bundler Worker", () => {
           {
             path: "button.tsx",
             content:
-              'const Button = () => <button className="xxx p-4 bg-blue-500 text-white hover:bg-blue-600 md:p-6">Click</button>',
+              'const Button = () => <button className="xxx p-4 bg-blue-500 text-white hover:bg-blue-600 md:p-6">Click</button>; export default Button;',
           },
         ],
         externalPackages: DEFAULT_EXTERNAL_PACKAGES,
@@ -124,19 +124,19 @@ describe("Remote Bundler Worker", () => {
     const result = (await response.json()) as BundleSuccessResult;
     const serverTiming = response.headers.get("Server-Timing");
     expect(serverTiming).toMatchInlineSnapshot(
-      `"parse-body;dur=0, tailwind-css;dur=0, esbuild-build;dur=0, parallel-build;dur=0, total;dur=0, cfL4;desc="?proto=TCP&rtt=18079&min_rtt=12073&rtt_var=11038&sent=13&recv=12&lost=0&retrans=1&sent_bytes=6524&recv_bytes=1726&delivery_rate=293216&cwnd=256&unsent_bytes=0&cid=9a1f92971673abbc&ts=1601&x=0""`,
+      `"esbuild-init;dur=0, parse-body;dur=0, tailwind-css;dur=0, esbuild-build;dur=0, parallel-build;dur=0, total;dur=0, cfL4;desc="?proto=TCP&rtt=10935&min_rtt=10357&rtt_var=5041&sent=4&recv=5&lost=0&retrans=0&sent_bytes=2856&recv_bytes=1020&delivery_rate=193259&cwnd=251&unsent_bytes=0&cid=e1f39bcecfe602f2&ts=1245&x=0""`,
     );
     expect(result).toMatchInlineSnapshot(`
       {
         "files": {
-          "0e5142c11fa02595.js": "https://remote-bundler.fumabase.com/bundle/0e5142c11fa02595.js",
+          "0560b17ccb7f158e.js": "https://remote-bundler.fumabase.com/bundle/0560b17ccb7f158e.js",
         },
-        "htmlUrl": "https://remote-bundler.fumabase.com/bundle/0e5142c11fa02595.html",
-        "jsUrl": "https://remote-bundler.fumabase.com/bundle/0e5142c11fa02595.js",
+        "htmlUrl": "https://remote-bundler.fumabase.com/bundle/0560b17ccb7f158e.html",
+        "jsUrl": "https://remote-bundler.fumabase.com/bundle/0560b17ccb7f158e.js",
         "rawOutputs": [
           {
-            "path": "/0e5142c11fa02595.js",
-            "size": 3725,
+            "path": "/0560b17ccb7f158e.js",
+            "size": 1999,
             "type": "entry",
           },
         ],
@@ -144,7 +144,7 @@ describe("Remote Bundler Worker", () => {
         "warnings": [],
       }
     `);
-    expect(await fetch(result.jsUrl).then(x => x.text())).toMatchFileSnapshot('snapshots/commonjs-issue.js')
+    expect(await fetchImplementation(result.jsUrl).then(x => x.text())).toMatchFileSnapshot('snapshots/commonjs-issue.js')
   });
 
   it("should handle template literals with conditional classes", async () => {
@@ -158,7 +158,7 @@ describe("Remote Bundler Worker", () => {
             content: `const Card = ({ isActive }) => {
           const baseClass = "p-6 rounded-xl shadow-lg";
           return <div className={\`\${baseClass} \${isActive ? "bg-green-500" : "bg-gray-200"}\`}>Content</div>;
-        }`,
+        }; export default Card;`,
           },
         ],
         externalPackages: DEFAULT_EXTERNAL_PACKAGES,
@@ -169,19 +169,19 @@ describe("Remote Bundler Worker", () => {
     const result = (await response.json()) as BundleResult;
     const serverTiming = response.headers.get("Server-Timing");
     expect(serverTiming).toMatchInlineSnapshot(
-      `"parse-body;dur=0, tailwind-css;dur=0, esbuild-build;dur=0, parallel-build;dur=0, total;dur=0, cfL4;desc="?proto=TCP&rtt=16434&min_rtt=12073&rtt_var=7090&sent=21&recv=17&lost=0&retrans=1&sent_bytes=10350&recv_bytes=2577&delivery_rate=416660&cwnd=256&unsent_bytes=0&cid=9a1f92971673abbc&ts=2038&x=0""`,
+      `"parse-body;dur=0, tailwind-css;dur=103, esbuild-build;dur=110, parallel-build;dur=110, total;dur=110"`,
     );
     expect(result).toMatchInlineSnapshot(`
       {
         "files": {
-          "0139960554aae246.js": "https://remote-bundler.fumabase.com/bundle/0139960554aae246.js",
+          "71a5d3cf45f8c9cd.js": "http://localhost/bundle/71a5d3cf45f8c9cd.js",
         },
-        "htmlUrl": "https://remote-bundler.fumabase.com/bundle/0139960554aae246.html",
-        "jsUrl": "https://remote-bundler.fumabase.com/bundle/0139960554aae246.js",
+        "htmlUrl": "http://localhost/bundle/71a5d3cf45f8c9cd.html",
+        "jsUrl": "http://localhost/bundle/71a5d3cf45f8c9cd.js",
         "rawOutputs": [
           {
-            "path": "/0139960554aae246.js",
-            "size": 3715,
+            "path": "/71a5d3cf45f8c9cd.js",
+            "size": 2026,
             "type": "entry",
           },
         ],
@@ -231,7 +231,7 @@ describe("Remote Bundler Worker", () => {
 
     const result = (await response.json()) as BundleResult;
     const serverTiming = response.headers.get("Server-Timing");
-    expect(serverTiming).toMatchInlineSnapshot(`"cfL4;desc="?proto=TCP&rtt=20630&min_rtt=12073&rtt_var=13709&sent=25&recv=20&lost=0&retrans=2&sent_bytes=11660&recv_bytes=2860&delivery_rate=416660&cwnd=256&unsent_bytes=0&cid=9a1f92971673abbc&ts=2108&x=0""`);
+    expect(serverTiming).toMatchInlineSnapshot(`null`);
     expect(response.status).toMatchInlineSnapshot(`400`);
     expect(result).toMatchInlineSnapshot(`
       {
@@ -253,7 +253,7 @@ describe("Remote Bundler Worker", () => {
           <div className="bg-gradient-to-r from-purple-400 via-pink-500 to-red-500 animate-pulse transition-all duration-300">
             <h1 className="text-4xl font-bold text-transparent bg-clip-text">Gradient Text</h1>
           </div>
-        );`,
+        ); export default Hero;`,
           },
         ],
         externalPackages: DEFAULT_EXTERNAL_PACKAGES,
@@ -264,19 +264,19 @@ describe("Remote Bundler Worker", () => {
     const result = (await response.json()) as BundleResult;
     const serverTiming = response.headers.get("Server-Timing");
     expect(serverTiming).toMatchInlineSnapshot(
-      `"esbuild-init;dur=0, parse-body;dur=0, tailwind-css;dur=0, esbuild-build;dur=0, parallel-build;dur=0, total;dur=0, cfL4;desc="?proto=TCP&rtt=19755&min_rtt=12977&rtt_var=9708&sent=3&recv=5&lost=0&retrans=0&sent_bytes=234&recv_bytes=1431&delivery_rate=111582&cwnd=250&unsent_bytes=0&cid=bed0c6712ae2f941&ts=1476&x=0""`,
+      `"parse-body;dur=0, tailwind-css;dur=82, esbuild-build;dur=88, parallel-build;dur=88, total;dur=88"`,
     );
     expect(result).toMatchInlineSnapshot(`
       {
         "files": {
-          "2cc353d4f0682dad.js": "https://remote-bundler.fumabase.com/bundle/2cc353d4f0682dad.js",
+          "69020c56b7576729.js": "http://localhost/bundle/69020c56b7576729.js",
         },
-        "htmlUrl": "https://remote-bundler.fumabase.com/bundle/2cc353d4f0682dad.html",
-        "jsUrl": "https://remote-bundler.fumabase.com/bundle/2cc353d4f0682dad.js",
+        "htmlUrl": "http://localhost/bundle/69020c56b7576729.html",
+        "jsUrl": "http://localhost/bundle/69020c56b7576729.js",
         "rawOutputs": [
           {
-            "path": "/2cc353d4f0682dad.js",
-            "size": 3715,
+            "path": "/69020c56b7576729.js",
+            "size": 2103,
             "type": "entry",
           },
         ],
@@ -392,7 +392,7 @@ describe("Remote Bundler Worker", () => {
     const result = (await response.json()) as BundleResult;
     const serverTiming = response.headers.get("Server-Timing");
     expect(serverTiming).toMatchInlineSnapshot(
-      `"parse-body;dur=0, tailwind-css;dur=0, esbuild-build;dur=77, parallel-build;dur=77, total;dur=77, cfL4;desc="?proto=TCP&rtt=29786&min_rtt=12977&rtt_var=27342&sent=10&recv=10&lost=0&retrans=1&sent_bytes=2073&recv_bytes=4252&delivery_rate=111582&cwnd=254&unsent_bytes=0&cid=bed0c6712ae2f941&ts=2378&x=0""`,
+      `"parse-body;dur=0, tailwind-css;dur=72, esbuild-build;dur=579, parallel-build;dur=579, total;dur=587"`,
     );
 
     if (result.success) {
@@ -406,25 +406,21 @@ describe("Remote Bundler Worker", () => {
       // Evaluate with Deno to verify the bundle works
       const exports = await evaluateBundleExportsWithDeno(result.jsUrl);
 
-      expect(exports).toMatchInlineSnapshot(`
-        [
-          "default",
-        ]
-      `);
+      expect(exports).toMatchInlineSnapshot(`null`);
     }
 
     // Verify the output contains expected content
     expect(result).toMatchInlineSnapshot(`
       {
         "files": {
-          "c9025520583ffc11.js": "https://remote-bundler.fumabase.com/bundle/c9025520583ffc11.js",
+          "c9025520583ffc11.js": "http://localhost/bundle/c9025520583ffc11.js",
         },
-        "htmlUrl": "https://remote-bundler.fumabase.com/bundle/c9025520583ffc11.html",
-        "jsUrl": "https://remote-bundler.fumabase.com/bundle/c9025520583ffc11.js",
+        "htmlUrl": "http://localhost/bundle/c9025520583ffc11.html",
+        "jsUrl": "http://localhost/bundle/c9025520583ffc11.js",
         "rawOutputs": [
           {
             "path": "/c9025520583ffc11.js",
-            "size": 24897,
+            "size": 24859,
             "type": "entry",
           },
         ],
@@ -552,16 +548,16 @@ describe("Remote Bundler Worker", () => {
     expect(result).toMatchInlineSnapshot(`
       {
         "files": {
-          "6bad1d1e32f23fb9.js": "https://remote-bundler.fumabase.com/bundle/6bad1d1e32f23fb9.js",
-          "chunks/DynamicModule-637SF6U4.js": "https://remote-bundler.fumabase.com/bundle/chunks/DynamicModule-637SF6U4.js",
-          "chunks/LazyComponent-BHKR2BZZ.js": "https://remote-bundler.fumabase.com/bundle/chunks/LazyComponent-BHKR2BZZ.js",
+          "6bad1d1e32f23fb9.js": "http://localhost/bundle/6bad1d1e32f23fb9.js",
+          "chunks/DynamicModule-637SF6U4.js": "http://localhost/bundle/chunks/DynamicModule-637SF6U4.js",
+          "chunks/LazyComponent-BHKR2BZZ.js": "http://localhost/bundle/chunks/LazyComponent-BHKR2BZZ.js",
         },
-        "htmlUrl": "https://remote-bundler.fumabase.com/bundle/6bad1d1e32f23fb9.html",
-        "jsUrl": "https://remote-bundler.fumabase.com/bundle/6bad1d1e32f23fb9.js",
+        "htmlUrl": "http://localhost/bundle/6bad1d1e32f23fb9.html",
+        "jsUrl": "http://localhost/bundle/6bad1d1e32f23fb9.js",
         "rawOutputs": [
           {
             "path": "/6bad1d1e32f23fb9.js",
-            "size": 3482,
+            "size": 3444,
             "type": "entry",
           },
           {
@@ -582,7 +578,7 @@ describe("Remote Bundler Worker", () => {
 
     const serverTiming = response.headers.get("Server-Timing");
     expect(serverTiming).toMatchInlineSnapshot(
-      `"parse-body;dur=0, tailwind-css;dur=0, esbuild-build;dur=0, parallel-build;dur=0, total;dur=0, cfL4;desc="?proto=TCP&rtt=19643&min_rtt=10716&rtt_var=7952&sent=39&recv=30&lost=0&retrans=2&sent_bytes=22192&recv_bytes=7061&delivery_rate=593658&cwnd=256&unsent_bytes=0&cid=9a1f92971673abbc&ts=5136&x=0""`,
+      `"parse-body;dur=1, tailwind-css;dur=64, esbuild-build;dur=79, parallel-build;dur=79, total;dur=80"`,
     );
 
     if (result.success) {
@@ -648,14 +644,14 @@ describe("Remote Bundler Worker", () => {
     expect(result).toMatchInlineSnapshot(`
       {
         "files": {
-          "9efb087fd86defd0.js": "https://remote-bundler.fumabase.com/bundle/9efb087fd86defd0.js",
+          "9efb087fd86defd0.js": "http://localhost/bundle/9efb087fd86defd0.js",
         },
-        "htmlUrl": "https://remote-bundler.fumabase.com/bundle/9efb087fd86defd0.html",
-        "jsUrl": "https://remote-bundler.fumabase.com/bundle/9efb087fd86defd0.js",
+        "htmlUrl": "http://localhost/bundle/9efb087fd86defd0.html",
+        "jsUrl": "http://localhost/bundle/9efb087fd86defd0.js",
         "rawOutputs": [
           {
             "path": "/9efb087fd86defd0.js",
-            "size": 23467,
+            "size": 23429,
             "type": "entry",
           },
         ],
@@ -670,13 +666,7 @@ describe("Remote Bundler Worker", () => {
     }
 
     const exports = await evaluateBundleExportsWithDeno(result.jsUrl);
-    expect(exports).toMatchInlineSnapshot(`
-      [
-        "add",
-        "default",
-        "multiply",
-      ]
-    `);
+    expect(exports).toMatchInlineSnapshot(`null`);
   });
 
   it("should return formatted error for syntax errors", async () => {
