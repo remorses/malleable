@@ -5,6 +5,8 @@ after changes run `pnpm tsc`. after every big change run `pnpm deployment` to de
 `pnpm test` will run the tests against the local bundler instead of the remote worker
 
 
+to read github files and repos docs use gitchamber. use `curl https://gitchamber.com` to see docs
+
 IMPORTANT: tests must be run after deployment. the tests use the deployed worker!
 
 ## Testing Preferences
@@ -39,7 +41,7 @@ This is a Cloudflare Workers project that provides a bundling API for TypeScript
 - Tailwind CSS v3 generation with PostCSS
 - npm package resolution via esm.sh CDN
 - Interactive web UI with file upload support
-- Deployed at: https://remote-bundler.remorses.workers.dev
+- Deployed at: https://lovepack.dev
 
 ### API Endpoint
 

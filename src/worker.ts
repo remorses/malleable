@@ -423,11 +423,11 @@ const app = new Spiceflow()
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Remote Bundler</title>
+    <title>Lovepack - Fast TypeScript/React Bundler</title>
 </head>
 <body>
     <div class="container">
-        <h1>🚀 Remote Bundler</h1>
+        <h1>💝 Lovepack</h1>
 
         <form id="bundleForm">
             <div class="form-group">

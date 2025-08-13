@@ -1,4 +1,5 @@
 {
+  "name": "lovepack",
   "scripts": {
     "dev": "wrangler dev",
     "demo": "vite",

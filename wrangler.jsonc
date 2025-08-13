@@ -1,6 +1,6 @@
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
-  "name": "remote-bundler",
+  "name": "lovepack",
   "main": "src/worker.ts",
   "compatibility_date": "2025-08-10",
   "compatibility_flags": ["nodejs_compat"],
@@ -13,6 +13,10 @@
       "zone_name": "fumabase.com",
       "custom_domain": true,
       "pattern": "remote-bundler.fumabase.com",
+    },
+    {
+      "custom_domain": true,
+      "pattern": "lovepack.dev",
     },
   ],
   "rules": [
