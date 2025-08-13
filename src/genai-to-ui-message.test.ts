@@ -482,7 +482,7 @@ describe('LiveMessageAssembler', () => {
     expect(userMessages).toMatchInlineSnapshot(`
       [
         {
-          "id": "msg_1755085654578_1",
+          "id": "msg_1755085849562_1",
           "parts": [
             {
               "providerMetadata": undefined,
@@ -516,7 +516,7 @@ describe('LiveMessageAssembler', () => {
     expect(finalMessages).toMatchInlineSnapshot(`
       [
         {
-          "id": "msg_1755085654579_2",
+          "id": "msg_1755085849563_2",
           "parts": [
             {
               "providerMetadata": undefined,
@@ -561,7 +561,7 @@ describe('LiveMessageAssembler', () => {
     expect(flushedMessages).toMatchInlineSnapshot(`
       [
         {
-          "id": "msg_1755085654579_1",
+          "id": "msg_1755085849563_1",
           "parts": [
             {
               "providerMetadata": undefined,
