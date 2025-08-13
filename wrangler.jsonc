@@ -8,6 +8,32 @@
   "kv_namespaces": [
     { "binding": "jsCache", "id": "6b37928db4814bf2a05819634cb9845b" }
   ],
+  "containers": [
+    {
+      "class_name": "BunContainer",
+      "image": "./Dockerfile",
+      "max_instances": 5,
+    },
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "class_name": "BunContainer",
+        "name": "BUN_CONTAINER",
+      },
+    ],
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["Sandbox"],
+    },
+    {
+      "tag": "v2",
+      "deleted_classes": ["Sandbox"],
+      "new_sqlite_classes": ["BunContainer"],
+    },
+  ],
   "routes": [
     {
       "zone_name": "fumabase.com",

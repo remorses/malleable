@@ -7,9 +7,66 @@ import { createEsmShPlugin } from "./esm-https-plugin.js"
 import { createLocalResolverPlugin } from "./local-resolver-plugin.js"
 import { createVirtualEntryPlugin } from "./virtual-entry-plugin.js"
 import { logger, createRequestLogger } from "./logger.js"
+import { Container, getContainer, getRandom } from '@cloudflare/containers'
+import { createSpiceflowClient } from 'spiceflow/client'
+import type { ContainerApp } from '../container_src/server.js'
+import { IMPORTMAP } from './importmap.js'
+
+// Bun container using the @cloudflare/containers utility
+export class BunContainer extends Container {
+  // Configure default port for the container
+  defaultPort = 8080
+
+  // Sleep after 1 second of inactivity for quick cleanup
+  sleepAfter = "1s"
+
+  // Lifecycle hooks
+  override onStart(): void {
+    console.log('Bun container started!')
+  }
+
+  override onStop(): void {
+    console.log('Bun container stopped')
+  }
+
+  override onError(error: unknown): void {
+    console.error('Container error:', error)
+  }
+
+  // Create a Spiceflow client for this container
+  getClient() {
+    // Create a custom fetch that routes through the container
+    const customFetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+      const request = new Request(input, init)
+      return this.fetch(request)
+    }
+
+    // Create the client with the custom fetch
+    return createSpiceflowClient<ContainerApp>('http://container:8080', {
+      fetch: customFetch as typeof fetch
+    })
+  }
+}
 
 interface Env {
   jsCache: KVNamespace
+  BUN_CONTAINER: DurableObjectNamespace<BunContainer>
+}
+
+interface State extends Env {
+  waitUntil?: (promise: Promise<any>) => void
+}
+
+// Helper to create a Spiceflow client from a container stub
+function getContainerClient(stub: DurableObjectStub<BunContainer>) {
+  const customFetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+    const request = new Request(input, init)
+    return stub.fetch(request)
+  }
+
+  return createSpiceflowClient<ContainerApp>('http://container:8080', {
+    fetch: customFetch as typeof fetch
+  })
 }
 
 let init = false
@@ -42,7 +99,56 @@ const html = (strings: TemplateStringsArray, ...values: any[]) =>
 
 // Create app with state
 const app = new Spiceflow()
-  .state('env', {} as Env)
+  .route({
+    method: 'POST',
+    path: '/api/prerender',
+    request: z.object({
+      files: z.array(z.object({
+        path: z.string(),
+        content: z.string()
+      })),
+      entryPoint: z.string().optional(),
+      cssUrls: z.array(z.string()).default([]),
+      bootstrapModules: z.array(z.string()).default([]),
+      importmap: z.string().optional(),
+    }),
+    async handler({ request, state }: any) {
+      try {
+        const body = await request.json()
+        
+        // Use load-balanced container pool with 3 instances
+        const containerStub = await getRandom(state.BUN_CONTAINER, 3) as DurableObjectStub<BunContainer>
+        
+        // Use the Spiceflow client to prerender
+        const client = getContainerClient(containerStub)
+        const { data, error } = await client.prerender.post({
+          files: body.files,
+          entryPoint: body.entryPoint,
+          cssUrls: body.cssUrls,
+          bootstrapModules: body.bootstrapModules,
+          importmap: body.importmap || IMPORTMAP
+        })
+        
+        if (error) {
+          return Response.json({
+            success: false,
+            error: error.message || error
+          }, { status: 500 })
+        }
+        
+        return Response.json({
+          success: true,
+          html: data.html,
+          renderTime: data.renderTime
+        })
+      } catch (error: any) {
+        return Response.json({
+          success: false,
+          error: error.message || 'Failed to prerender'
+        }, { status: 500 })
+      }
+    }
+  })
   .route({
     method: 'OPTIONS',
     path: '/api/bundle',
@@ -62,7 +168,7 @@ const app = new Spiceflow()
     method: 'POST',
     path: '/api/bundle',
     request: bundleSchema,
-    async handler({ request, state }) {
+    async handler({ request, state }: any) {
       // Create request-scoped logger
       const reqLogger = createRequestLogger()
 
@@ -236,7 +342,7 @@ const app = new Spiceflow()
             }
           }
 
-          // Generate HTML that renders the React component
+          // Generate initial HTML for client-side rendering
           const htmlContent = html`<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -245,15 +351,7 @@ const app = new Spiceflow()
     <title>React App</title>
     ${cssUrls.map(url => `<link rel="stylesheet" href="${url}">`).join('\n    ')}
     <script type="importmap">
-    {
-      "imports": {
-        "react": "https://esm.sh/react",
-        "react-dom": "https://esm.sh/react-dom",
-        "react-dom/": "https://esm.sh/react-dom/",
-        "react/jsx-runtime": "https://esm.sh/react/jsx-runtime",
-        "react/jsx-dev-runtime": "https://esm.sh/react/jsx-dev-runtime"
-      }
-    }
+    ${IMPORTMAP}
     </script>
 </head>
 <body>
@@ -286,12 +384,46 @@ const app = new Spiceflow()
                 : undefined
 
               console.log(`storing in jsCache`, file.filename)
-              return state.env.jsCache.put(file.filename, file.text, {
+              return state.jsCache.put(file.filename, file.text, {
                 expirationTtl: ttl,
                 metadata
               })
             })
           )
+
+          // Start prerendering in the background (non-blocking)
+          if (state.waitUntil) {
+            state.waitUntil(
+              (async () => {
+                try {
+                  // Use load-balanced container pool for background prerendering
+                  const containerStub = await getRandom(state.BUN_CONTAINER, 3) as DurableObjectStub<BunContainer>
+
+                  // Use the Spiceflow client to prerender
+                  const client = getContainerClient(containerStub)
+                  const { data, error } = await client.prerender.post({
+                    files,
+                    entryPoint: actualEntryPoint,
+                    cssUrls,
+                    bootstrapModules: mainJsUrl ? [mainJsUrl] : [],
+                    importmap: IMPORTMAP
+                  })
+
+                  if (!error && data.html) {
+                    // Update the HTML in KV with prerendered content
+                    console.log(`Updating ${htmlKey} with prerendered HTML`)
+                    await state.jsCache.put(htmlKey, data.html, {
+                      expirationTtl: ttl
+                    })
+                  } else {
+                    console.error('Prerender error:', error || 'No HTML returned')
+                  }
+                } catch (error) {
+                  console.error('Background prerender error:', error)
+                }
+              })()
+            )
+          }
 
           // Create HTML URL
           const htmlUrl = `${baseUrl}/bundle/${htmlKey}`;
@@ -370,7 +502,7 @@ const app = new Spiceflow()
   .route({
     method: 'GET',
     path: '/bundle/*',
-    async handler({ params, state }) {
+    async handler({ params, state }: any) {
       const key = params['*']
 
       if (!key) {
@@ -378,7 +510,7 @@ const app = new Spiceflow()
       }
 
       // Get content and metadata from KV
-      const kvResult = await state.env.jsCache.getWithMetadata<{ serverTiming?: string }>(key)
+      const kvResult = await state.jsCache.getWithMetadata(key) as { value: string | null, metadata: { serverTiming?: string } | null }
 
       if (!kvResult.value) {
         console.log('not found', key, params)
@@ -593,7 +725,11 @@ const app = new Spiceflow()
 export { app }
 
 export default {
-  async fetch(request: Request, env: Env) {
-    return await app.handle(request, { state: { env } })
+  async fetch(request: Request, env: Env, ctx: ExecutionContext) {
+    const state: State = {
+      ...env,
+      waitUntil: ctx.waitUntil.bind(ctx)
+    }
+    return await app.handle(request, { state } as any)
   }
 }

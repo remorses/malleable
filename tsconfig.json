@@ -14,5 +14,5 @@
     "types": ["@cloudflare/workers-types", "@types/node"],
     "jsx": "react"
   },
-  "exclude": ["demo/**/*", ]
+  "exclude": ["demo/**/*", "container_src/**/*"]
 }

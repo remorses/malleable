@@ -5,11 +5,12 @@
     "demo": "vite",
     "test": "pnpm vitest -u --run",
     "test:prod": "USE_PROD=1 pnpm vitest -u --run",
-    "deployment": "wrangler deploy --minify"
+    "deployment": "pnpm tsc && wrangler deploy --minify"
   },
   "type": "module",
   "dependencies": {
     "@ai-sdk/openai": "^2.0.8",
+    "@cloudflare/containers": "^0.0.25",
     "@node-loader/http": "^2.0.0",
     "@tailwindcss/typography": "^0.5.16",
     "@types/path-browserify": "^1.0.3",
@@ -28,6 +29,7 @@
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20250810.0",
     "@google/genai": "^1.13.0",
+    "@types/bun": "^1.2.20",
     "@types/node": "^24.2.1",
     "@types/react": "^19.1.9",
     "@types/react-dom": "^19.1.7",

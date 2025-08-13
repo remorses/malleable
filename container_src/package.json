@@ -1,0 +1,7 @@
+{
+  "name": "lovepack-container",
+  "dependencies": {
+    "spiceflow": "^1.17.9",
+    "zod": "^4.0.17"
+  }
+}

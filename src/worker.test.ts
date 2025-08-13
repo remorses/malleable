@@ -43,11 +43,10 @@ const fetchImplementation = useProd
 
       return await app.handle(request, {
         state: {
-          env: {
-            jsCache: mockKVNamespace as any,
-          },
-        },
-      });
+          jsCache: mockKVNamespace as any,
+          BUN_CONTAINER: {} as any, // Mock container namespace for tests
+        }
+      } as any);
     };
 
 
