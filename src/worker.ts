@@ -17,8 +17,9 @@ export class BunContainer extends Container {
   // Configure default port for the container
   defaultPort = 8080
 
+
   // Sleep after 1 second of inactivity for quick cleanup
-  sleepAfter = "1s"
+  sleepAfter = "1m"
 
   // Lifecycle hooks
   override onStart(): void {
@@ -115,10 +116,10 @@ const app = new Spiceflow()
     async handler({ request, state }: any) {
       try {
         const body = await request.json()
-        
+
         // Use load-balanced container pool with 3 instances
-        const containerStub = await getRandom(state.BUN_CONTAINER, 3) as DurableObjectStub<BunContainer>
-        
+        const containerStub = await getRandom(state.BUN_CONTAINER, 1) as DurableObjectStub<BunContainer>
+
         // Use the Spiceflow client to prerender
         const client = getContainerClient(containerStub)
         const { data, error } = await client.prerender.post({
@@ -128,14 +129,14 @@ const app = new Spiceflow()
           bootstrapModules: body.bootstrapModules,
           importmap: body.importmap || IMPORTMAP
         })
-        
+
         if (error) {
           return Response.json({
             success: false,
             error: error.message || error
           }, { status: 500 })
         }
-        
+
         return Response.json({
           success: true,
           html: data.html,
