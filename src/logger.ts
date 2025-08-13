@@ -9,13 +9,15 @@ export class Logger {
   private completedTimings: Map<string, Timing> = new Map()
 
   time(label: string): void {
-    this.timers.set(label, Date.now())
+    this.timers.set(label, performance.now())
   }
 
   timeEnd(label: string): void {
     const startTime = this.timers.get(label)
     if (startTime) {
-      const duration = Date.now() - startTime
+      const elapsed = performance.now() - startTime
+      // Ensure we always show at least 1ms for any measurable duration
+      const duration = elapsed > 0 && elapsed < 1 ? 1 : Math.round(elapsed)
       console.log(`[TIMER] ${label}: ${duration}ms`)
       
       // Store completed timing
