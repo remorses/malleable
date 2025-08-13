@@ -1,6 +1,6 @@
 import postcss from 'postcss'
 import autoprefixer from 'autoprefixer'
-import tailwindcss from 'tailwindcss'
+import tailwindcss, { Config } from 'tailwindcss'
 import typography from '@tailwindcss/typography'
 
 // Export the theme configuration for use in other files
@@ -72,6 +72,10 @@ function createTailwindProcessor(content: string | Array<{ raw: string; extensio
   return postcss([
     tailwindcss({
       content: contentConfig,
+      darkMode: 'class',
+      future: {
+        hoverOnlyWhenSupported: true
+      },
       corePlugins: {
         preflight: false,
       },
