@@ -1,4 +1,4 @@
-import { createUnplugin } from 'unplugin'
+import type { Plugin } from 'esbuild-wasm'
 import * as path from 'path-browserify'
 import { processCSSFileWithTailwind } from './generate-tailwind.js'
 
@@ -14,7 +14,7 @@ export interface LocalResolverOptions {
   getFileContent?: (filePath: string) => Promise<string | null>
 }
 
-export const createLocalResolverPlugin = createUnplugin<LocalResolverOptions>((options) => {
+export function createLocalResolverPlugin(options: LocalResolverOptions = {}): Plugin {
   const { files = [], filePaths = [], workingDir = '/', getFileContent } = options
 
   // Create a map for quick file lookup
@@ -35,138 +35,163 @@ export const createLocalResolverPlugin = createUnplugin<LocalResolverOptions>((o
 
   return {
     name: 'local-resolver',
-    enforce: 'pre', // Run before other plugins
-    esbuild: {
-      loader: (code, id) => {
-        // Use JSX loader for our virtual entry
-        if (id.endsWith('.css')) {
-          return 'css'
-        }
-        return 'tsx'
-      }
-    },
-    async resolveId(id, importer) {
-      // Always resolve relative to workingDir for entrypoints
-      const resolvedPath = path.isAbsolute(id) ? id : path.posix.resolve(workingDir, id)
-      // Skip if already processed
-      if (id.startsWith('\0') || id.startsWith('https://')) {
-        return null
-      }
-
-      // Handle entry points
-      if (!importer) {
-
-        // Check if file exists in fileMap
-        if (fileMap.has(resolvedPath)) {
-          return '\0local:' + resolvedPath
-        }
-        // Check if file exists in available paths (for GitHub mode)
-        if (availablePaths.has(resolvedPath)) {
-          return '\0local:' + resolvedPath
-        }
-      }
-
-
-      // Handle relative imports
-      if (id.startsWith('.') || id.startsWith('/')) {
-        const basedir = importer
-          ? (importer.startsWith('\0local:')
-              ? path.dirname(importer.slice(7)) // Remove '\0local:' prefix
-              : path.dirname(importer))
-          : workingDir
-        const resolvedPath = path.posix.resolve(workingDir, basedir, id)
-
-
-        // Try with common extensions if no extension provided
-        const extensions = ['', '.css', '.ts', '.tsx', '.js', '.jsx', '.mjs']
-        for (const ext of extensions) {
-          const fullPath = resolvedPath + ext
-
-          // Check local files first
-          if (fileMap.has(fullPath)) {
-            return '\0local:' + fullPath
-          }
-
-          // Check available paths (for GitHub mode)
-          if (availablePaths.has(fullPath)) {
-            return '\0local:' + fullPath
-          }
-
-          // Also try index files (not for CSS)
-          if (ext !== '.css') {
-            const indexPath = path.join(resolvedPath, 'index' + ext)
-            if (fileMap.has(indexPath)) {
-              return '\0local:' + indexPath
-            }
-            if (availablePaths.has(indexPath)) {
-              return '\0local:' + indexPath
-            }
-          }
-        }
-      }
-
-      // If not found locally, return null to let other plugins handle it
-      return null
-    },
-
-    async load(id) {
-      // Only handle local files
-      if (!id.startsWith('\0local:')) {
-        return null
-      }
-      console.log({id})
-
-      const filePath = id.slice(7) // Remove '\0local:' prefix
-
-      // Check fileMap first (for local files)
-      let content = fileMap.get(filePath) || fileContentCache.get(filePath)
-
-      // If not found and we have getFileContent, fetch it
-      if (!content && getFileContent) {
-        const fetchedContent = await getFileContent(filePath)
-        if (fetchedContent !== null) {
-          content = fetchedContent
-          fileContentCache.set(filePath, fetchedContent)
-        }
-      }
-
-      if (!content) {
-        this.error({
-          message: `File not found: ${filePath}`,
-          id: filePath,
-        })
-        return null
-      }
-
-      // Determine loader based on extension
-      const ext = path.extname(filePath)
-
-      // Handle CSS files
-      if (ext === '.css') {
-        try {
-          // Process CSS with Tailwind
-          const processedCSS = await processCSSFileWithTailwind(content)
-
-          return {
-            code: processedCSS,
-            map: null
-          }
-        } catch (error: any) {
-          this.error({
-            message: `Failed to process CSS file ${filePath}: ${error.message}`,
-            id: filePath,
-          })
+    setup(build) {
+      // Handle entry points and imports
+      build.onResolve({ filter: /.*/ }, args => {
+        // Skip if already processed or is an HTTP URL
+        if (args.path.startsWith('\0') || args.path.startsWith('https://') || args.path.startsWith('http://')) {
           return null
         }
-      }
 
-      // For TypeScript/JSX files, we just pass them through as-is
-      // since esbuild will handle the transformation
+        // Handle entry points (no importer)
+        if (!args.importer) {
+          const resolvedPath = path.isAbsolute(args.path) 
+            ? args.path 
+            : path.posix.resolve(workingDir, args.path)
 
-      return {
-        code: content,
-        map: null
-      }
+          // Check if file exists in fileMap
+          if (fileMap.has(resolvedPath)) {
+            return {
+              path: resolvedPath,
+              namespace: 'local',
+            }
+          }
+          // Check if file exists in available paths (for GitHub mode)
+          if (availablePaths.has(resolvedPath)) {
+            return {
+              path: resolvedPath,
+              namespace: 'local',
+            }
+          }
+        }
+
+        // Handle relative imports
+        if (args.path.startsWith('.') || args.path.startsWith('/')) {
+          // Determine base directory
+          let basedir = workingDir
+          
+          if (args.importer) {
+            if (args.namespace === 'local') {
+              basedir = path.dirname(args.importer)
+            } else if (!args.importer.startsWith('http')) {
+              basedir = path.dirname(args.importer)
+            }
+          }
+
+          const resolvedPath = path.posix.resolve(workingDir, basedir, args.path)
+
+          // Try with common extensions if no extension provided
+          const extensions = ['', '.css', '.ts', '.tsx', '.js', '.jsx', '.mjs']
+          for (const ext of extensions) {
+            const fullPath = resolvedPath + ext
+
+            // Check local files first
+            if (fileMap.has(fullPath)) {
+              return {
+                path: fullPath,
+                namespace: 'local',
+              }
+            }
+
+            // Check available paths (for GitHub mode)
+            if (availablePaths.has(fullPath)) {
+              return {
+                path: fullPath,
+                namespace: 'local',
+              }
+            }
+
+            // Also try index files (not for CSS)
+            if (ext !== '.css') {
+              const indexPath = path.join(resolvedPath, 'index' + ext)
+              if (fileMap.has(indexPath)) {
+                return {
+                  path: indexPath,
+                  namespace: 'local',
+                }
+              }
+              if (availablePaths.has(indexPath)) {
+                return {
+                  path: indexPath,
+                  namespace: 'local',
+                }
+              }
+            }
+          }
+        }
+
+        // If not found locally, return null to let other plugins handle it
+        return null
+      })
+
+      // Load content from local namespace
+      build.onLoad({ filter: /.*/, namespace: 'local' }, async (args) => {
+        console.log({id: args.path})
+        
+        const filePath = args.path
+
+        // Check fileMap first (for local files)
+        let content = fileMap.get(filePath) || fileContentCache.get(filePath)
+
+        // If not found and we have getFileContent, fetch it
+        if (!content && getFileContent) {
+          const fetchedContent = await getFileContent(filePath)
+          if (fetchedContent !== null) {
+            content = fetchedContent
+            fileContentCache.set(filePath, fetchedContent)
+          }
+        }
+
+        if (!content) {
+          return {
+            errors: [{
+              text: `File not found: ${filePath}`,
+              location: null,
+              notes: [],
+              detail: null,
+              pluginName: 'local-resolver',
+            }]
+          }
+        }
+
+        // Determine loader based on extension
+        const ext = path.extname(filePath)
+
+        // Handle CSS files
+        if (ext === '.css') {
+          try {
+            // Process CSS with Tailwind
+            const processedCSS = await processCSSFileWithTailwind(content)
+
+            return {
+              contents: processedCSS,
+              loader: 'css',
+            }
+          } catch (error: any) {
+            return {
+              errors: [{
+                text: `Failed to process CSS file ${filePath}: ${error.message}`,
+                location: null,
+                notes: [],
+                detail: error,
+                pluginName: 'local-resolver',
+              }]
+            }
+          }
+        }
+
+        // For TypeScript/JSX files, determine the appropriate loader
+        let loader: 'tsx' | 'ts' | 'jsx' | 'js' = 'tsx'
+        if (ext === '.ts') loader = 'ts'
+        else if (ext === '.tsx') loader = 'tsx'
+        else if (ext === '.jsx') loader = 'jsx'
+        else if (ext === '.js' || ext === '.mjs') loader = 'js'
+
+        return {
+          contents: content,
+          loader,
+        }
+      })
     }
   }
-})
+}

@@ -3,6 +3,7 @@
     "dev": "wrangler dev",
     "demo": "vite",
     "test": "pnpm vitest -u",
+    "test:prod": "USE_PROD=1 pnpm vitest -u",
     "deployment": "wrangler deploy --minify"
   },
   "type": "module",

@@ -62,12 +62,12 @@ test('CSS import and processing', async () => {
       "rawOutputs": [
         {
           "path": "/1d406200ac53b27b.js",
-          "size": 8635,
+          "size": 8612,
           "type": "entry",
         },
         {
           "path": "/1d406200ac53b27b.css",
-          "size": 3224,
+          "size": 3208,
           "type": "entry",
         },
       ],

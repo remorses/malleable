@@ -1,4 +1,4 @@
-import { createUnplugin } from 'unplugin'
+import type { Plugin } from 'esbuild-wasm'
 import dedent from 'string-dedent'
 
 interface VirtualEntryOptions {
@@ -7,34 +7,23 @@ interface VirtualEntryOptions {
   baseUrl: string
 }
 
-export const createVirtualEntryPlugin = createUnplugin<VirtualEntryOptions>((options) => {
+export function createVirtualEntryPlugin(options: VirtualEntryOptions): Plugin {
   const { actualEntryPath, cssUrl, baseUrl } = options
   const virtualModuleId = 'virtual:entry'
-  const resolvedVirtualModuleId = '\0' + virtualModuleId
 
   return {
     name: 'virtual-entry',
-
-    // Configure esbuild-specific loader
-    esbuild: {
-      loader: (code, id) => {
-        // Use JSX loader for our virtual entry
-        if (id === resolvedVirtualModuleId) {
-          return 'jsx' as const
+    setup(build) {
+      // Resolve the virtual entry module
+      build.onResolve({ filter: /^virtual:entry$/ }, args => {
+        return {
+          path: virtualModuleId,
+          namespace: 'virtual-entry',
         }
-        return 'tsx' as const
-      }
-    },
+      })
 
-    resolveId(id) {
-      if (id === virtualModuleId) {
-        return resolvedVirtualModuleId
-      }
-      return null
-    },
-
-    load(id) {
-      if (id === resolvedVirtualModuleId) {
+      // Load the virtual entry module content
+      build.onLoad({ filter: /.*/, namespace: 'virtual-entry' }, args => {
         const content = dedent`
           import React, { useLayoutEffect, useRef, useState } from 'react';
           import { createPortal } from 'react-dom';
@@ -99,12 +88,10 @@ export const createVirtualEntryPlugin = createUnplugin<VirtualEntryOptions>((opt
         `
 
         return {
-          code: content,
-
-          map: null
+          contents: content,
+          loader: 'jsx',
         }
-      }
-      return null
+      })
     }
   }
-})
+}

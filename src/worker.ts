@@ -3,7 +3,7 @@ import { z } from 'zod'
 import * as esbuild from 'esbuild-wasm'
 import wasm from "../node_modules/esbuild-wasm/esbuild.wasm"
 import { generateTailwindCSS, shadcnTheme } from "./generate-tailwind.js"
-import { createEsmShPlugin } from "./esm-https-plugin.ts"
+import { createEsmShPlugin } from "./esm-https-plugin.js"
 import { createLocalResolverPlugin } from "./local-resolver-plugin.js"
 import { createVirtualEntryPlugin } from "./virtual-entry-plugin.js"
 import { logger, createRequestLogger } from "./logger.js"
@@ -147,15 +147,15 @@ const app = new Spiceflow()
                 minify: false,
                 jsx: 'automatic',
                 plugins: [
-                  createVirtualEntryPlugin.esbuild({
+                  createVirtualEntryPlugin({
                     actualEntryPath: actualEntryPoint,
                     cssUrl,
                     baseUrl
-                  }) as any,
-                  createLocalResolverPlugin.esbuild({
+                  }),
+                  createLocalResolverPlugin({
                     files,
-                  }) as any,
-                  createEsmShPlugin.esbuild({ externalPackages }) as any
+                  }),
+                  createEsmShPlugin({ externalPackages })
                 ],
                 absWorkingDir: '/',
                 loader: {
@@ -217,22 +217,13 @@ const app = new Spiceflow()
           const kvPromises: Promise<void>[] = []
 
           // Store CSS file
-          kvPromises.push(state.env.jsCache.put(cssKey, css, { expirationTtl: ttl }))
+          filesToStore.push({
+            filename: cssKey,
+            text: css,
+            isJs: false
+          })
 
-          // Store other files with metadata for JS files
-          for (const file of filesToStore) {
-            const metadata = file.isJs
-              ? { serverTiming: serverTimingHeader }
-              : undefined
 
-            kvPromises.push(state.env.jsCache.put(file.filename, file.text, {
-              expirationTtl: ttl,
-              metadata
-            }))
-          }
-
-          // Store all files in parallel (not timed since it happens after response)
-          await Promise.all(kvPromises)
 
           // The main entry file will be named with our hash
           const mainJsUrl = fileUrls[`${entryHash}.js`] || undefined
@@ -280,7 +271,27 @@ const app = new Spiceflow()
 
           // Store HTML in KV
           const htmlKey = `${entryHash}.html`;
-          await state.env.jsCache.put(htmlKey, htmlContent, { expirationTtl: ttl });
+          filesToStore.push({
+            filename: htmlKey,
+            text: htmlContent,
+            isJs: false
+          });
+
+
+          // Store other files with metadata for JS files
+          await Promise.all(
+            filesToStore.map(file => {
+              const metadata = file.isJs
+                ? { serverTiming: serverTimingHeader }
+                : undefined
+
+              console.log(`storing in jsCache`, file.filename)
+              return state.env.jsCache.put(file.filename, file.text, {
+                expirationTtl: ttl,
+                metadata
+              })
+            })
+          )
 
           // Create HTML URL
           const htmlUrl = `${baseUrl}/bundle/${htmlKey}`;
@@ -370,6 +381,7 @@ const app = new Spiceflow()
       const kvResult = await state.env.jsCache.getWithMetadata<{ serverTiming?: string }>(key)
 
       if (!kvResult.value) {
+        console.log('not found', key, params)
         return new Response('Not found', { status: 404 })
       }
 
@@ -388,7 +400,8 @@ const app = new Spiceflow()
       // Build headers
       const headers: Record<string, string> = {
         'Content-Type': contentType,
-        'Cache-Control': 'public, max-age=604800', // Browser cache for 7 days
+        'Cache-Control': 'no-store',
+        // 'Cache-Control': 'public, max-age=604800', // Browser cache for 7 days
         'Access-Control-Allow-Origin': '*',
       }
 

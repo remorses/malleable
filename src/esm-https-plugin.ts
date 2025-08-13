@@ -1,4 +1,4 @@
-import { createUnplugin } from 'unplugin'
+import type { Plugin } from 'esbuild-wasm'
 import { logger } from "./logger.ts"
 
 export interface PluginOptions {
@@ -10,7 +10,7 @@ export interface PluginOptions {
 const globalCodeCache = new Map<string, string>()
 const globalRedirectCache = new Map<string, string>()
 
-export const createEsmShPlugin = createUnplugin<PluginOptions>((options = {}) => {
+export function createEsmShPlugin(options: PluginOptions = {}): Plugin {
   const {
     externalPackages = [],
     cdnUrl = 'https://esm.sh',
@@ -18,104 +18,166 @@ export const createEsmShPlugin = createUnplugin<PluginOptions>((options = {}) =>
 
   return {
     name: 'esm-sh-plugin',
+    setup(build) {
+      // Handle direct https:// URL imports
+      build.onResolve({ filter: /^https?:\/\// }, args => {
+        return {
+          path: args.path,
+          namespace: 'http-url',
+        }
+      })
 
-    resolveId(id, importer) {
-      // Handle https:// URLs directly
-      if (id.startsWith('https://') || id.startsWith('http://')) {
-        return id
-      }
+      // Handle relative imports from within http-url namespace
+      build.onResolve({ filter: /.*/, namespace: 'http-url' }, args => {
+        // For relative imports, resolve against the importer URL
+        if (args.path.startsWith('.')) {
+          const url = new URL(args.path, args.importer).toString().trim()
+          return {
+            path: url,
+            namespace: 'http-url',
+          }
+        }
 
-      // Handle relative imports from remote modules
-      if (importer?.startsWith('https://') && (id.startsWith('.') || id.startsWith('/'))) {
-        const url = new URL(id, importer).toString().trim()
-        return url
-      }
+        // For absolute paths starting with /, resolve relative to the origin
+        if (args.path.startsWith('/')) {
+          const importerUrl = new URL(args.importer)
+          const url = new URL(args.path, importerUrl.origin).toString().trim()
+          return {
+            path: url,
+            namespace: 'http-url',
+          }
+        }
 
-      // Handle npm packages (not relative/absolute paths)
-      if (!id.startsWith('.') && !id.startsWith('/') && !id.startsWith('\0')) {
+        // For bare imports within http-url namespace, resolve through esm.sh
+        if (!args.path.startsWith('http')) {
+          const packageName = getPackageName(args.path)
+          if (externalPackages.some(pkg =>
+            pkg === packageName || args.path.startsWith(pkg + '/')
+          )) {
+            return {
+              path: args.path,
+              external: true
+            }
+          }
+
+          const externalsQuery = externalPackages.length > 0
+            ? '?' + new URLSearchParams({ external: externalPackages.join(',') }).toString()
+            : ''
+          const url = `${cdnUrl}/${args.path}${externalsQuery}`.trim()
+          return {
+            path: url,
+            namespace: 'http-url',
+          }
+        }
+
+        // Already a full URL
+        return {
+          path: args.path,
+          namespace: 'http-url',
+        }
+      })
+
+      // Handle npm packages in the default (file) namespace
+      build.onResolve({ filter: /.*/ }, args => {
+        // Skip if already processed or is a relative/absolute path
+        if (args.path.startsWith('.') || args.path.startsWith('/') || args.path.startsWith('\0')) {
+          return null
+        }
+
         // Check if package should be external
-        const packageName = getPackageName(id)
+        const packageName = getPackageName(args.path)
         if (externalPackages.some(pkg =>
-          pkg === packageName || id.startsWith(pkg + '/')
+          pkg === packageName || args.path.startsWith(pkg + '/')
         )) {
-          return { id, external: true }
+          return {
+            path: args.path,
+            external: true
+          }
         }
 
         // Resolve through esm.sh with external query params
         const externalsQuery = externalPackages.length > 0
           ? '?' + new URLSearchParams({ external: externalPackages.join(',') }).toString()
           : ''
-        const url = `${cdnUrl}/${id}${externalsQuery}`.trim()
-        return url
-      }
+        const url = `${cdnUrl}/${args.path}${externalsQuery}`.trim()
 
-      return null
-    },
+        return {
+          path: url,
+          namespace: 'http-url',
+        }
+      })
 
-    async load(id) {
-      // Only handle https:// URLs
-      if (!id.startsWith('https://') && !id.startsWith('http://')) {
-        return null
-      }
+      // Load content from http-url namespace
+      build.onLoad({ filter: /.*/, namespace: 'http-url' }, async (args) => {
+        const url = args.path
 
-      const url = id
-
-      // Check cache first
-      if (globalCodeCache.has(url)) {
-        logger.log(`Cache hit for ${url.substring(0, 50)}`)
-        return globalCodeCache.get(url)
-      }
-
-      try {
-        // Follow redirects
-        const resolvedUrl = await resolveRedirect(url, globalRedirectCache)
-
-        // Fetch the module
-        const fetchId = Math.random().toString(36).substring(2, 9)
-        logger.time(`${fetchId} fetch ${url.substring(0, 50)}`)
-        const response = await fetch(resolvedUrl)
-        logger.timeEnd(`${fetchId} fetch ${url.substring(0, 50)}`)
-
-        if (!response.ok) {
-          throw new Error(`Failed to fetch ${resolvedUrl}: ${response.status} ${response.statusText}`)
+        // Check cache first
+        if (globalCodeCache.has(url)) {
+          logger.log(`Cache hit for ${url.substring(0, 50)}`)
+          return {
+            contents: globalCodeCache.get(url)!,
+            loader: 'js',
+          }
         }
 
-        // Determine if it's JSON based on content type
-        const contentType = response.headers.get('content-type') || ''
-        const isJson = contentType.includes('application/json')
+        try {
+          // Follow redirects
+          const resolvedUrl = await resolveRedirect(url, globalRedirectCache)
 
-        let contents = await response.text()
-        if (!contents) throw new Error(`https url returned empty string ${url}`)
+          // Fetch the module
+          const fetchId = Math.random().toString(36).substring(2, 9)
+          logger.time(`${fetchId} fetch ${url.substring(0, 50)}`)
+          const response = await fetch(resolvedUrl)
+          logger.timeEnd(`${fetchId} fetch ${url.substring(0, 50)}`)
 
-        // Transform import.meta.url references
-        if (contents.includes('import.meta.url')) {
-          contents = contents.replace(
-            /import\.meta\.url/g,
-            JSON.stringify(resolvedUrl)
-          )
+          if (!response.ok) {
+            throw new Error(`Failed to fetch ${resolvedUrl}: ${response.status} ${response.statusText}`)
+          }
+
+          // Determine if it's JSON based on content type
+          const contentType = response.headers.get('content-type') || ''
+          const isJson = contentType.includes('application/json')
+
+          let contents = await response.text()
+          if (!contents) throw new Error(`https url returned empty string ${url}`)
+
+          // Transform import.meta.url references
+          if (contents.includes('import.meta.url')) {
+            contents = contents.replace(
+              /\bimport\.meta\.url\b/g,
+              JSON.stringify(resolvedUrl)
+            )
+          }
+
+          // For JSON files, export as default
+          if (isJson) {
+            contents = `export default ${contents}`
+          }
+
+          // Cache JavaScript modules
+          if (!isJson) {
+            globalCodeCache.set(url, contents)
+          }
+
+          return {
+            contents,
+            loader: 'js',
+          }
+        } catch (error: any) {
+          return {
+            errors: [{
+              text: error.message,
+              location: null,
+              notes: [],
+              detail: error,
+              pluginName: 'esm-sh-plugin',
+            }]
+          }
         }
-
-        // For JSON files, export as default
-        if (isJson) {
-          contents = `export default ${contents}`
-        }
-
-        // Cache JavaScript modules
-        if (!isJson) {
-          globalCodeCache.set(url, contents)
-        }
-
-        return contents
-      } catch (error: any) {
-        this.error({
-          message: error.message,
-          id: url,
-        })
-        return null
-      }
+      })
     }
   }
-})
+}
 
 // Helper function to extract package name from import path
 function getPackageName(path: string): string {
