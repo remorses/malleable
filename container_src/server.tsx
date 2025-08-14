@@ -1,6 +1,6 @@
 /// <reference types="bun" />
 import React from "react";
-import { prerender } from "react-dom/static";
+import { prerender } from "react-dom/static.edge";
 
 import { Spiceflow } from "spiceflow";
 import { z } from "zod";

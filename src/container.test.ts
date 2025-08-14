@@ -189,9 +189,8 @@ describe("Container Prerendering", { timeout: 30000 }, () => {
 
     expect(result).toMatchInlineSnapshot(`
       {
-        "html": "",
-        "renderTime": 2.0272899999999936,
-        "success": true,
+        "error": "A call to blockConcurrencyWhile() in a Durable Object waited for too long. The call was canceled and the Durable Object was reset.",
+        "success": false,
       }
     `);
   });
