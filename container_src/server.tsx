@@ -64,38 +64,33 @@ const app = new Spiceflow().route({
 
       // Create wrapper component with HTML structure
       function App() {
-        const head = React.createElement(
-          "head",
-          null,
-          React.createElement("meta", { charSet: "UTF-8" }),
-          React.createElement("meta", {
-            name: "viewport",
-            content: "width=device-width, initial-scale=1.0",
-          }),
-          React.createElement("title", null, "React App"),
-          ...cssUrls.map((url) =>
-            React.createElement("link", { rel: "stylesheet", href: url }),
-          ),
-          React.createElement("script", {
-            type: "importmap",
-            dangerouslySetInnerHTML: { __html: importmap || IMPORTMAP },
-          }),
+        return (
+          <html lang="en">
+            <head>
+              <meta charSet="UTF-8" />
+              <meta
+                name="viewport"
+                content="width=device-width, initial-scale=1.0"
+              />
+              <title>React App</title>
+              {cssUrls.map((url) => (
+                <link rel="stylesheet" href={url} />
+              ))}
+              <script
+                type="importmap"
+                dangerouslySetInnerHTML={{ __html: importmap || IMPORTMAP }}
+              />
+            </head>
+            <body>
+              <div id="root">
+                <EntryComponent />
+              </div>
+              {bootstrapModules.map((url) => (
+                <script type="module" src={url} />
+              ))}
+            </body>
+          </html>
         );
-
-        const body = React.createElement(
-          "body",
-          null,
-          React.createElement(
-            "div",
-            { id: "root" },
-            React.createElement(EntryComponent),
-          ),
-          ...bootstrapModules.map((url) =>
-            React.createElement("script", { type: "module", src: url }),
-          ),
-        );
-
-        return React.createElement("html", { lang: "en" }, head, body);
       }
 
       // Bootstrap script content for hydration
@@ -127,7 +122,7 @@ import('${bootstrapModules[0] || `./${actualEntryPoint}`}').then(module => {
 
       // Render to string using prerender
       async function renderToString() {
-        const { prelude } = await prerender(React.createElement(App), {
+        const { prelude } = await prerender(<App />, {
           bootstrapScriptContent,
           bootstrapModules,
         });

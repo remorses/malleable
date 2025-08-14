@@ -52,7 +52,7 @@ describe("Container Prerendering", { timeout: 30000 }, () => {
       expect(result).toMatchInlineSnapshot(`
         {
           "html": "",
-          "renderTime": 588.646418,
+          "renderTime": 687.8415149999998,
           "success": true,
         }
       `);
@@ -112,7 +112,7 @@ describe("Container Prerendering", { timeout: 30000 }, () => {
     expect(result).toMatchInlineSnapshot(`
       {
         "html": "",
-        "renderTime": 0.6908419999999751,
+        "renderTime": 0.6237389999998868,
         "success": true,
       }
     `);
@@ -155,7 +155,7 @@ describe("Container Prerendering", { timeout: 30000 }, () => {
     expect(result).toMatchInlineSnapshot(`
       {
         "html": "",
-        "renderTime": 0.7401499999998578,
+        "renderTime": 0.4908269999998538,
         "success": true,
       }
     `);
@@ -190,7 +190,7 @@ describe("Container Prerendering", { timeout: 30000 }, () => {
     expect(result).toMatchInlineSnapshot(`
       {
         "html": "",
-        "renderTime": 0.5869119999999839,
+        "renderTime": 2.0272899999999936,
         "success": true,
       }
     `);
@@ -223,7 +223,7 @@ describe("Container Prerendering", { timeout: 30000 }, () => {
     expect(result).toMatchInlineSnapshot(`
       {
         "html": "",
-        "renderTime": 0.6119910000002164,
+        "renderTime": 1.124087000000145,
         "success": true,
       }
     `);
@@ -265,7 +265,7 @@ describe("Container Prerendering", { timeout: 30000 }, () => {
     expect(result).toMatchInlineSnapshot(`
       {
         "html": "",
-        "renderTime": 0.8806879999999637,
+        "renderTime": 1.323470000000043,
         "success": true,
       }
     `);
