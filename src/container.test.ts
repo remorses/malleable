@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 
-const API_URL = process.env.USE_PROD
+const API_URL = !process.env.USE_LOCAL
   ? "https://lovepack.dev"
   : "http://localhost:8787";
 
@@ -61,7 +61,7 @@ describe("Container Prerendering", { timeout: 30000 }, ({}) => {
           hydrateRoot(root, React.createElement(App));
         }
         </script><script type="module" src="https://example.com/bundle.js" async=""></script></body></html>",
-          "renderTime": 39.93621299999995,
+          "renderTime": 3.6875730000028852,
           "success": true,
         }
       `);
@@ -133,7 +133,7 @@ describe("Container Prerendering", { timeout: 30000 }, ({}) => {
         }
       });
       </script></body></html>",
-        "renderTime": 5.861502000000087,
+        "renderTime": 55.89401799999905,
         "success": true,
       }
     `);
@@ -176,7 +176,7 @@ describe("Container Prerendering", { timeout: 30000 }, ({}) => {
     expect(result).toMatchInlineSnapshot(`
       {
         "html": "",
-        "renderTime": 9.708990999999969,
+        "renderTime": 97.54984900000272,
         "success": true,
       }
     `);
@@ -211,7 +211,7 @@ describe("Container Prerendering", { timeout: 30000 }, ({}) => {
     expect(result).toMatchInlineSnapshot(`
       {
         "html": "",
-        "renderTime": 1.002301999999986,
+        "renderTime": 0.8041270000030636,
         "success": true,
       }
     `);
@@ -256,7 +256,7 @@ describe("Container Prerendering", { timeout: 30000 }, ({}) => {
         }
       });
       </script></body></html>",
-        "renderTime": 3.6665499999999156,
+        "renderTime": 2.8740949999992154,
         "success": true,
       }
     `);
@@ -310,7 +310,7 @@ describe("Container Prerendering", { timeout: 30000 }, ({}) => {
         }
       });
       </script></body></html>",
-        "renderTime": 3.2301319999999123,
+        "renderTime": 3.5053310000002966,
         "success": true,
       }
     `);

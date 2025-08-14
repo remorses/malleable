@@ -4,7 +4,7 @@ import { evaluateBundleExportsWithDeno } from "./test-utils.js";
 import { app } from "./worker.js";
 
 
-const useProd = process.env.USE_PROD
+const useProd = !process.env.USE_LOCAL
 const WORKER_URL = useProd
   ? "https://remote-bundler.fumabase.com"
   : "http://localhost";

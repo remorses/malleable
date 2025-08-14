@@ -4,7 +4,7 @@
     "dev": "wrangler dev",
     "demo": "vite",
     "test": "pnpm vitest -u --run",
-    "test:prod": "USE_PROD=1 pnpm vitest -u --run",
+    "test:local": "USE_LOCAL=1 pnpm vitest -u --run",
     "deployment": "pnpm tsc && wrangler deploy --minify"
   },
   "type": "module",
@@ -27,6 +27,7 @@
     "zod": "^4.0.17"
   },
   "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "^0.8.63",
     "@cloudflare/workers-types": "^4.20250810.0",
     "@google/genai": "^1.14.0",
     "@types/bun": "^1.2.20",
