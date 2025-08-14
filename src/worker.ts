@@ -10,7 +10,7 @@ import { logger, createRequestLogger } from "./logger.js"
 import { Container, getContainer, getRandom } from '@cloudflare/containers'
 import { createSpiceflowClient } from 'spiceflow/client'
 import type { ContainerApp } from '../container_src/server.js'
-import { IMPORTMAP } from './importmap.js'
+import { IMPORTMAP } from '../container_src/importmap.js'
 
 // Bun container using the @cloudflare/containers utility
 export class BunContainer extends Container {

@@ -171,7 +171,7 @@ describe("Container Prerendering", { timeout: 30000 }, () => {
     
     expect(result.success).toBe(false);
     expect(result.error).toBeDefined();
-    expect(result.error).toMatchInlineSnapshot(`"A call to blockConcurrencyWhile() in a Durable Object waited for too long. The call was canceled and the Durable Object was reset."`);
+    expect(result.error).toMatchInlineSnapshot(`"Failed to start container: The container is not running, consider calling start()"`);
   });
 
   it("should include importmap in the prerendered HTML", async () => {

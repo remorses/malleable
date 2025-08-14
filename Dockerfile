@@ -10,7 +10,9 @@ COPY container_src/package.json .
 RUN bun install
 
 # Copy the server file
-COPY container_src/server.ts .
+COPY container_src/ .
+
+RUN ls .
 
 # Expose the port
 EXPOSE 8080

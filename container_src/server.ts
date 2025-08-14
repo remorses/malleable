@@ -2,7 +2,7 @@
 
 import { Spiceflow } from "spiceflow";
 import { z } from "zod";
-import { IMPORTMAP } from "../src/importmap.js";
+import { IMPORTMAP } from "./importmap.js";
 
 // Create a Spiceflow API for the container
 const app = new Spiceflow().route({
