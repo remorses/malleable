@@ -156,6 +156,7 @@ import('${bootstrapModules[0] || `./${actualEntryPoint}`}').then(module => {
     } catch (error: any) {
       return {
         html: "",
+        success: false,
         error: error.message || "Failed to prerender component",
         renderTime: performance.now() - startTime,
       };
@@ -173,7 +174,7 @@ const server = Bun.serve({
 
   fetch: async (req, server) => {
     console.log(`Incoming request: ${req.method} ${req.url}`);
-    return app.handle(req)
+    return app.handle(req);
   },
 });
 
