@@ -1,164 +1,22 @@
 /// <reference types="bun" />
-import React from "react";
-import { prerender } from "react-dom/static.edge";
-
 import { Spiceflow } from "spiceflow";
 import { z } from "zod";
-import { IMPORTMAP } from "./importmap.js";
+import { prerenderComponent, prerenderRequestSchema, type PrerenderResponse } from "./prerender.js";
 
 // Create a Spiceflow API for the container
 const app = new Spiceflow().route({
   method: "POST",
   path: "/prerender",
-  request: z.object({
-    files: z.array(
-      z.object({
-        path: z.string(),
-        content: z.string(),
-      }),
-    ),
-    entryPoint: z.string().optional(),
-    cssUrls: z.array(z.string()).default([]),
-    bootstrapModules: z.array(z.string()).default([]),
-    importmap: z.string().optional(),
-  }),
+  request: prerenderRequestSchema,
   response: z.object({
     html: z.string(),
     error: z.string().optional(),
     renderTime: z.number(),
   }),
   async handler({ request }) {
-    const { files, entryPoint, cssUrls, bootstrapModules, importmap } =
-      await request.json();
-    const startTime = performance.now();
-
-    try {
-      // Determine actual entry point
-      const actualEntryPoint = entryPoint || files[0]?.path;
-      if (!actualEntryPoint) {
-        throw new Error("No files provided");
-      }
-
-      // Create a temporary directory for the project
-      const tempDir = `/tmp/render_${Date.now()}`;
-      await Bun.$`mkdir -p ${tempDir}`;
-
-      // Write all files to disk
-      for (const file of files) {
-        const filePath = `${tempDir}/${file.path}`;
-        // Create directory if needed
-        const dir = filePath.substring(0, filePath.lastIndexOf("/"));
-        if (dir !== tempDir) {
-          await Bun.$`mkdir -p ${dir}`;
-        }
-        await Bun.write(filePath, file.content);
-      }
-
-      // Change to the temp directory for relative imports
-      process.chdir(tempDir);
-
-      // Import the entry component dynamically
-      const EntryComponent = (await import(`./${actualEntryPoint}`)).default;
-
-      // Create wrapper component with HTML structure
-      function App() {
-        return (
-          <html lang="en">
-            <head>
-              <meta charSet="UTF-8" />
-              <meta
-                name="viewport"
-                content="width=device-width, initial-scale=1.0"
-              />
-              <title>React App</title>
-              {cssUrls.map((url) => (
-                <link rel="stylesheet" href={url} />
-              ))}
-              <script
-                type="importmap"
-                dangerouslySetInnerHTML={{ __html: importmap || IMPORTMAP }}
-              />
-            </head>
-            <body>
-              <div id="root">
-                <EntryComponent />
-              </div>
-              {bootstrapModules.map((url) => (
-                <script type="module" src={url} />
-              ))}
-            </body>
-          </html>
-        );
-      }
-
-      // Bootstrap script content for hydration
-      const bootstrapScriptContent =
-        bootstrapModules.length > 0
-          ? `
-import React from 'react';
-import { hydrateRoot } from 'react-dom/client';
-import App from '${bootstrapModules[0]}';
-
-const root = document.getElementById('root');
-if (root) {
-  hydrateRoot(root, React.createElement(App));
-}
-`
-          : `
-import React from 'react';
-import { hydrateRoot } from 'react-dom/client';
-
-// Dynamically import the app
-import('${bootstrapModules[0] || `./${actualEntryPoint}`}').then(module => {
-  const App = module.default;
-  const root = document.getElementById('root');
-  if (root) {
-    hydrateRoot(root, React.createElement(App));
-  }
-});
-`;
-
-      // Render to string using prerender
-      async function renderToString() {
-        const { prelude } = await prerender(<App />, {
-          bootstrapScriptContent,
-          bootstrapModules,
-          onError(error, errorInfo) {
-            console.error(error, errorInfo);
-          },
-          signal: request.signal,
-
-        });
-
-        const reader = prelude.getReader();
-        let content = "";
-        while (true) {
-          const { done, value } = await reader.read();
-          if (value) content += Buffer.from(value).toString("utf8");
-          if (done) {
-            return content;
-          }
-        }
-      }
-
-      const html = await renderToString();
-
-      // Clean up temp directory
-      process.chdir("/");
-      await Bun.$`rm -rf ${tempDir}`;
-
-      return {
-        html: html || "",
-        renderTime: performance.now() - startTime,
-      };
-    } catch (error: any) {
-      return {
-        html: "",
-        success: false,
-        error: error.message || "Failed to prerender component",
-        renderTime: performance.now() - startTime,
-      };
-    }
+    const input = await request.json();
+    const result = await prerenderComponent(input, request.signal);
+    return result as PrerenderResponse;
   },
 });
 

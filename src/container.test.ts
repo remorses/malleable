@@ -18,7 +18,7 @@ async function fetchApi(
   });
 }
 
-describe("Container Prerendering", { timeout: 30000 }, () => {
+describe("Container Prerendering", { timeout: 30000 }, ({}) => {
   it("should prerender a simple React component", async () => {
     const response = await fetchApi("/api/prerender", {
       method: "POST",
@@ -52,7 +52,7 @@ describe("Container Prerendering", { timeout: 30000 }, () => {
       expect(result).toMatchInlineSnapshot(`
         {
           "html": "",
-          "renderTime": 687.8415149999998,
+          "renderTime": 9.47264599999994,
           "success": true,
         }
       `);
@@ -112,7 +112,7 @@ describe("Container Prerendering", { timeout: 30000 }, () => {
     expect(result).toMatchInlineSnapshot(`
       {
         "html": "",
-        "renderTime": 0.6237389999998868,
+        "renderTime": 0.628153999999995,
         "success": true,
       }
     `);
@@ -155,7 +155,7 @@ describe("Container Prerendering", { timeout: 30000 }, () => {
     expect(result).toMatchInlineSnapshot(`
       {
         "html": "",
-        "renderTime": 0.4908269999998538,
+        "renderTime": 0.5679330000000391,
         "success": true,
       }
     `);
@@ -189,8 +189,9 @@ describe("Container Prerendering", { timeout: 30000 }, () => {
 
     expect(result).toMatchInlineSnapshot(`
       {
-        "error": "A call to blockConcurrencyWhile() in a Durable Object waited for too long. The call was canceled and the Durable Object was reset.",
-        "success": false,
+        "html": "",
+        "renderTime": 0.5508629999999357,
+        "success": true,
       }
     `);
   });
@@ -222,7 +223,7 @@ describe("Container Prerendering", { timeout: 30000 }, () => {
     expect(result).toMatchInlineSnapshot(`
       {
         "html": "",
-        "renderTime": 1.124087000000145,
+        "renderTime": 0.6187330000000202,
         "success": true,
       }
     `);
@@ -264,7 +265,7 @@ describe("Container Prerendering", { timeout: 30000 }, () => {
     expect(result).toMatchInlineSnapshot(`
       {
         "html": "",
-        "renderTime": 1.323470000000043,
+        "renderTime": 0.6967039999999542,
         "success": true,
       }
     `);
