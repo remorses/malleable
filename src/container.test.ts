@@ -52,7 +52,7 @@ describe("Container Prerendering", { timeout: 30000 }, () => {
       expect(result).toMatchInlineSnapshot(`
         {
           "html": "",
-          "renderTime": 0.7942020000009506,
+          "renderTime": 588.646418,
           "success": true,
         }
       `);
@@ -109,7 +109,13 @@ describe("Container Prerendering", { timeout: 30000 }, () => {
     const result = await response.json() as any;
 
     expect(result.success).toBe(true);
-    expect(result.html).toMatchInlineSnapshot(`""`);
+    expect(result).toMatchInlineSnapshot(`
+      {
+        "html": "",
+        "renderTime": 0.6908419999999751,
+        "success": true,
+      }
+    `);
   });
 
   it("should prerender with state and hooks", async () => {
@@ -149,7 +155,7 @@ describe("Container Prerendering", { timeout: 30000 }, () => {
     expect(result).toMatchInlineSnapshot(`
       {
         "html": "",
-        "renderTime": 0.9232500000034634,
+        "renderTime": 0.7401499999998578,
         "success": true,
       }
     `);
@@ -184,7 +190,7 @@ describe("Container Prerendering", { timeout: 30000 }, () => {
     expect(result).toMatchInlineSnapshot(`
       {
         "html": "",
-        "renderTime": 2.8870940000015253,
+        "renderTime": 0.5869119999999839,
         "success": true,
       }
     `);
@@ -217,7 +223,7 @@ describe("Container Prerendering", { timeout: 30000 }, () => {
     expect(result).toMatchInlineSnapshot(`
       {
         "html": "",
-        "renderTime": 99.2079389999999,
+        "renderTime": 0.6119910000002164,
         "success": true,
       }
     `);
@@ -259,7 +265,7 @@ describe("Container Prerendering", { timeout: 30000 }, () => {
     expect(result).toMatchInlineSnapshot(`
       {
         "html": "",
-        "renderTime": 0.6498009999995702,
+        "renderTime": 0.8806879999999637,
         "success": true,
       }
     `);

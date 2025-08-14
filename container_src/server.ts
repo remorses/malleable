@@ -1,4 +1,6 @@
 /// <reference types="bun" />
+import React from "react";
+import { prerender } from "react-dom/static";
 
 import { Spiceflow } from "spiceflow";
 import { z } from "zod";
@@ -55,9 +57,7 @@ const app = new Spiceflow().route({
       // Change to the temp directory for relative imports
       process.chdir(tempDir);
 
-      // Dynamically import React and prerendering functions
-      const React = await import("react");
-      const { prerender } = await import("react-dom/static");
+
 
       // Import the entry component dynamically
       const EntryComponent = (await import(`./${actualEntryPoint}`)).default;
