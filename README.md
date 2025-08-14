@@ -79,7 +79,7 @@ const response = await fetch('https://lovepack.dev/api/bundle', {
       path: 'index.tsx',
       content: `
         import React from 'react';
-        
+
         function Button() {
           return (
             <button className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90">
@@ -87,7 +87,7 @@ const response = await fetch('https://lovepack.dev/api/bundle', {
             </button>
           );
         }
-        
+
         export default Button;
       `
     }],
@@ -124,9 +124,9 @@ const response = await fetch('https://lovepack.dev/api/bundle', {
         path: 'Button.tsx',
         content: `
           import React from 'react';
-          
+
           export const Button = ({ children, onClick }) => (
-            <button 
+            <button
               className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
               onClick={onClick}
             >
@@ -141,7 +141,7 @@ const response = await fetch('https://lovepack.dev/api/bundle', {
           import React from 'react';
           import { Button } from './Button';
           import { formatPrice } from './utils';
-          
+
           export default function App() {
             const price = 99.99;
             return (
@@ -203,8 +203,6 @@ pnpm dev
 # Run tests
 pnpm test
 
-# Run tests against production
-pnpm test:prod
 
 # Deploy to Cloudflare Workers
 pnpm deployment

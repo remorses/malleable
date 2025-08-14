@@ -1,6 +1,6 @@
 use pnpm to install dependencies
 
-after changes run `pnpm tsc`. after every big change run `pnpm deployment` to deploy the script and `pnpm test:prod` to update snapshots (-u --run are already passed)
+after changes run `pnpm tsc`. after every big change run `pnpm deployment` to deploy the script and `pnpm test` to update snapshots (-u --run are already passed)
 
 `pnpm test` will run the tests against the local bundler instead of the remote worker
 
