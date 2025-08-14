@@ -280,8 +280,6 @@ const app = new Spiceflow()
           const outputFiles = result.outputFiles || []
           const warnings = result.warnings
 
-          // Use same hash for CSS file
-          const cssKey = `${entryHash}.css`
 
           // Store all output files in KV
           const ttl = 60 * 60 * 24 * 7 // 7 days in seconds
@@ -312,7 +310,7 @@ const app = new Spiceflow()
 
           // Store CSS file
           filesToStore.push({
-            filename: cssKey,
+            filename: `${entryHash}.css`,
             text: css,
             isJs: false
           })
@@ -323,7 +321,7 @@ const app = new Spiceflow()
           const mainJsUrl = fileUrls[`${entryHash}.js`] || undefined
 
           // Collect all CSS file URLs
-          const cssUrls: string[] = []
+          const cssUrls: string[] = [cssUrl]
           for (const [filename, url] of Object.entries(fileUrls)) {
             if (filename.endsWith('.css')) {
               cssUrls.push(url)
