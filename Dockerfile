@@ -18,4 +18,4 @@ RUN ls .
 EXPOSE 8080
 
 # Run the Spiceflow server in interactive mode
-ENTRYPOINT ["bun", "run", "-i", "server.ts"]
+ENTRYPOINT ["bun", "run", "-i", "server.tsx"]

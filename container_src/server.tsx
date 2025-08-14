@@ -57,8 +57,6 @@ const app = new Spiceflow().route({
       // Change to the temp directory for relative imports
       process.chdir(tempDir);
 
-
-
       // Import the entry component dynamically
       const EntryComponent = (await import(`./${actualEntryPoint}`)).default;
 
@@ -125,16 +123,21 @@ import('${bootstrapModules[0] || `./${actualEntryPoint}`}').then(module => {
         const { prelude } = await prerender(<App />, {
           bootstrapScriptContent,
           bootstrapModules,
+          onError(error, errorInfo) {
+            console.error(error, errorInfo);
+          },
+          signal: request.signal,
+
         });
 
         const reader = prelude.getReader();
         let content = "";
         while (true) {
           const { done, value } = await reader.read();
+          if (value) content += Buffer.from(value).toString("utf8");
           if (done) {
             return content;
           }
-          content += Buffer.from(value).toString("utf8");
         }
       }
 
