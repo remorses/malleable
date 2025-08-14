@@ -6,7 +6,7 @@
   "compatibility_flags": ["nodejs_compat"],
 
   "kv_namespaces": [
-    { "binding": "jsCache", "id": "6b37928db4814bf2a05819634cb9845b" }
+    { "binding": "jsCache", "id": "6b37928db4814bf2a05819634cb9845b" },
   ],
   "containers": [
     {

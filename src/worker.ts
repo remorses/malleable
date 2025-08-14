@@ -22,31 +22,18 @@ export class BunContainer extends Container {
   sleepAfter = "1m"
 
   // Lifecycle hooks
-  override onStart(): void {
-    console.log('Bun container started!')
-  }
+  // override onStart(): void {
+  //   console.log('Bun container started!')
+  // }
 
-  override onStop(): void {
-    console.log('Bun container stopped')
-  }
+  // override onStop(): void {
+  //   console.log('Bun container stopped')
+  // }
 
   override onError(error: unknown): void {
     console.error('Container error:', error)
   }
 
-  // Create a Spiceflow client for this container
-  getClient() {
-    // Create a custom fetch that routes through the container
-    const customFetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
-      const request = new Request(input, init)
-      return this.fetch(request)
-    }
-
-    // Create the client with the custom fetch
-    return createSpiceflowClient<ContainerApp>('http://container:8080', {
-      fetch: customFetch as typeof fetch
-    })
-  }
 }
 
 interface Env {
