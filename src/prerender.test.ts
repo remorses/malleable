@@ -40,7 +40,7 @@ describe("Prerender Module", () => {
         hydrateRoot(root, React.createElement(App));
       }
       </script><script type="module" src="https://example.com/bundle.js" async=""></script></body></html>",
-        "renderTime": 955.890125,
+        "renderTime": 736.0995,
       }
     `);
   });
@@ -104,7 +104,7 @@ describe("Prerender Module", () => {
         }
       });
       </script></body></html>",
-        "renderTime": 368.90704100000016,
+        "renderTime": 362.54983300000004,
       }
     `);
   });
@@ -134,10 +134,10 @@ describe("Prerender Module", () => {
     expect(result).toMatchInlineSnapshot(`
       {
         "error": "Transform failed with 2 errors:
-      /private/tmp/render_1755174983699/BadComponent.tsx:7:12: ERROR: The character "}" is not valid inside a JSX element
-      /private/tmp/render_1755174983699/BadComponent.tsx:8:10: ERROR: Unexpected end of file before a closing "div" tag",
+      /private/tmp/render_1755183231998/BadComponent.tsx:7:12: ERROR: The character "}" is not valid inside a JSX element
+      /private/tmp/render_1755183231998/BadComponent.tsx:8:10: ERROR: Unexpected end of file before a closing "div" tag",
         "html": "",
-        "renderTime": 358.8144169999998,
+        "renderTime": 347.046959,
       }
     `);
   });
@@ -242,7 +242,7 @@ describe("Prerender Module", () => {
         }
       });
       </script></body></html>",
-        "renderTime": 334.6444580000002,
+        "renderTime": 327.01900000000023,
       }
     `);
   });
@@ -261,7 +261,7 @@ describe("Prerender Module", () => {
       {
         "error": "No files provided",
         "html": "",
-        "renderTime": 0.07162500000004002,
+        "renderTime": 0.04445800000030431,
       }
     `);
   });

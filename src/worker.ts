@@ -1,7 +1,6 @@
 import { Spiceflow } from 'spiceflow'
 import { z } from 'zod'
-import * as esbuild from 'esbuild-wasm'
-import wasm from "../node_modules/esbuild-wasm/esbuild.wasm"
+
 import { generateTailwindCSS, shadcnTheme } from "./generate-tailwind.js"
 import { createEsmShPlugin } from "./esm-https-plugin.js"
 import { createLocalResolverPlugin } from "./local-resolver-plugin.js"
@@ -162,6 +161,13 @@ const app = new Spiceflow()
 
       reqLogger.time(`total`)
 
+      reqLogger.time(`import-esbuild`)
+      const [esbuild, wasm] = await Promise.all([
+        import('esbuild-wasm'),
+        import("../node_modules/esbuild-wasm/esbuild.wasm").then(mod => mod.default)
+      ])
+      reqLogger.timeEnd(`import-esbuild`)
+
       if (!init) {
         reqLogger.time(`esbuild-init`)
         await esbuild.initialize({
@@ -204,6 +210,7 @@ const app = new Spiceflow()
 
 
         // Generate hash for the entry point name
+        reqLogger.time(`hash-generation`)
         const hashInput = JSON.stringify({
           files: files.sort((a, b) => a.path.localeCompare(b.path)),
           entryPoint: actualEntryPoint,
@@ -211,6 +218,7 @@ const app = new Spiceflow()
           tailwindConfig: JSON.stringify(shadcnTheme)
         })
         const entryHash = await generateHash(hashInput)
+        reqLogger.timeEnd(`hash-generation`)
 
 
 
@@ -299,11 +307,7 @@ const app = new Spiceflow()
             fileUrls[filename] = `${new URL(request.url).origin}/bundle/${filename}`
           }
 
-          // Complete all timing before generating the header
-          reqLogger.timeEnd(`total`)
-
-          // Generate Server-Timing header after all timing is complete
-          const serverTimingHeader = reqLogger.getServerTimingHeader()
+          let serverTimingHeader = reqLogger.getServerTimingHeader()
 
           // Now store all files with metadata
           const kvPromises: Promise<void>[] = []
@@ -329,6 +333,7 @@ const app = new Spiceflow()
           }
 
           // Generate initial HTML for client-side rendering
+          reqLogger.time(`html-generation`)
           const htmlContent = html`<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -352,6 +357,7 @@ const app = new Spiceflow()
     </script>
 </body>
 </html>`;
+          reqLogger.timeEnd(`html-generation`)
 
           // Store HTML in KV
           const htmlKey = `${entryHash}.html`;
@@ -363,6 +369,7 @@ const app = new Spiceflow()
 
 
           // Store other files with metadata for JS files
+          reqLogger.time(`kv-storage`)
           await Promise.all(
             filesToStore.map(file => {
               const metadata = file.isJs
@@ -376,6 +383,11 @@ const app = new Spiceflow()
               })
             })
           )
+          reqLogger.timeEnd(`kv-storage`)
+
+
+          reqLogger.timeEnd(`total`)
+
 
           // Start prerendering in the background (non-blocking)
           if (state.waitUntil) {

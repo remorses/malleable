@@ -72,7 +72,7 @@ describe("Remote Bundler Worker", () => {
     const result = (await response.json()) as BundleResult;
     const serverTiming = response.headers.get("Server-Timing");
     expect(serverTiming).toMatchInlineSnapshot(
-      `"esbuild-init;dur=0, parse-body;dur=0, tailwind-css;dur=0, esbuild-build;dur=0, parallel-build;dur=0, total;dur=0, cfL4;desc="?proto=TCP&rtt=10466&min_rtt=10403&rtt_var=4028&sent=4&recv=5&lost=0&retrans=0&sent_bytes=2856&recv_bytes=976&delivery_rate=263978&cwnd=251&unsent_bytes=0&cid=74817566a5f81462&ts=1051&x=0""`,
+      `"import-esbuild;dur=0, import-wasm;dur=0, esbuild-init;dur=0, parse-body;dur=0, hash-generation;dur=0, tailwind-css;dur=0, esbuild-build;dur=0, parallel-build;dur=0, html-generation;dur=0, kv-storage;dur=361, total;dur=361, cfL4;desc="?proto=TCP&rtt=13858&min_rtt=12943&rtt_var=5507&sent=4&recv=5&lost=0&retrans=0&sent_bytes=2856&recv_bytes=976&delivery_rate=222514&cwnd=251&unsent_bytes=0&cid=12edcbc7a5714166&ts=1840&x=0""`,
     );
     expect(result).toMatchInlineSnapshot(`
       {
@@ -123,7 +123,7 @@ describe("Remote Bundler Worker", () => {
     const result = (await response.json()) as BundleSuccessResult;
     const serverTiming = response.headers.get("Server-Timing");
     expect(serverTiming).toMatchInlineSnapshot(
-      `"parse-body;dur=0, tailwind-css;dur=0, esbuild-build;dur=0, parallel-build;dur=0, total;dur=0, cfL4;desc="?proto=TCP&rtt=11094&min_rtt=10403&rtt_var=3218&sent=13&recv=9&lost=0&retrans=0&sent_bytes=6197&recv_bytes=1750&delivery_rate=390138&cwnd=255&unsent_bytes=0&cid=74817566a5f81462&ts=1491&x=0""`,
+      `"import-esbuild;dur=0, import-wasm;dur=0, parse-body;dur=0, hash-generation;dur=0, tailwind-css;dur=0, esbuild-build;dur=0, parallel-build;dur=0, html-generation;dur=0, kv-storage;dur=95, total;dur=95, cfL4;desc="?proto=TCP&rtt=13671&min_rtt=12927&rtt_var=3417&sent=11&recv=9&lost=0&retrans=0&sent_bytes=6112&recv_bytes=1750&delivery_rate=332640&cwnd=256&unsent_bytes=0&cid=12edcbc7a5714166&ts=2522&x=0""`,
     );
     expect(result).toMatchInlineSnapshot(`
       {
@@ -168,7 +168,7 @@ describe("Remote Bundler Worker", () => {
     const result = (await response.json()) as BundleResult;
     const serverTiming = response.headers.get("Server-Timing");
     expect(serverTiming).toMatchInlineSnapshot(
-      `"parse-body;dur=0, tailwind-css;dur=0, esbuild-build;dur=0, parallel-build;dur=0, total;dur=0, cfL4;desc="?proto=TCP&rtt=11197&min_rtt=10403&rtt_var=2197&sent=22&recv=13&lost=0&retrans=0&sent_bytes=9041&recv_bytes=2623&delivery_rate=462650&cwnd=255&unsent_bytes=0&cid=74817566a5f81462&ts=1986&x=0""`,
+      `"import-esbuild;dur=0, import-wasm;dur=0, parse-body;dur=0, hash-generation;dur=0, tailwind-css;dur=0, esbuild-build;dur=0, parallel-build;dur=0, html-generation;dur=0, kv-storage;dur=93, total;dur=93, cfL4;desc="?proto=TCP&rtt=15569&min_rtt=12732&rtt_var=6145&sent=19&recv=14&lost=0&retrans=1&sent_bytes=8935&recv_bytes=2623&delivery_rate=332640&cwnd=256&unsent_bytes=0&cid=12edcbc7a5714166&ts=3173&x=0""`,
     );
     expect(result).toMatchInlineSnapshot(`
       {
@@ -214,7 +214,7 @@ describe("Remote Bundler Worker", () => {
       const result = (await response.json()) as BundleResult;
       const serverTiming = response.headers.get("Server-Timing");
       expect(serverTiming).toMatchInlineSnapshot(
-        `"parse-body;dur=0, tailwind-css;dur=0, esbuild-build;dur=540, parallel-build;dur=540, total;dur=540, cfL4;desc="?proto=TCP&rtt=11217&min_rtt=10403&rtt_var=1688&sent=26&recv=15&lost=0&retrans=0&sent_bytes=10356&recv_bytes=3219&delivery_rate=462650&cwnd=255&unsent_bytes=0&cid=74817566a5f81462&ts=3686&x=0""`,
+        `"import-esbuild;dur=0, import-wasm;dur=0, parse-body;dur=0, hash-generation;dur=0, tailwind-css;dur=0, esbuild-build;dur=1084, parallel-build;dur=1084, html-generation;dur=0, kv-storage;dur=1363, total;dur=2447, cfL4;desc="?proto=TCP&rtt=17817&min_rtt=12732&rtt_var=9105&sent=22&recv=16&lost=0&retrans=1&sent_bytes=10328&recv_bytes=3219&delivery_rate=332640&cwnd=256&unsent_bytes=0&cid=12edcbc7a5714166&ts=6373&x=0""`,
       );
       expect(result.success).toMatchInlineSnapshot(`true`);
     },
@@ -232,7 +232,7 @@ describe("Remote Bundler Worker", () => {
 
     const result = (await response.json()) as BundleResult;
     const serverTiming = response.headers.get("Server-Timing");
-    expect(serverTiming).toMatchInlineSnapshot(`"cfL4;desc="?proto=TCP&rtt=11153&min_rtt=10403&rtt_var=1395&sent=30&recv=17&lost=0&retrans=0&sent_bytes=11679&recv_bytes=3502&delivery_rate=462650&cwnd=255&unsent_bytes=0&cid=74817566a5f81462&ts=3723&x=0""`);
+    expect(serverTiming).toMatchInlineSnapshot(`"cfL4;desc="?proto=TCP&rtt=29465&min_rtt=12732&rtt_var=30125&sent=27&recv=19&lost=0&retrans=2&sent_bytes=11784&recv_bytes=3502&delivery_rate=332640&cwnd=256&unsent_bytes=0&cid=12edcbc7a5714166&ts=6511&x=0""`);
     expect(response.status).toMatchInlineSnapshot(`400`);
     expect(result).toMatchInlineSnapshot(`
       {
@@ -265,7 +265,7 @@ describe("Remote Bundler Worker", () => {
     const result = (await response.json()) as BundleResult;
     const serverTiming = response.headers.get("Server-Timing");
     expect(serverTiming).toMatchInlineSnapshot(
-      `"esbuild-init;dur=0, parse-body;dur=0, tailwind-css;dur=0, esbuild-build;dur=0, parallel-build;dur=0, total;dur=0, cfL4;desc="?proto=TCP&rtt=15439&min_rtt=14753&rtt_var=6022&sent=4&recv=5&lost=0&retrans=0&sent_bytes=2856&recv_bytes=1181&delivery_rate=195214&cwnd=251&unsent_bytes=0&cid=76a45410da9c06c0&ts=1018&x=0""`,
+      `"import-esbuild;dur=0, import-wasm;dur=0, esbuild-init;dur=0, parse-body;dur=1, hash-generation;dur=0, tailwind-css;dur=0, esbuild-build;dur=0, parallel-build;dur=0, html-generation;dur=0, kv-storage;dur=114, total;dur=115, cfL4;desc="?proto=TCP&rtt=14706&min_rtt=14487&rtt_var=5589&sent=3&recv=5&lost=0&retrans=0&sent_bytes=234&recv_bytes=1452&delivery_rate=99399&cwnd=203&unsent_bytes=0&cid=49d5ce80bdb95652&ts=1464&x=0""`,
     );
     expect(result).toMatchInlineSnapshot(`
       {
@@ -393,7 +393,7 @@ describe("Remote Bundler Worker", () => {
     const result = (await response.json()) as BundleResult;
     const serverTiming = response.headers.get("Server-Timing");
     expect(serverTiming).toMatchInlineSnapshot(
-      `"parse-body;dur=1, tailwind-css;dur=0, esbuild-build;dur=49, parallel-build;dur=49, total;dur=50, cfL4;desc="?proto=TCP&rtt=15611&min_rtt=14753&rtt_var=4862&sent=11&recv=9&lost=0&retrans=0&sent_bytes=4664&recv_bytes=4002&delivery_rate=342408&cwnd=255&unsent_bytes=0&cid=76a45410da9c06c0&ts=1592&x=0""`,
+      `"import-esbuild;dur=0, import-wasm;dur=0, parse-body;dur=0, hash-generation;dur=0, tailwind-css;dur=0, esbuild-build;dur=89, parallel-build;dur=89, html-generation;dur=0, kv-storage;dur=82, total;dur=171, cfL4;desc="?proto=TCP&rtt=15267&min_rtt=14487&rtt_var=4069&sent=11&recv=10&lost=0&retrans=0&sent_bytes=2184&recv_bytes=4273&delivery_rate=403542&cwnd=208&unsent_bytes=0&cid=49d5ce80bdb95652&ts=2184&x=0""`,
     );
 
     if (result.success) {
@@ -583,7 +583,7 @@ describe("Remote Bundler Worker", () => {
 
     const serverTiming = response.headers.get("Server-Timing");
     expect(serverTiming).toMatchInlineSnapshot(
-      `"parse-body;dur=0, tailwind-css;dur=0, esbuild-build;dur=0, parallel-build;dur=0, total;dur=0, cfL4;desc="?proto=TCP&rtt=12176&min_rtt=10398&rtt_var=3004&sent=40&recv=26&lost=0&retrans=0&sent_bytes=19888&recv_bytes=7703&delivery_rate=462650&cwnd=255&unsent_bytes=0&cid=74817566a5f81462&ts=6231&x=0""`,
+      `"import-esbuild;dur=0, import-wasm;dur=0, parse-body;dur=0, hash-generation;dur=0, tailwind-css;dur=0, esbuild-build;dur=0, parallel-build;dur=0, html-generation;dur=0, kv-storage;dur=125, total;dur=125, cfL4;desc="?proto=TCP&rtt=22905&min_rtt=12673&rtt_var=18155&sent=37&recv=29&lost=0&retrans=2&sent_bytes=19865&recv_bytes=7703&delivery_rate=608065&cwnd=256&unsent_bytes=0&cid=12edcbc7a5714166&ts=9554&x=0""`,
     );
 
     if (result.success) {

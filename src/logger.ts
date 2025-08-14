@@ -16,8 +16,8 @@ export class Logger {
     const startTime = this.timers.get(label)
     if (startTime) {
       const elapsed = performance.now() - startTime
-      // Ensure we always show at least 1ms for any measurable duration
-      const duration = elapsed > 0 && elapsed < 1 ? 1 : Math.round(elapsed)
+      // Round to nearest millisecond, but ensure at least 1ms for any measurable duration
+      const duration = elapsed > 0 ? Math.max(1, Math.round(elapsed)) : 0
       console.log(`[TIMER] ${label}: ${duration}ms`)
       
       // Store completed timing
