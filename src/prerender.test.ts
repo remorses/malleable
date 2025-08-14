@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { prerenderComponent, prerenderRequestSchema, type PrerenderRequest } from "../container_src/prerender.js";
+import { prerenderComponent, prerenderRequestSchema, type PrerenderRequest } from "./prerender.js";
 
 describe("Prerender Module", () => {
   it("should prerender a simple React component", async () => {

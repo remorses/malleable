@@ -9,8 +9,8 @@ import { createVirtualEntryPlugin } from "./virtual-entry-plugin.js"
 import { logger, createRequestLogger } from "./logger.js"
 import { Container, getContainer, getRandom } from '@cloudflare/containers'
 import { createSpiceflowClient } from 'spiceflow/client'
-import type { ContainerApp } from '../container_src/bun-server.tsx'
-import { IMPORTMAP } from '../container_src/importmap.js'
+import type { ContainerApp } from './bun-server.js'
+import { IMPORTMAP } from './importmap.js'
 
 // Bun container using the @cloudflare/containers utility
 export class BunContainer extends Container {
