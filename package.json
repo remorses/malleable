@@ -11,7 +11,6 @@
   "dependencies": {
     "@ai-sdk/openai": "^2.0.8",
     "@cloudflare/containers": "^0.0.25",
-    "@node-loader/http": "^2.0.0",
     "@tailwindcss/typography": "^0.5.16",
     "@types/path-browserify": "^1.0.3",
     "ai": "^5.0.9",
@@ -22,12 +21,10 @@
     "spiceflow": "^1.17.9",
     "string-dedent": "^3.0.2",
     "tailwindcss": "^3.4.17",
-    "unplugin": "^2.3.5",
     "vitest": "^3.2.4",
     "zod": "^4.0.17"
   },
   "devDependencies": {
-    "@cloudflare/vitest-pool-workers": "^0.8.63",
     "@cloudflare/workers-types": "^4.20250810.0",
     "@google/genai": "^1.14.0",
     "@types/bun": "^1.2.20",
