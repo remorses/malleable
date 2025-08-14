@@ -47,6 +47,14 @@ export default defineConfig({
   ssr: {
     noExternal: ["esbuild-wasm"],
   },
+  resolve: {
+    alias: {
+      "cloudflare:workers": new URL(
+        "./src/mocks/cloudflare-workers.ts",
+        import.meta.url,
+      ).pathname,
+    },
+  },
   plugins: [
     react(),
     wasmPlugin(),

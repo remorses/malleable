@@ -1,6 +1,5 @@
 // virtual-entry:virtual:entry
-import React2, { useLayoutEffect, useRef, useState as useState2 } from "react";
-import { createPortal } from "react-dom";
+import React2 from "react";
 
 // local:/app.tsx
 import { Suspense, lazy, useState, useEffect } from "react";
@@ -42,44 +41,16 @@ var app_default = App;
 
 // virtual-entry:virtual:entry
 import { Fragment, jsx as jsx2, jsxs as jsxs2 } from "react/jsx-runtime";
-function ScopedIsland({ href, children, className }) {
-  const hostRef = useRef(null);
-  const [shadow, setShadow] = useState2(null);
-  const [ready, setReady] = useState2(false);
-  useLayoutEffect(() => {
-    if (!hostRef.current || shadow) return;
-    setShadow(hostRef.current.attachShadow({ mode: "open" }));
-  }, [shadow]);
-  return /* @__PURE__ */ jsx2("div", { ref: hostRef, className, style: { visibility: ready ? "visible" : "hidden" }, children: shadow && createPortal(
-    /* @__PURE__ */ jsxs2(Fragment, { children: [
-      /* @__PURE__ */ jsx2(
-        "link",
-        {
-          rel: "stylesheet",
-          href,
-          onLoad: () => setReady(true),
-          onError: () => setReady(true)
-        }
-      ),
-      ready ? children : null
-    ] }),
-    shadow
-  ) });
-}
 var OriginalDefault = app_default;
 var WrappedComponent = (props) => {
-  return /* @__PURE__ */ jsx2(ScopedIsland, { href: "https://remote-bundler.fumabase.com/bundle/6bad1d1e32f23fb9.css", className: props.className, children: OriginalDefault ? /* @__PURE__ */ jsx2(OriginalDefault, { ...props }) : null });
-};
-var virtual_entry_default = WrappedComponent;
-var WithoutShadowRoot = (props) => {
   return /* @__PURE__ */ jsxs2(Fragment, { children: [
     /* @__PURE__ */ jsx2("link", { rel: "stylesheet", href: "https://remote-bundler.fumabase.com/bundle/6bad1d1e32f23fb9.css" }),
     OriginalDefault ? /* @__PURE__ */ jsx2(OriginalDefault, { ...props }) : null
   ] });
 };
+var virtual_entry_default = WrappedComponent;
 export {
   App,
-  WithoutShadowRoot,
   virtual_entry_default as default,
   loadDynamicData
 };
