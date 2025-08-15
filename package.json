@@ -17,6 +17,7 @@
     "ai": "^5.0.9",
     "autoprefixer": "^10.4.21",
     "esbuild-wasm": "^0.25.8",
+    "eventemitter3": "^5.0.1",
     "path-browserify": "^1.0.1",
     "postcss": "^8.5.6",
     "spiceflow": "^1.17.9",
