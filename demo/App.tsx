@@ -206,18 +206,9 @@ export default function App() {
           )}
         </div>
 
-        <div className='grid grid-cols-1 lg:grid-cols-2 gap-6'>
-          {/* Input Section */}
+        <div className='grid grid-cols-1 lg:grid-cols-3 gap-6'>
+          {/* Input Section - takes 1/3 */}
           <div className='space-y-4'>
-            {/* Status indicator */}
-            {isGenerating && (
-              <div className='p-3 bg-primary/10 rounded-md'>
-                <span className='text-sm text-primary'>
-                  Generating component...
-                </span>
-              </div>
-            )}
-
             {/* Generated Code */}
             <div>
               <h3 className='text-lg font-semibold mb-2 text-foreground'>
@@ -226,7 +217,7 @@ export default function App() {
               <textarea
                 value={code}
                 onChange={(e) => useStore.setState({ code: e.target.value })}
-                className='w-full h-64 p-3 border border-input rounded-md bg-muted font-mono text-sm'
+                className='w-full h-48 p-3 border border-input rounded-md bg-muted font-mono text-sm'
                 placeholder='Generated code will appear here...'
               />
             </div>
@@ -250,14 +241,14 @@ export default function App() {
             </div>
           </div>
 
-          {/* Preview Section */}
-          <div className='space-y-4'>
+          {/* Preview Section - takes 2/3 */}
+          <div className='space-y-4 lg:col-span-2'>
             <div>
               <h3 className='text-lg font-semibold mb-2 text-foreground'>
                 Preview
               </h3>
 
-              <div className='border border-border rounded-md p-4 min-h-[400px] bg-card flex flex-col items-center justify-center'>
+              <div className='border border-border rounded-md p-4 min-h-[500px] bg-card flex flex-col items-center justify-center'>
                 {PreviewComponent && <PreviewComponent />}
               </div>
             </div>
