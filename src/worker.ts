@@ -80,11 +80,11 @@ export class BunContainer extends Container<Env> {
               },
             })
             console.log(
-              `Stored prerendered HTML for ${htmlKey} in KV from alarm`,
+              `${siteId}: Stored prerendered HTML for ${htmlKey} in KV from alarm`,
             )
           }
         } catch (error) {
-          console.error(`Alarm prerender error for site ${siteId}:`, error)
+          console.error(`${siteId}: Alarm prerender error:`, error)
         } finally {
           // Clean up storage for this site
           await this.ctx.storage.delete(`prerenderPayload:${siteId}`)
@@ -150,7 +150,7 @@ const app = new Spiceflow()
       cssUrls: z.array(z.string()).default([]),
       bootstrapModules: z.array(z.string()).default([]),
       importmap: z.string().optional(),
-      siteId: z.string().optional(),
+      siteId: z.string(),
     }),
     async handler({ request, state }: any) {
       try {
@@ -169,6 +169,7 @@ const app = new Spiceflow()
           cssUrls: body.cssUrls,
           bootstrapModules: body.bootstrapModules,
           importmap: body.importmap || IMPORTMAP,
+          siteId: body.siteId,
         })
 
         return Response.json({
@@ -423,7 +424,7 @@ const app = new Spiceflow()
               ? { serverTiming: serverTimingHeader }
               : undefined
 
-            console.log(`storing in jsCache`, file.filename)
+            console.log(`${siteId}: storing in jsCache`, file.filename)
             return state.jsCache.put(
               file.filename,
               file.text,
@@ -460,7 +461,7 @@ const app = new Spiceflow()
 
               // The actual prerendering will happen in the alarm handler
             } catch (error) {
-              console.error('Background prerender error:', error)
+              console.error(`${siteId}: Background prerender error:`, error)
             }
           })(),
         )
@@ -571,7 +572,9 @@ const app = new Spiceflow()
       }
 
       if (!kvResult.value) {
-        console.log('not found', key, params)
+        // Extract siteId from key (format: siteId/filename)
+        const siteId = key.split('/')[0] || 'unknown'
+        console.log(`${siteId}: not found`, key, params)
         return new Response('Not found', { status: 404 })
       }
 

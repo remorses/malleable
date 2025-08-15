@@ -18,7 +18,7 @@ export const prerenderRequestSchema = z.object({
   bootstrapModules: z.array(z.string()).default([]),
   importmap: z.string().optional(),
   runNpmInstall: z.boolean().default(false).optional(),
-  siteId: z.string().optional(),
+  siteId: z.string(),
 })
 
 export const prerenderResultSchema = z.object({
@@ -51,6 +51,7 @@ export async function prerenderComponent(
       bootstrapModules,
       importmap,
       runNpmInstall,
+      siteId = 'default',
     } = input
 
     // Determine actual entry point
@@ -169,7 +170,7 @@ import('${bootstrapModules[0] || `./${actualEntryPoint}`}').then(module => {
           bootstrapScriptContent,
           bootstrapModules,
           onError(error, errorInfo) {
-            console.error(error, errorInfo)
+            console.error(`${siteId}: Prerender error:`, error, errorInfo)
           },
           signal,
         })
