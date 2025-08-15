@@ -157,11 +157,12 @@ export function aiToolToGenAIFunction(
  */
 export function aiToolToCallableTool(
   tool: Tool<any, any>,
-  name?: string,
-): CallableTool {
+  name: string,
+): CallableTool & { name: string } {
   const toolName = name || 'tool'
 
   return {
+    name,
     async tool(): Promise<GenAITool> {
       const functionDeclaration = aiToolToGenAIFunction(tool)
       if (name) {
@@ -224,7 +225,6 @@ export function aiToolToCallableTool(
   }
 }
 
-
 /**
  * Helper to extract schema from AI SDK tool
  */
@@ -244,7 +244,7 @@ export function extractSchemaFromTool(tool: Tool<any, any>): any {
  */
 export function callableToolsFromObject(
   tools: Record<string, Tool<any, any>>,
-): CallableTool[] {
+): Array<CallableTool & { name: string }> {
   return Object.entries(tools).map(([name, tool]) =>
     aiToolToCallableTool(tool, name),
   )
