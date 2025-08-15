@@ -27,6 +27,7 @@ describe('Prerender Module', () => {
       ],
       cssUrls: ['https://example.com/styles.css'],
       bootstrapModules: ['https://example.com/bundle.js'],
+      siteId: 'hello-prerender-' + Math.random().toString(36).substring(7),
       runNpmInstall: true,
     }
 
@@ -88,6 +89,7 @@ describe('Prerender Module', () => {
       entryPoint: 'App.tsx',
       cssUrls: [],
       bootstrapModules: [],
+      siteId: 'multifile-app-' + Math.random().toString(36).substring(7),
       runNpmInstall: true,
     }
 
@@ -130,6 +132,7 @@ describe('Prerender Module', () => {
       ],
       cssUrls: [],
       bootstrapModules: [],
+      siteId: 'bad-component-' + Math.random().toString(36).substring(7),
       runNpmInstall: true,
     }
 
@@ -226,6 +229,7 @@ describe('Prerender Module', () => {
       cssUrls: [],
       bootstrapModules: [],
       importmap: customImportmap,
+      siteId: 'custom-importmap-' + Math.random().toString(36).substring(7),
       runNpmInstall: true,
     }
 
@@ -256,6 +260,7 @@ describe('Prerender Module', () => {
       files: [],
       cssUrls: [],
       bootstrapModules: [],
+      siteId: 'no-files-' + Math.random().toString(36).substring(7),
       runNpmInstall: false,
     }
 
