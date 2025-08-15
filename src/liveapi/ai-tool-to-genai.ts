@@ -153,18 +153,6 @@ export function aiToolToGenAIFunction(
 }
 
 /**
- * Convert AI SDK Tool with known name to GenAI FunctionDeclaration
- */
-export function aiToolToGenAIFunctionWithName(
-  tool: Tool<any, any>,
-  name: string,
-): FunctionDeclaration {
-  const declaration = aiToolToGenAIFunction(tool)
-  declaration.name = name
-  return declaration
-}
-
-/**
  * Convert AI SDK Tool to GenAI CallableTool
  */
 export function aiToolToCallableTool(
@@ -175,9 +163,10 @@ export function aiToolToCallableTool(
 
   return {
     async tool(): Promise<GenAITool> {
-      const functionDeclaration = name
-        ? aiToolToGenAIFunctionWithName(tool, name)
-        : aiToolToGenAIFunction(tool)
+      const functionDeclaration = aiToolToGenAIFunction(tool)
+      if (name) {
+        functionDeclaration.name = name
+      }
 
       return {
         functionDeclarations: [functionDeclaration],
@@ -233,31 +222,6 @@ export function aiToolToCallableTool(
       return parts
     },
   }
-}
-
-/**
- * Convert multiple AI SDK tools to GenAI Tool format (deprecated, use aiToolsToCallableTools)
- */
-export function aiToolsToGenAITools(
-  tools: Record<string, Tool<any, any>>,
-): GenAITool[] {
-  const functionDeclarations: FunctionDeclaration[] = []
-
-  for (const [name, tool] of Object.entries(tools)) {
-    const functionDeclaration = aiToolToGenAIFunctionWithName(tool, name)
-    functionDeclarations.push(functionDeclaration)
-  }
-
-  // Return a single tool with all function declarations
-  if (functionDeclarations.length > 0) {
-    return [
-      {
-        functionDeclarations,
-      },
-    ]
-  }
-
-  return []
 }
 
 /**

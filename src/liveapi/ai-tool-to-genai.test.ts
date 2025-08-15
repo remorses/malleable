@@ -5,8 +5,7 @@ import { Type } from '@google/genai'
 import type { FunctionDeclaration, FunctionCall } from '@google/genai'
 import {
   aiToolToGenAIFunction,
-  aiToolToGenAIFunctionWithName,
-  aiToolsToGenAITools,
+
   aiToolToCallableTool,
   extractSchemaFromTool,
 } from './ai-tool-to-genai.js'
@@ -55,37 +54,6 @@ describe('AI Tool to GenAI Conversion', () => {
         },
       }
     `)
-  })
-
-  it('should use custom name when provided', () => {
-    const calculateTool = tool({
-      description: 'Perform a calculation',
-      inputSchema: z.object({
-        a: z.number(),
-        b: z.number(),
-        operation: z.enum(['add', 'subtract', 'multiply', 'divide']),
-      }),
-      execute: async ({ a, b, operation }) => {
-        switch (operation) {
-          case 'add':
-            return a + b
-          case 'subtract':
-            return a - b
-          case 'multiply':
-            return a * b
-          case 'divide':
-            return a / b
-        }
-      },
-    })
-
-    const genAIFunction = aiToolToGenAIFunctionWithName(
-      calculateTool,
-      'calculator',
-    )
-
-    expect(genAIFunction.name).toBe('calculator')
-    expect(genAIFunction.description).toBe('Perform a calculation')
   })
 
   it('should handle complex nested schemas', () => {
@@ -150,70 +118,6 @@ describe('AI Tool to GenAI Conversion', () => {
     `)
   })
 
-  it('should convert multiple tools to GenAI tools format', () => {
-    const tools = {
-      weather: tool({
-        description: 'Get weather',
-        inputSchema: z.object({
-          location: z.string(),
-        }),
-        execute: async ({ location }) => ({ temp: 72 }),
-      }),
-      search: tool({
-        description: 'Search the web',
-        inputSchema: z.object({
-          query: z.string(),
-          limit: z.number().optional(),
-        }),
-        execute: async ({ query }) => ({ results: [] }),
-      }),
-    }
-
-    const genAITools = aiToolsToGenAITools(tools)
-
-    expect(genAITools).toMatchInlineSnapshot(`
-      [
-        {
-          "functionDeclarations": [
-            {
-              "description": "Get weather",
-              "name": "weather",
-              "parameters": {
-                "properties": {
-                  "location": {
-                    "type": "STRING",
-                  },
-                },
-                "required": [
-                  "location",
-                ],
-                "type": "OBJECT",
-              },
-            },
-            {
-              "description": "Search the web",
-              "name": "search",
-              "parameters": {
-                "properties": {
-                  "limit": {
-                    "format": "float",
-                    "type": "NUMBER",
-                  },
-                  "query": {
-                    "type": "STRING",
-                  },
-                },
-                "required": [
-                  "query",
-                ],
-                "type": "OBJECT",
-              },
-            },
-          ],
-        },
-      ]
-    `)
-  })
 
   it('should extract schema from tool', () => {
     const testTool = tool({
