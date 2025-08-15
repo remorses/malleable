@@ -20,7 +20,14 @@ export const prerenderRequestSchema = z.object({
   runNpmInstall: z.boolean().default(false).optional(),
 })
 
+export const prerenderResultSchema = z.object({
+  html: z.string(),
+  error: z.string().optional(),
+  renderTime: z.number(),
+})
+
 export type PrerenderRequest = z.infer<typeof prerenderRequestSchema>
+export type PrerenderResult = z.infer<typeof prerenderResultSchema>
 
 export interface PrerenderResponse {
   html: string

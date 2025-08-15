@@ -4,6 +4,7 @@ import { z } from 'zod'
 import {
   prerenderComponent,
   prerenderRequestSchema,
+  prerenderResultSchema,
   type PrerenderResponse,
 } from './prerender.js'
 
@@ -12,11 +13,7 @@ const app = new Spiceflow().route({
   method: 'POST',
   path: '/prerender',
   request: prerenderRequestSchema,
-  response: z.object({
-    html: z.string(),
-    error: z.string().optional(),
-    renderTime: z.number(),
-  }),
+  response: prerenderResultSchema,
   async handler({ request }) {
     const input = await request.json()
     const result = await prerenderComponent(input, request.signal)

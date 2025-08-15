@@ -11,6 +11,7 @@ import { createSpiceflowClient } from 'spiceflow/client'
 import type { ContainerApp } from './bun-server.js'
 import { IMPORTMAP } from './importmap.js'
 import { waitUntil } from 'cloudflare:workers'
+import { PrerenderRequest, PrerenderResult } from './prerender.tsx'
 
 // Bun container using the @cloudflare/containers utility
 export class BunContainer extends Container {
@@ -28,6 +29,16 @@ export class BunContainer extends Container {
   // override onStop(): void {
   //   console.log('Bun container stopped')
   // }
+  //
+  //
+  async prerender(input: PrerenderRequest) {
+    const res = await this.containerFetch('http://localhost/prerender', {
+      body: JSON.stringify(input),
+    })
+    if (!res.ok) throw new Error(`failed prerender in Bun: ${await res.text()}`)
+    const json = (await res.json()) as PrerenderResult
+    return json
+  }
 
   override onError(error: unknown): void {
     console.error('Container error:', error)
@@ -44,19 +55,6 @@ interface State extends Env {
 }
 
 // Helper to create a Spiceflow client from a container stub
-function getContainerClient(stub: DurableObjectStub<BunContainer>) {
-  const customFetch = async (
-    input: RequestInfo | URL,
-    init?: RequestInit,
-  ): Promise<Response> => {
-    const request = new Request(input, init)
-    return stub.fetch(request)
-  }
-
-  return createSpiceflowClient<ContainerApp>('http://container:8080', {
-    fetch: customFetch as typeof fetch,
-  })
-}
 
 let init = false
 
@@ -114,24 +112,14 @@ const app = new Spiceflow()
         )) as DurableObjectStub<BunContainer>
 
         // Use the Spiceflow client to prerender
-        const client = getContainerClient(containerStub)
-        const { data, error } = await client.prerender.post({
+
+        const data = await containerStub.prerender({
           files: body.files,
           entryPoint: body.entryPoint,
           cssUrls: body.cssUrls,
           bootstrapModules: body.bootstrapModules,
           importmap: body.importmap || IMPORTMAP,
         })
-
-        if (error) {
-          return Response.json(
-            {
-              success: false,
-              error: error.message || error,
-            },
-            { status: 500 },
-          )
-        }
 
         return Response.json({
           success: true,
@@ -418,8 +406,8 @@ const app = new Spiceflow()
               )) as DurableObjectStub<BunContainer>
 
               // Use the Spiceflow client to prerender
-              const client = getContainerClient(containerStub)
-              const { data, error } = await client.prerender.post({
+
+              const data = await containerStub.prerender({
                 files,
                 entryPoint: actualEntryPoint,
                 cssUrls,
@@ -427,14 +415,12 @@ const app = new Spiceflow()
                 importmap: IMPORTMAP,
               })
 
-              if (!error && data.html) {
+              if (data.html) {
                 // Update the HTML in KV with prerendered content
                 console.log(`Updating ${htmlKey} with prerendered HTML`)
                 await state.jsCache.put(htmlKey, data.html, {
                   expirationTtl: ttl,
                 })
-              } else {
-                console.error('Prerender error:', error || 'No HTML returned')
               }
             } catch (error) {
               console.error('Background prerender error:', error)
