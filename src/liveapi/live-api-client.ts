@@ -10,7 +10,7 @@ import {
     Session
 } from "@google/genai";
 
-import { LiveClientOptions } from "../types.ts";
+import { LiveClientOptions } from "./types.ts";
 import { AudioRecorder } from "./audio-recorder.ts";
 import { AudioStreamer } from "./audio-streamer.ts";
 import { audioContext, base64ToArrayBuffer } from "./utils.ts";

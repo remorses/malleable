@@ -1,1 +1,1 @@
-export * from "./lib/live-api-client.ts";
+export * from "./live-api-client.ts";
