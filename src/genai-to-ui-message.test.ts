@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect } from 'vitest'
 import type {
   LiveClientMessage,
   LiveServerContent,
@@ -6,15 +6,15 @@ import type {
   Content,
   Part,
   FunctionCall,
-  FunctionResponse
-} from '@google/genai';
-import { Type, Modality, LiveServerMessage } from '@google/genai';
-import { LiveMessageAssembler } from './genai-to-ui-message.js';
+  FunctionResponse,
+} from '@google/genai'
+import { Type, Modality, LiveServerMessage } from '@google/genai'
+import { LiveMessageAssembler } from './genai-to-ui-message.js'
 
 // Example conversation flow with tool calls
 export const EXAMPLE_WEBSOCKET_CONVERSATION: {
-  client: LiveClientMessage[];
-  server: LiveServerMessage[];
+  client: LiveClientMessage[]
+  server: LiveServerMessage[]
 } = {
   client: [
     // 1. Initial setup message
@@ -24,11 +24,13 @@ export const EXAMPLE_WEBSOCKET_CONVERSATION: {
         generationConfig: {
           temperature: 0.7,
           maxOutputTokens: 2048,
-          responseModalities: [Modality.TEXT]
+          responseModalities: [Modality.TEXT],
         },
         systemInstruction: {
-          parts: [{ text: 'You are a helpful assistant with access to tools.' }],
-          role: 'system'
+          parts: [
+            { text: 'You are a helpful assistant with access to tools.' },
+          ],
+          role: 'system',
         },
         tools: [
           {
@@ -40,15 +42,18 @@ export const EXAMPLE_WEBSOCKET_CONVERSATION: {
                   type: Type.OBJECT,
                   properties: {
                     location: { type: Type.STRING, description: 'City name' },
-                    unit: { type: Type.STRING, enum: ['celsius', 'fahrenheit'] }
+                    unit: {
+                      type: Type.STRING,
+                      enum: ['celsius', 'fahrenheit'],
+                    },
                   },
-                  required: ['location']
-                }
-              }
-            ]
-          }
-        ]
-      }
+                  required: ['location'],
+                },
+              },
+            ],
+          },
+        ],
+      },
     },
 
     // 2. User asks a question
@@ -57,11 +62,11 @@ export const EXAMPLE_WEBSOCKET_CONVERSATION: {
         turns: [
           {
             parts: [{ text: "What's the weather like in San Francisco?" }],
-            role: 'user'
-          }
+            role: 'user',
+          },
         ],
-        turnComplete: true
-      }
+        turnComplete: true,
+      },
     },
 
     // 3. Client provides tool response
@@ -76,37 +81,37 @@ export const EXAMPLE_WEBSOCKET_CONVERSATION: {
                 temperature: 72,
                 condition: 'Partly cloudy',
                 humidity: 65,
-                unit: 'fahrenheit'
-              }
-            }
-          }
-        ]
-      }
+                unit: 'fahrenheit',
+              },
+            },
+          },
+        ],
+      },
     },
 
     // 4. User sends follow-up with realtime input
     {
       realtimeInput: {
         text: 'Is that warm for this time',
-        activityStart: {}
-      }
+        activityStart: {},
+      },
     },
 
     // 5. Complete the realtime input
     {
       realtimeInput: {
         text: ' of year?',
-        activityEnd: {}
-      }
-    }
+        activityEnd: {},
+      },
+    },
   ],
 
   server: [
     // 1. Setup complete response
     {
       setupComplete: {
-        sessionId: 'session_abc123'
-      }
+        sessionId: 'session_abc123',
+      },
     } as LiveServerMessage,
 
     // 2. Model starts responding to weather question
@@ -114,10 +119,10 @@ export const EXAMPLE_WEBSOCKET_CONVERSATION: {
       serverContent: {
         modelTurn: {
           parts: [{ text: "I'll check the weather in San Francisco for you." }],
-          role: 'model'
+          role: 'model',
         },
-        turnComplete: false
-      }
+        turnComplete: false,
+      },
     } as LiveServerMessage,
 
     // 3. Model makes a tool call
@@ -129,11 +134,11 @@ export const EXAMPLE_WEBSOCKET_CONVERSATION: {
             name: 'get_weather',
             args: {
               location: 'San Francisco',
-              unit: 'fahrenheit'
-            }
-          }
-        ]
-      }
+              unit: 'fahrenheit',
+            },
+          },
+        ],
+      },
     }) as LiveServerMessage,
 
     // 4. Model provides final response with weather info
@@ -142,14 +147,14 @@ export const EXAMPLE_WEBSOCKET_CONVERSATION: {
         modelTurn: {
           parts: [
             {
-              text: "Based on the current weather data, San Francisco is experiencing partly cloudy conditions with a temperature of 72°F and 65% humidity."
-            }
+              text: 'Based on the current weather data, San Francisco is experiencing partly cloudy conditions with a temperature of 72°F and 65% humidity.',
+            },
           ],
-          role: 'model'
+          role: 'model',
         },
         turnComplete: true,
-        generationComplete: true
-      }
+        generationComplete: true,
+      },
     } as LiveServerMessage,
 
     // 5. Model responds to follow-up question
@@ -158,13 +163,13 @@ export const EXAMPLE_WEBSOCKET_CONVERSATION: {
         modelTurn: {
           parts: [
             {
-              text: "Yes, 72°F is quite warm for San Francisco at this time of year. The city typically experiences temperatures in the 60s, so this is above average. The moderate humidity at 65% makes it feel comfortable despite being warmer than usual."
-            }
+              text: 'Yes, 72°F is quite warm for San Francisco at this time of year. The city typically experiences temperatures in the 60s, so this is above average. The moderate humidity at 65% makes it feel comfortable despite being warmer than usual.',
+            },
           ],
-          role: 'model'
+          role: 'model',
         },
-        turnComplete: true
-      }
+        turnComplete: true,
+      },
     } as LiveServerMessage,
 
     // 6. Usage metadata
@@ -172,11 +177,11 @@ export const EXAMPLE_WEBSOCKET_CONVERSATION: {
       usageMetadata: {
         promptTokenCount: 156,
         candidatesTokenCount: 89,
-        totalTokenCount: 245
-      }
-    }) as LiveServerMessage
-  ]
-};
+        totalTokenCount: 245,
+      },
+    }) as LiveServerMessage,
+  ],
+}
 
 // Additional example: Multi-part content with code and images
 export const EXAMPLE_MULTIPART_MESSAGE: LiveServerMessage = {
@@ -190,44 +195,44 @@ export const EXAMPLE_MULTIPART_MESSAGE: LiveServerMessage = {
   const response = await fetch(\`/api/weather?city=\${city}\`);
   return response.json();
 }`,
-            language: 'javascript'
-          }
+            language: 'javascript',
+          },
         },
         { text: "And here's the expected response format:" },
         {
           codeExecutionResult: {
             output: '{ "temperature": 72, "condition": "Partly cloudy" }',
-            outcome: 'OUTCOME_OK'
-          }
+            outcome: 'OUTCOME_OK',
+          },
         },
         {
           inlineData: {
             mimeType: 'image/png',
-            data: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=='
-          }
-        }
+            data: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
+          },
+        },
       ],
-      role: 'model'
+      role: 'model',
     },
-    turnComplete: true
-  }
-} as LiveServerMessage;
+    turnComplete: true,
+  },
+} as LiveServerMessage
 
 describe('LiveMessageAssembler', () => {
   it('should convert server setup complete message', () => {
-    const assembler = new LiveMessageAssembler();
-    const message = EXAMPLE_WEBSOCKET_CONVERSATION.server[0];
-    const parts = assembler.processServerMessage(message);
+    const assembler = new LiveMessageAssembler()
+    const message = EXAMPLE_WEBSOCKET_CONVERSATION.server[0]
+    const parts = assembler.processServerMessage(message)
 
     expect(parts).toMatchInlineSnapshot(`
       []
-    `);
-  });
+    `)
+  })
 
   it('should convert server content message to text parts', () => {
-    const assembler = new LiveMessageAssembler();
-    const message = EXAMPLE_WEBSOCKET_CONVERSATION.server[1];
-    const parts = assembler.processServerMessage(message);
+    const assembler = new LiveMessageAssembler()
+    const message = EXAMPLE_WEBSOCKET_CONVERSATION.server[1]
+    const parts = assembler.processServerMessage(message)
 
     expect(parts).toMatchInlineSnapshot(`
       [
@@ -241,13 +246,13 @@ describe('LiveMessageAssembler', () => {
           "role": "assistant",
         },
       ]
-    `);
-  });
+    `)
+  })
 
   it('should convert tool call message to tool parts', () => {
-    const assembler = new LiveMessageAssembler();
-    const message = EXAMPLE_WEBSOCKET_CONVERSATION.server[2];
-    const parts = assembler.processServerMessage(message);
+    const assembler = new LiveMessageAssembler()
+    const message = EXAMPLE_WEBSOCKET_CONVERSATION.server[2]
+    const parts = assembler.processServerMessage(message)
 
     expect(parts).toMatchInlineSnapshot(`
       [
@@ -269,13 +274,13 @@ describe('LiveMessageAssembler', () => {
           "role": "assistant",
         },
       ]
-    `);
-  });
+    `)
+  })
 
   it('should handle turn complete flag', () => {
-    const assembler = new LiveMessageAssembler();
-    const message = EXAMPLE_WEBSOCKET_CONVERSATION.server[3];
-    const parts = assembler.processServerMessage(message);
+    const assembler = new LiveMessageAssembler()
+    const message = EXAMPLE_WEBSOCKET_CONVERSATION.server[3]
+    const parts = assembler.processServerMessage(message)
 
     expect(parts).toMatchInlineSnapshot(`
       [
@@ -297,13 +302,13 @@ describe('LiveMessageAssembler', () => {
           "role": "assistant",
         },
       ]
-    `);
-  });
+    `)
+  })
 
   it('should convert client content message', () => {
-    const assembler = new LiveMessageAssembler();
-    const message = EXAMPLE_WEBSOCKET_CONVERSATION.client[1];
-    const parts = assembler.processClientMessage(message);
+    const assembler = new LiveMessageAssembler()
+    const message = EXAMPLE_WEBSOCKET_CONVERSATION.client[1]
+    const parts = assembler.processClientMessage(message)
 
     expect(parts).toMatchInlineSnapshot(`
       [
@@ -325,13 +330,13 @@ describe('LiveMessageAssembler', () => {
           "role": "user",
         },
       ]
-    `);
-  });
+    `)
+  })
 
   it('should convert tool response message', () => {
-    const assembler = new LiveMessageAssembler();
-    const message = EXAMPLE_WEBSOCKET_CONVERSATION.client[2];
-    const parts = assembler.processClientMessage(message);
+    const assembler = new LiveMessageAssembler()
+    const message = EXAMPLE_WEBSOCKET_CONVERSATION.client[2]
+    const parts = assembler.processClientMessage(message)
 
     expect(parts).toMatchInlineSnapshot(`
       [
@@ -352,15 +357,15 @@ describe('LiveMessageAssembler', () => {
           "role": "user",
         },
       ]
-    `);
-  });
+    `)
+  })
 
   it('should handle realtime input streaming', () => {
-    const assembler = new LiveMessageAssembler();
-    const startMessage = EXAMPLE_WEBSOCKET_CONVERSATION.client[3];
-    const endMessage = EXAMPLE_WEBSOCKET_CONVERSATION.client[4];
+    const assembler = new LiveMessageAssembler()
+    const startMessage = EXAMPLE_WEBSOCKET_CONVERSATION.client[3]
+    const endMessage = EXAMPLE_WEBSOCKET_CONVERSATION.client[4]
 
-    const startParts = assembler.processClientMessage(startMessage);
+    const startParts = assembler.processClientMessage(startMessage)
     expect(startParts).toMatchInlineSnapshot(`
       [
         {
@@ -373,9 +378,9 @@ describe('LiveMessageAssembler', () => {
           "role": "user",
         },
       ]
-    `);
+    `)
 
-    const endParts = assembler.processClientMessage(endMessage);
+    const endParts = assembler.processClientMessage(endMessage)
     expect(endParts).toMatchInlineSnapshot(`
       [
         {
@@ -388,12 +393,12 @@ describe('LiveMessageAssembler', () => {
           "role": "user",
         },
       ]
-    `);
-  });
+    `)
+  })
 
   it('should handle multipart content with code and images', () => {
-    const assembler = new LiveMessageAssembler();
-    const parts = assembler.processServerMessage(EXAMPLE_MULTIPART_MESSAGE);
+    const assembler = new LiveMessageAssembler()
+    const parts = assembler.processServerMessage(EXAMPLE_MULTIPART_MESSAGE)
 
     expect(parts).toMatchInlineSnapshot(`
       [
@@ -469,15 +474,17 @@ describe('LiveMessageAssembler', () => {
           "role": "assistant",
         },
       ]
-    `);
-  });
+    `)
+  })
 
   it('should assemble parts into complete messages', () => {
-    const assembler = new LiveMessageAssembler();
+    const assembler = new LiveMessageAssembler()
 
     // Process user message
-    const userParts = assembler.processClientMessage(EXAMPLE_WEBSOCKET_CONVERSATION.client[1]);
-    const userMessages = assembler.addParts(userParts);
+    const userParts = assembler.processClientMessage(
+      EXAMPLE_WEBSOCKET_CONVERSATION.client[1],
+    )
+    const userMessages = assembler.addParts(userParts)
 
     expect(userMessages).toMatchInlineSnapshot(`
       [
@@ -493,25 +500,31 @@ describe('LiveMessageAssembler', () => {
           "role": "user",
         },
       ]
-    `);
+    `)
 
     // Process assistant response
-    const assistantParts1 = assembler.processServerMessage(EXAMPLE_WEBSOCKET_CONVERSATION.server[1]);
-    const messages1 = assembler.addParts(assistantParts1);
+    const assistantParts1 = assembler.processServerMessage(
+      EXAMPLE_WEBSOCKET_CONVERSATION.server[1],
+    )
+    const messages1 = assembler.addParts(assistantParts1)
     expect(messages1).toMatchInlineSnapshot(`
       []
-    `);
+    `)
 
     // Process tool call
-    const toolCallParts = assembler.processServerMessage(EXAMPLE_WEBSOCKET_CONVERSATION.server[2]);
-    const messages2 = assembler.addParts(toolCallParts);
+    const toolCallParts = assembler.processServerMessage(
+      EXAMPLE_WEBSOCKET_CONVERSATION.server[2],
+    )
+    const messages2 = assembler.addParts(toolCallParts)
     expect(messages2).toMatchInlineSnapshot(`
       []
-    `);
+    `)
 
     // Process final response with turn complete
-    const finalParts = assembler.processServerMessage(EXAMPLE_WEBSOCKET_CONVERSATION.server[3]);
-    const finalMessages = assembler.addParts(finalParts);
+    const finalParts = assembler.processServerMessage(
+      EXAMPLE_WEBSOCKET_CONVERSATION.server[3],
+    )
+    const finalMessages = assembler.addParts(finalParts)
 
     expect(finalMessages).toMatchInlineSnapshot(`
       [
@@ -545,18 +558,20 @@ describe('LiveMessageAssembler', () => {
           "role": "assistant",
         },
       ]
-    `);
-  });
+    `)
+  })
 
   it('should handle flush to get incomplete messages', () => {
-    const assembler = new LiveMessageAssembler();
+    const assembler = new LiveMessageAssembler()
 
     // Add some parts without turn complete
-    const parts = assembler.processServerMessage(EXAMPLE_WEBSOCKET_CONVERSATION.server[1]);
-    assembler.addParts(parts);
+    const parts = assembler.processServerMessage(
+      EXAMPLE_WEBSOCKET_CONVERSATION.server[1],
+    )
+    assembler.addParts(parts)
 
     // Flush should return the incomplete message
-    const flushedMessages = assembler.flush();
+    const flushedMessages = assembler.flush()
 
     expect(flushedMessages).toMatchInlineSnapshot(`
       [
@@ -572,6 +587,6 @@ describe('LiveMessageAssembler', () => {
           "role": "assistant",
         },
       ]
-    `);
-  });
-});
+    `)
+  })
+})

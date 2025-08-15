@@ -1,7 +1,15 @@
-import type { Tool, jsonSchema as JsonSchemaType } from 'ai';
-import type { FunctionDeclaration, Schema, Type as GenAIType, Tool as GenAITool, CallableTool, FunctionCall, Part } from '@google/genai';
-import { Type } from '@google/genai';
-import { z, toJSONSchema } from 'zod';
+import type { Tool, jsonSchema as JsonSchemaType } from 'ai'
+import type {
+  FunctionDeclaration,
+  Schema,
+  Type as GenAIType,
+  Tool as GenAITool,
+  CallableTool,
+  FunctionCall,
+  Part,
+} from '@google/genai'
+import { Type } from '@google/genai'
+import { z, toJSONSchema } from 'zod'
 
 /**
  * Convert JSON Schema to GenAI Schema format
@@ -9,137 +17,139 @@ import { z, toJSONSchema } from 'zod';
  * https://github.com/googleapis/js-genai/blob/027f09db662ce6b30f737b10b4d2efcb4282a9b6/src/_transformers.ts#L294
  */
 function jsonSchemaToGenAISchema(jsonSchema: any): Schema {
-  const schema: Schema = {};
+  const schema: Schema = {}
 
   // Map JSON Schema type to GenAI Type
   if (jsonSchema.type) {
     switch (jsonSchema.type) {
       case 'string':
-        schema.type = Type.STRING;
-        break;
+        schema.type = Type.STRING
+        break
       case 'number':
-        schema.type = Type.NUMBER;
-        schema.format = jsonSchema.format || 'float';
-        break;
+        schema.type = Type.NUMBER
+        schema.format = jsonSchema.format || 'float'
+        break
       case 'integer':
-        schema.type = Type.INTEGER;
-        schema.format = jsonSchema.format || 'int32';
-        break;
+        schema.type = Type.INTEGER
+        schema.format = jsonSchema.format || 'int32'
+        break
       case 'boolean':
-        schema.type = Type.BOOLEAN;
-        break;
+        schema.type = Type.BOOLEAN
+        break
       case 'array':
-        schema.type = Type.ARRAY;
+        schema.type = Type.ARRAY
         if (jsonSchema.items) {
-          schema.items = jsonSchemaToGenAISchema(jsonSchema.items);
+          schema.items = jsonSchemaToGenAISchema(jsonSchema.items)
         }
         if (jsonSchema.minItems !== undefined) {
-          schema.minItems = jsonSchema.minItems;
+          schema.minItems = jsonSchema.minItems
         }
         if (jsonSchema.maxItems !== undefined) {
-          schema.maxItems = jsonSchema.maxItems;
+          schema.maxItems = jsonSchema.maxItems
         }
-        break;
+        break
       case 'object':
-        schema.type = Type.OBJECT;
+        schema.type = Type.OBJECT
         if (jsonSchema.properties) {
-          schema.properties = {};
+          schema.properties = {}
           for (const [key, value] of Object.entries(jsonSchema.properties)) {
-            schema.properties[key] = jsonSchemaToGenAISchema(value);
+            schema.properties[key] = jsonSchemaToGenAISchema(value)
           }
         }
         if (jsonSchema.required) {
-          schema.required = jsonSchema.required;
+          schema.required = jsonSchema.required
         }
         // Note: GenAI Schema doesn't have additionalProperties field
         // We skip it for now
-        break;
+        break
       default:
         // For unknown types, keep as-is
-        schema.type = jsonSchema.type;
+        schema.type = jsonSchema.type
     }
   }
 
   // Copy over common properties
   if (jsonSchema.description) {
-    schema.description = jsonSchema.description;
+    schema.description = jsonSchema.description
   }
   if (jsonSchema.enum) {
-    schema.enum = jsonSchema.enum.map(String);
+    schema.enum = jsonSchema.enum.map(String)
   }
   if (jsonSchema.default !== undefined) {
-    schema.default = jsonSchema.default;
+    schema.default = jsonSchema.default
   }
   if (jsonSchema.example !== undefined) {
-    schema.example = jsonSchema.example;
+    schema.example = jsonSchema.example
   }
   if (jsonSchema.nullable) {
-    schema.nullable = true;
+    schema.nullable = true
   }
 
   // Handle anyOf/oneOf as anyOf in GenAI
   if (jsonSchema.anyOf) {
-    schema.anyOf = jsonSchema.anyOf.map((s: any) => jsonSchemaToGenAISchema(s));
+    schema.anyOf = jsonSchema.anyOf.map((s: any) => jsonSchemaToGenAISchema(s))
   } else if (jsonSchema.oneOf) {
-    schema.anyOf = jsonSchema.oneOf.map((s: any) => jsonSchemaToGenAISchema(s));
+    schema.anyOf = jsonSchema.oneOf.map((s: any) => jsonSchemaToGenAISchema(s))
   }
 
   // Handle number/string specific properties
   if (jsonSchema.minimum !== undefined) {
-    schema.minimum = jsonSchema.minimum;
+    schema.minimum = jsonSchema.minimum
   }
   if (jsonSchema.maximum !== undefined) {
-    schema.maximum = jsonSchema.maximum;
+    schema.maximum = jsonSchema.maximum
   }
   if (jsonSchema.minLength !== undefined) {
-    schema.minLength = jsonSchema.minLength;
+    schema.minLength = jsonSchema.minLength
   }
   if (jsonSchema.maxLength !== undefined) {
-    schema.maxLength = jsonSchema.maxLength;
+    schema.maxLength = jsonSchema.maxLength
   }
   if (jsonSchema.pattern) {
-    schema.pattern = jsonSchema.pattern;
+    schema.pattern = jsonSchema.pattern
   }
 
-  return schema;
+  return schema
 }
 
 /**
  * Convert AI SDK Tool to GenAI FunctionDeclaration
  */
-export function aiToolToGenAIFunction(tool: Tool<any, any>): FunctionDeclaration {
+export function aiToolToGenAIFunction(
+  tool: Tool<any, any>,
+): FunctionDeclaration {
   // Extract the input schema - assume it's a Zod schema
-  const inputSchema = tool.inputSchema as z.ZodType<any>;
+  const inputSchema = tool.inputSchema as z.ZodType<any>
 
   // Get the tool name from the schema or generate one
-  let toolName = 'tool';
-  let jsonSchema: any = {};
+  let toolName = 'tool'
+  let jsonSchema: any = {}
 
   if (inputSchema) {
     // Convert Zod schema to JSON Schema
-    jsonSchema = toJSONSchema(inputSchema);
+    jsonSchema = toJSONSchema(inputSchema)
 
     // Extract name from Zod description if available
-    const description = (inputSchema).description;
+    const description = inputSchema.description
     if (description) {
-      const nameMatch = description.match(/name:\s*(\w+)/);
+      const nameMatch = description.match(/name:\s*(\w+)/)
       if (nameMatch) {
-        toolName = nameMatch[1];
+        toolName = nameMatch[1]
       }
     }
   }
 
   // Convert JSON Schema to GenAI Schema
-  const genAISchema = jsonSchemaToGenAISchema(jsonSchema);
+  const genAISchema = jsonSchemaToGenAISchema(jsonSchema)
 
   // Create the FunctionDeclaration
   const functionDeclaration: FunctionDeclaration = {
     name: toolName,
     description: tool.description || jsonSchema.description || 'Tool function',
-    parameters: genAISchema
-  };
+    parameters: genAISchema,
+  }
 
-  return functionDeclaration;
+  return functionDeclaration
 }
 
 /**
@@ -147,11 +157,11 @@ export function aiToolToGenAIFunction(tool: Tool<any, any>): FunctionDeclaration
  */
 export function aiToolToGenAIFunctionWithName(
   tool: Tool<any, any>,
-  name: string
+  name: string,
 ): FunctionDeclaration {
-  const declaration = aiToolToGenAIFunction(tool);
-  declaration.name = name;
-  return declaration;
+  const declaration = aiToolToGenAIFunction(tool)
+  declaration.name = name
+  return declaration
 }
 
 /**
@@ -159,48 +169,52 @@ export function aiToolToGenAIFunctionWithName(
  */
 export function aiToolToCallableTool(
   tool: Tool<any, any>,
-  name?: string
+  name?: string,
 ): CallableTool {
-  const toolName = name || 'tool';
-  
+  const toolName = name || 'tool'
+
   return {
     async tool(): Promise<GenAITool> {
-      const functionDeclaration = name 
+      const functionDeclaration = name
         ? aiToolToGenAIFunctionWithName(tool, name)
-        : aiToolToGenAIFunction(tool);
-      
+        : aiToolToGenAIFunction(tool)
+
       return {
-        functionDeclarations: [functionDeclaration]
-      };
+        functionDeclarations: [functionDeclaration],
+      }
     },
-    
+
     async callTool(functionCalls: FunctionCall[]): Promise<Part[]> {
-      const parts: Part[] = [];
-      
+      const parts: Part[] = []
+
       for (const functionCall of functionCalls) {
         // Check if this function call matches our tool
-        if (functionCall.name !== toolName && name && functionCall.name !== name) {
-          continue;
+        if (
+          functionCall.name !== toolName &&
+          name &&
+          functionCall.name !== name
+        ) {
+          continue
         }
-        
+
         // Execute the tool if it has an execute function
         if (tool.execute) {
           try {
             const result = await tool.execute(functionCall.args || {}, {
               toolCallId: functionCall.id || '',
-              messages: []
-            });
-            
+              messages: [],
+            })
+
             // Convert the result to a Part
             parts.push({
               functionResponse: {
                 id: functionCall.id,
                 name: functionCall.name || toolName,
                 response: {
-                  output: result
-                }
-              }
-            } as Part);
+                  output: result,
+                },
+              },
+            } as Part)
           } catch (error) {
             // Handle errors
             parts.push({
@@ -208,52 +222,54 @@ export function aiToolToCallableTool(
                 id: functionCall.id,
                 name: functionCall.name || toolName,
                 response: {
-                  error: error instanceof Error ? error.message : String(error)
-                }
-              }
-            } as Part);
+                  error: error instanceof Error ? error.message : String(error),
+                },
+              },
+            } as Part)
           }
         }
       }
-      
-      return parts;
-    }
-  };
+
+      return parts
+    },
+  }
 }
 
 /**
  * Convert multiple AI SDK tools to GenAI Tool format (deprecated, use aiToolsToCallableTools)
  */
 export function aiToolsToGenAITools(
-  tools: Record<string, Tool<any, any>>
+  tools: Record<string, Tool<any, any>>,
 ): GenAITool[] {
-  const functionDeclarations: FunctionDeclaration[] = [];
+  const functionDeclarations: FunctionDeclaration[] = []
 
   for (const [name, tool] of Object.entries(tools)) {
-    const functionDeclaration = aiToolToGenAIFunctionWithName(tool, name);
-    functionDeclarations.push(functionDeclaration);
+    const functionDeclaration = aiToolToGenAIFunctionWithName(tool, name)
+    functionDeclarations.push(functionDeclaration)
   }
 
   // Return a single tool with all function declarations
   if (functionDeclarations.length > 0) {
-    return [{
-      functionDeclarations
-    }];
+    return [
+      {
+        functionDeclarations,
+      },
+    ]
   }
 
-  return [];
+  return []
 }
 
 /**
  * Helper to extract schema from AI SDK tool
  */
 export function extractSchemaFromTool(tool: Tool<any, any>): any {
-  const inputSchema = tool.inputSchema as z.ZodType<any>;
+  const inputSchema = tool.inputSchema as z.ZodType<any>
 
   if (!inputSchema) {
-    return {};
+    return {}
   }
 
   // Convert Zod schema to JSON Schema
-  return toJSONSchema(inputSchema);
+  return toJSONSchema(inputSchema)
 }

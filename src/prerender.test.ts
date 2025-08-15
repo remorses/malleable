@@ -1,12 +1,16 @@
-import { describe, it, expect } from "vitest";
-import { prerenderComponent, prerenderRequestSchema, type PrerenderRequest } from "./prerender.js";
+import { describe, it, expect } from 'vitest'
+import {
+  prerenderComponent,
+  prerenderRequestSchema,
+  type PrerenderRequest,
+} from './prerender.js'
 
-describe("Prerender Module", () => {
-  it("should prerender a simple React component", async () => {
+describe('Prerender Module', () => {
+  it('should prerender a simple React component', async () => {
     const request: PrerenderRequest = {
       files: [
         {
-          path: "App.tsx",
+          path: 'App.tsx',
           content: `
             import React from 'react';
 
@@ -21,12 +25,12 @@ describe("Prerender Module", () => {
           `,
         },
       ],
-      cssUrls: ["https://example.com/styles.css"],
-      bootstrapModules: ["https://example.com/bundle.js"],
+      cssUrls: ['https://example.com/styles.css'],
+      bootstrapModules: ['https://example.com/bundle.js'],
       runNpmInstall: true,
-    };
+    }
 
-    const result = await prerenderComponent(request);
+    const result = await prerenderComponent(request)
 
     expect(result).toMatchInlineSnapshot(`
       {
@@ -42,14 +46,14 @@ describe("Prerender Module", () => {
       </script><script type="module" src="https://example.com/bundle.js" async=""></script></body></html>",
         "renderTime": 736.0995,
       }
-    `);
-  });
+    `)
+  })
 
-  it("should prerender with multiple files", async () => {
+  it('should prerender with multiple files', async () => {
     const request: PrerenderRequest = {
       files: [
         {
-          path: "Button.tsx",
+          path: 'Button.tsx',
           content: `
             import React from 'react';
 
@@ -63,7 +67,7 @@ describe("Prerender Module", () => {
           `,
         },
         {
-          path: "App.tsx",
+          path: 'App.tsx',
           content: `
             import React from 'react';
             import { Button } from './Button';
@@ -81,13 +85,13 @@ describe("Prerender Module", () => {
           `,
         },
       ],
-      entryPoint: "App.tsx",
+      entryPoint: 'App.tsx',
       cssUrls: [],
       bootstrapModules: [],
       runNpmInstall: true,
-    };
+    }
 
-    const result = await prerenderComponent(request);
+    const result = await prerenderComponent(request)
 
     expect(result).toMatchInlineSnapshot(`
       {
@@ -106,14 +110,14 @@ describe("Prerender Module", () => {
       </script></body></html>",
         "renderTime": 362.54983300000004,
       }
-    `);
-  });
+    `)
+  })
 
-  it("should handle prerendering errors gracefully", async () => {
+  it('should handle prerendering errors gracefully', async () => {
     const request: PrerenderRequest = {
       files: [
         {
-          path: "BadComponent.tsx",
+          path: 'BadComponent.tsx',
           content: `
             import React from 'react';
 
@@ -127,9 +131,9 @@ describe("Prerender Module", () => {
       cssUrls: [],
       bootstrapModules: [],
       runNpmInstall: true,
-    };
+    }
 
-    const result = await prerenderComponent(request);
+    const result = await prerenderComponent(request)
 
     expect(result).toMatchInlineSnapshot(`
       {
@@ -139,22 +143,22 @@ describe("Prerender Module", () => {
         "html": "",
         "renderTime": 347.046959,
       }
-    `);
-  });
+    `)
+  })
 
-  it("should validate request schema", () => {
+  it('should validate request schema', () => {
     const validRequest = {
       files: [
         {
-          path: "App.tsx",
-          content: "export default function App() { return <div>Test</div>; }",
+          path: 'App.tsx',
+          content: 'export default function App() { return <div>Test</div>; }',
         },
       ],
-      cssUrls: ["https://example.com/styles.css"],
+      cssUrls: ['https://example.com/styles.css'],
       bootstrapModules: [],
-    };
+    }
 
-    const parsed = prerenderRequestSchema.parse(validRequest);
+    const parsed = prerenderRequestSchema.parse(validRequest)
     expect(parsed).toMatchInlineSnapshot(`
       {
         "bootstrapModules": [],
@@ -169,20 +173,20 @@ describe("Prerender Module", () => {
         ],
         "runNpmInstall": false,
       }
-    `);
-  });
+    `)
+  })
 
-  it("should use default values when not provided", () => {
+  it('should use default values when not provided', () => {
     const minimalRequest = {
       files: [
         {
-          path: "App.tsx",
-          content: "export default function App() { return <div>Test</div>; }",
+          path: 'App.tsx',
+          content: 'export default function App() { return <div>Test</div>; }',
         },
       ],
-    };
+    }
 
-    const parsed = prerenderRequestSchema.parse(minimalRequest);
+    const parsed = prerenderRequestSchema.parse(minimalRequest)
     expect(parsed).toMatchInlineSnapshot(`
       {
         "bootstrapModules": [],
@@ -195,21 +199,21 @@ describe("Prerender Module", () => {
         ],
         "runNpmInstall": false,
       }
-    `);
-  });
+    `)
+  })
 
-  it("should prerender with custom importmap", async () => {
+  it('should prerender with custom importmap', async () => {
     const customImportmap = JSON.stringify({
       imports: {
-        react: "https://custom.cdn/react@19",
-        "react-dom": "https://custom.cdn/react-dom@19",
+        react: 'https://custom.cdn/react@19',
+        'react-dom': 'https://custom.cdn/react-dom@19',
       },
-    });
+    })
 
     const request: PrerenderRequest = {
       files: [
         {
-          path: "App.tsx",
+          path: 'App.tsx',
           content: `
             import React from 'react';
 
@@ -223,9 +227,9 @@ describe("Prerender Module", () => {
       bootstrapModules: [],
       importmap: customImportmap,
       runNpmInstall: true,
-    };
+    }
 
-    const result = await prerenderComponent(request);
+    const result = await prerenderComponent(request)
 
     expect(result).toMatchInlineSnapshot(`
       {
@@ -244,18 +248,18 @@ describe("Prerender Module", () => {
       </script></body></html>",
         "renderTime": 327.01900000000023,
       }
-    `);
-  });
+    `)
+  })
 
-  it("should handle no files provided error", async () => {
+  it('should handle no files provided error', async () => {
     const request: PrerenderRequest = {
       files: [],
       cssUrls: [],
       bootstrapModules: [],
-      runNpmInstall: false
-    };
+      runNpmInstall: false,
+    }
 
-    const result = await prerenderComponent(request);
+    const result = await prerenderComponent(request)
 
     expect(result).toMatchInlineSnapshot(`
       {
@@ -263,6 +267,6 @@ describe("Prerender Module", () => {
         "html": "",
         "renderTime": 0.04445800000030431,
       }
-    `);
-  });
-});
+    `)
+  })
+})

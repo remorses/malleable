@@ -17,7 +17,7 @@ export function createVirtualEntryPlugin(options: VirtualEntryOptions): Plugin {
     name: 'virtual-entry',
     setup(build) {
       // Resolve the virtual entry module
-      build.onResolve({ filter: /^virtual:entry$/ }, args => {
+      build.onResolve({ filter: /^virtual:entry$/ }, (args) => {
         return {
           path: virtualModuleId,
           namespace: 'virtual-entry',
@@ -25,8 +25,7 @@ export function createVirtualEntryPlugin(options: VirtualEntryOptions): Plugin {
       })
 
       // Load the virtual entry module content
-      build.onLoad({ filter: /.*/, namespace: 'virtual-entry' }, args => {
-
+      build.onLoad({ filter: /.*/, namespace: 'virtual-entry' }, (args) => {
         const content = js`
           import React from 'react';
           import * as ActualEntry from './${actualEntryPath}';
@@ -55,6 +54,6 @@ export function createVirtualEntryPlugin(options: VirtualEntryOptions): Plugin {
           loader: 'jsx',
         }
       })
-    }
+    },
   }
 }

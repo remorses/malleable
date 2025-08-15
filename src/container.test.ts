@@ -1,31 +1,31 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from 'vitest'
 
 const API_URL = !process.env.USE_LOCAL
-  ? "https://lovepack.dev"
-  : "http://localhost:8787";
+  ? 'https://lovepack.dev'
+  : 'http://localhost:8787'
 
 async function fetchApi(
   endpoint: string,
-  options?: RequestInit
+  options?: RequestInit,
 ): Promise<Response> {
-  const url = `${API_URL}${endpoint}`;
+  const url = `${API_URL}${endpoint}`
   return fetch(url, {
     ...options,
     headers: {
-      "Content-Type": "application/json",
+      'Content-Type': 'application/json',
       ...options?.headers,
     },
-  });
+  })
 }
 
-describe("Container Prerendering", { timeout: 30000 }, ({}) => {
-  it("should prerender a simple React component", async () => {
-    const response = await fetchApi("/api/prerender", {
-      method: "POST",
+describe('Container Prerendering', { timeout: 30000 }, ({}) => {
+  it('should prerender a simple React component', async () => {
+    const response = await fetchApi('/api/prerender', {
+      method: 'POST',
       body: JSON.stringify({
         files: [
           {
-            path: "App.tsx",
+            path: 'App.tsx',
             content: `
               import React from 'react';
 
@@ -40,12 +40,12 @@ describe("Container Prerendering", { timeout: 30000 }, ({}) => {
             `,
           },
         ],
-        cssUrls: ["https://example.com/styles.css"],
-        bootstrapModules: ["https://example.com/bundle.js"],
+        cssUrls: ['https://example.com/styles.css'],
+        bootstrapModules: ['https://example.com/bundle.js'],
       }),
-    });
+    })
 
-    const result = await response.json() as any;
+    const result = (await response.json()) as any
 
     // Container limits in production may cause failures
     if (result.success) {
@@ -64,20 +64,21 @@ describe("Container Prerendering", { timeout: 30000 }, ({}) => {
           "renderTime": 41.447329999999965,
           "success": true,
         }
-      `);
-
+      `)
     } else {
-      expect(result.error).toMatchInlineSnapshot(`"Failed to start container: The container is not running, consider calling start()"`);
+      expect(result.error).toMatchInlineSnapshot(
+        `"Failed to start container: The container is not running, consider calling start()"`,
+      )
     }
-  });
+  })
 
-  it("should prerender with multiple files", async () => {
-    const response = await fetchApi("/api/prerender", {
-      method: "POST",
+  it('should prerender with multiple files', async () => {
+    const response = await fetchApi('/api/prerender', {
+      method: 'POST',
       body: JSON.stringify({
         files: [
           {
-            path: "Button.tsx",
+            path: 'Button.tsx',
             content: `
               import React from 'react';
 
@@ -91,7 +92,7 @@ describe("Container Prerendering", { timeout: 30000 }, ({}) => {
             `,
           },
           {
-            path: "App.tsx",
+            path: 'App.tsx',
             content: `
               import React from 'react';
               import { Button } from './Button';
@@ -109,15 +110,15 @@ describe("Container Prerendering", { timeout: 30000 }, ({}) => {
             `,
           },
         ],
-        entryPoint: "App.tsx",
+        entryPoint: 'App.tsx',
         cssUrls: [],
         bootstrapModules: [],
       }),
-    });
+    })
 
-    const result = await response.json() as any;
+    const result = (await response.json()) as any
 
-    expect(result.success).toBe(true);
+    expect(result.success).toBe(true)
     expect(result).toMatchInlineSnapshot(`
       {
         "html": "<!DOCTYPE html><html lang="en"><head><meta charSet="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>React App</title><script type="importmap">{"imports":{"react":"https://esm.sh/react@19","react-dom":"https://esm.sh/react-dom@19","react-dom/":"https://esm.sh/react-dom@19/","react/jsx-runtime":"https://esm.sh/react@19/jsx-runtime","react/jsx-dev-runtime":"https://esm.sh/react@19/jsx-dev-runtime"}}</script></head><body><div id="root"><div class="app"><h1>Multi-file App</h1><button class="btn">Click me</button></div></div><script>
@@ -136,16 +137,16 @@ describe("Container Prerendering", { timeout: 30000 }, ({}) => {
         "renderTime": 6.72291400000006,
         "success": true,
       }
-    `);
-  });
+    `)
+  })
 
-  it("should prerender with state and hooks", async () => {
-    const response = await fetchApi("/api/prerender", {
-      method: "POST",
+  it('should prerender with state and hooks', async () => {
+    const response = await fetchApi('/api/prerender', {
+      method: 'POST',
       body: JSON.stringify({
         files: [
           {
-            path: "Counter.tsx",
+            path: 'Counter.tsx',
             content: `
               import React, { useState } from 'react';
 
@@ -165,31 +166,30 @@ describe("Container Prerendering", { timeout: 30000 }, ({}) => {
             `,
           },
         ],
-        cssUrls: ["https://cdn.example.com/tailwind.css"],
+        cssUrls: ['https://cdn.example.com/tailwind.css'],
         bootstrapModules: [],
       }),
-    });
+    })
 
-    const result = await response.json() as any;
+    const result = (await response.json()) as any
 
-    expect(result.success).toBe(true);
+    expect(result.success).toBe(true)
     expect(result).toMatchInlineSnapshot(`
       {
         "html": "",
         "renderTime": 23.053619000000026,
         "success": true,
       }
-    `);
+    `)
+  })
 
-  });
-
-  it("should handle prerendering errors gracefully", async () => {
-    const response = await fetchApi("/api/prerender", {
-      method: "POST",
+  it('should handle prerendering errors gracefully', async () => {
+    const response = await fetchApi('/api/prerender', {
+      method: 'POST',
       body: JSON.stringify({
         files: [
           {
-            path: "BadComponent.tsx",
+            path: 'BadComponent.tsx',
             content: `
               import React from 'react';
 
@@ -203,26 +203,25 @@ describe("Container Prerendering", { timeout: 30000 }, ({}) => {
         cssUrls: [],
         bootstrapModules: [],
       }),
-    });
+    })
 
-    const result = await response.json() as any;
-
+    const result = (await response.json()) as any
 
     expect(result).toMatchInlineSnapshot(`
       {
         "error": "Failed to start container: The container is not running, consider calling start()",
         "success": false,
       }
-    `);
-  });
+    `)
+  })
 
-  it("should include importmap in the prerendered HTML", async () => {
-    const response = await fetchApi("/api/prerender", {
-      method: "POST",
+  it('should include importmap in the prerendered HTML', async () => {
+    const response = await fetchApi('/api/prerender', {
+      method: 'POST',
       body: JSON.stringify({
         files: [
           {
-            path: "App.tsx",
+            path: 'App.tsx',
             content: `
               import React from 'react';
 
@@ -235,11 +234,11 @@ describe("Container Prerendering", { timeout: 30000 }, ({}) => {
         cssUrls: [],
         bootstrapModules: [],
       }),
-    });
+    })
 
-    const result = await response.json() as any;
+    const result = (await response.json()) as any
 
-    expect(result.success).toBe(true);
+    expect(result.success).toBe(true)
     expect(result).toMatchInlineSnapshot(`
       {
         "html": "<!DOCTYPE html><html lang="en"><head><meta charSet="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>React App</title><script type="importmap">{"imports":{"react":"https://esm.sh/react@19","react-dom":"https://esm.sh/react-dom@19","react-dom/":"https://esm.sh/react-dom@19/","react/jsx-runtime":"https://esm.sh/react@19/jsx-runtime","react/jsx-dev-runtime":"https://esm.sh/react@19/jsx-dev-runtime"}}</script></head><body><div id="root"><div>Test importmap</div></div><script>
@@ -258,23 +257,23 @@ describe("Container Prerendering", { timeout: 30000 }, ({}) => {
         "renderTime": 4.116624999999999,
         "success": true,
       }
-    `);
-  });
+    `)
+  })
 
-  it("should prerender with custom importmap", async () => {
+  it('should prerender with custom importmap', async () => {
     const customImportmap = JSON.stringify({
       imports: {
-        react: "https://custom.cdn/react@19",
-        "react-dom": "https://custom.cdn/react-dom@19",
+        react: 'https://custom.cdn/react@19',
+        'react-dom': 'https://custom.cdn/react-dom@19',
       },
-    });
+    })
 
-    const response = await fetchApi("/api/prerender", {
-      method: "POST",
+    const response = await fetchApi('/api/prerender', {
+      method: 'POST',
       body: JSON.stringify({
         files: [
           {
-            path: "App.tsx",
+            path: 'App.tsx',
             content: `
               import React from 'react';
 
@@ -288,11 +287,11 @@ describe("Container Prerendering", { timeout: 30000 }, ({}) => {
         bootstrapModules: [],
         importmap: customImportmap,
       }),
-    });
+    })
 
-    const result = await response.json() as any;
+    const result = (await response.json()) as any
 
-    expect(result.success).toBe(true);
+    expect(result.success).toBe(true)
 
     expect(result).toMatchInlineSnapshot(`
       {
@@ -312,6 +311,6 @@ describe("Container Prerendering", { timeout: 30000 }, ({}) => {
         "renderTime": 2.663381999999956,
         "success": true,
       }
-    `);
-  });
-});
+    `)
+  })
+})

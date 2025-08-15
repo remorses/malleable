@@ -16,7 +16,7 @@ test('CSS import and processing', async () => {
             </div>
           );
         }
-      `
+      `,
     },
     {
       path: 'styles.css',
@@ -32,24 +32,27 @@ test('CSS import and processing', async () => {
         .custom-button {
           @apply bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded;
         }
-      `
-    }
+      `,
+    },
   ]
 
-  const response = await fetch('https://remote-bundler.fumabase.com/api/bundle', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
+  const response = await fetch(
+    'https://remote-bundler.fumabase.com/api/bundle',
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        files,
+        entryPoint: 'index.tsx',
+        externalPackages: ['react'],
+      }),
     },
-    body: JSON.stringify({
-      files,
-      entryPoint: 'index.tsx',
-      externalPackages: ['react']
-    }),
-  })
+  )
 
-  const result = await response.json() as any
-  
+  const result = (await response.json()) as any
+
   // Verify the full API response with inline snapshot
   expect(result).toMatchInlineSnapshot(`
     {
@@ -75,15 +78,15 @@ test('CSS import and processing', async () => {
       "warnings": [],
     }
   `)
-  
+
   // Check that CSS files are generated and fetch the content
-  const cssFiles = Object.keys(result.files).filter(f => f.endsWith('.css'))
+  const cssFiles = Object.keys(result.files).filter((f) => f.endsWith('.css'))
   expect(cssFiles.length).toBeGreaterThan(0)
-  
+
   const cssUrl = result.files[cssFiles[0]]
   const cssResponse = await fetch(cssUrl)
   const cssContent = await cssResponse.text()
-  
+
   // Verify the CSS content with inline snapshot
   expect(cssContent).toMatchInlineSnapshot(`
     "/* local:/styles.css */

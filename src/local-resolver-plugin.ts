@@ -14,8 +14,15 @@ export interface LocalResolverOptions {
   getFileContent?: (filePath: string) => Promise<string | null>
 }
 
-export function createLocalResolverPlugin(options: LocalResolverOptions = {}): Plugin {
-  const { files = [], filePaths = [], workingDir = '/', getFileContent } = options
+export function createLocalResolverPlugin(
+  options: LocalResolverOptions = {},
+): Plugin {
+  const {
+    files = [],
+    filePaths = [],
+    workingDir = '/',
+    getFileContent,
+  } = options
 
   // Create a map for quick file lookup
   const fileMap = new Map<string, string>()
@@ -25,7 +32,7 @@ export function createLocalResolverPlugin(options: LocalResolverOptions = {}): P
   const availablePaths = new Set<string>(filePaths)
 
   // Populate fileMap from files array
-  files.forEach(file => {
+  files.forEach((file) => {
     fileMap.set(file.path, file.content)
     const absolutePath = path.isAbsolute(file.path)
       ? file.path
@@ -37,16 +44,20 @@ export function createLocalResolverPlugin(options: LocalResolverOptions = {}): P
     name: 'local-resolver',
     setup(build) {
       // Handle entry points and imports
-      build.onResolve({ filter: /.*/ }, args => {
+      build.onResolve({ filter: /.*/ }, (args) => {
         // Skip if already processed or is an HTTP URL
-        if (args.path.startsWith('\0') || args.path.startsWith('https://') || args.path.startsWith('http://')) {
+        if (
+          args.path.startsWith('\0') ||
+          args.path.startsWith('https://') ||
+          args.path.startsWith('http://')
+        ) {
           return null
         }
 
         // Handle entry points (no importer)
         if (!args.importer) {
-          const resolvedPath = path.isAbsolute(args.path) 
-            ? args.path 
+          const resolvedPath = path.isAbsolute(args.path)
+            ? args.path
             : path.posix.resolve(workingDir, args.path)
 
           // Check if file exists in fileMap
@@ -69,7 +80,7 @@ export function createLocalResolverPlugin(options: LocalResolverOptions = {}): P
         if (args.path.startsWith('.') || args.path.startsWith('/')) {
           // Determine base directory
           let basedir = workingDir
-          
+
           if (args.importer) {
             if (args.namespace === 'local') {
               basedir = path.dirname(args.importer)
@@ -78,7 +89,11 @@ export function createLocalResolverPlugin(options: LocalResolverOptions = {}): P
             }
           }
 
-          const resolvedPath = path.posix.resolve(workingDir, basedir, args.path)
+          const resolvedPath = path.posix.resolve(
+            workingDir,
+            basedir,
+            args.path,
+          )
 
           // Try with common extensions if no extension provided
           const extensions = ['', '.css', '.ts', '.tsx', '.js', '.jsx', '.mjs']
@@ -126,8 +141,8 @@ export function createLocalResolverPlugin(options: LocalResolverOptions = {}): P
 
       // Load content from local namespace
       build.onLoad({ filter: /.*/, namespace: 'local' }, async (args) => {
-        console.log({id: args.path})
-        
+        console.log({ id: args.path })
+
         const filePath = args.path
 
         // Check fileMap first (for local files)
@@ -144,13 +159,15 @@ export function createLocalResolverPlugin(options: LocalResolverOptions = {}): P
 
         if (!content) {
           return {
-            errors: [{
-              text: `File not found: ${filePath}`,
-              location: null,
-              notes: [],
-              detail: null,
-              pluginName: 'local-resolver',
-            }]
+            errors: [
+              {
+                text: `File not found: ${filePath}`,
+                location: null,
+                notes: [],
+                detail: null,
+                pluginName: 'local-resolver',
+              },
+            ],
           }
         }
 
@@ -169,13 +186,15 @@ export function createLocalResolverPlugin(options: LocalResolverOptions = {}): P
             }
           } catch (error: any) {
             return {
-              errors: [{
-                text: `Failed to process CSS file ${filePath}: ${error.message}`,
-                location: null,
-                notes: [],
-                detail: error,
-                pluginName: 'local-resolver',
-              }]
+              errors: [
+                {
+                  text: `Failed to process CSS file ${filePath}: ${error.message}`,
+                  location: null,
+                  notes: [],
+                  detail: error,
+                  pluginName: 'local-resolver',
+                },
+              ],
             }
           }
         }
@@ -192,6 +211,6 @@ export function createLocalResolverPlugin(options: LocalResolverOptions = {}): P
           loader,
         }
       })
-    }
+    },
   }
 }

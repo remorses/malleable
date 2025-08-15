@@ -19,14 +19,14 @@ export class Logger {
       // Round to nearest millisecond, but ensure at least 1ms for any measurable duration
       const duration = elapsed > 0 ? Math.max(1, Math.round(elapsed)) : 0
       console.log(`[TIMER] ${label}: ${duration}ms`)
-      
+
       // Store completed timing
       const cleanLabel = label.replace(/^[a-z0-9]+ /, '') // Remove request ID prefix
       this.completedTimings.set(label, {
         name: cleanLabel.replace(/ /g, '-'),
-        duration
+        duration,
       })
-      
+
       this.timers.delete(label)
     }
   }
@@ -43,7 +43,7 @@ export class Logger {
   getServerTimingHeader(): string {
     const timings = this.getTimings()
     return timings
-      .map(t => {
+      .map((t) => {
         let value = t.name
         if (t.duration !== undefined) {
           value += `;dur=${t.duration}`

@@ -1,24 +1,23 @@
-import { describe, it, expect } from "vitest";
-import type { BundleResult, BundleSuccessResult } from "./types.js";
-import { evaluateBundleExportsWithDeno } from "./test-utils.js";
-import { app } from "./worker.js";
-
+import { describe, it, expect } from 'vitest'
+import type { BundleResult, BundleSuccessResult } from './types.js'
+import { evaluateBundleExportsWithDeno } from './test-utils.js'
+import { app } from './worker.js'
 
 const useProd = !process.env.USE_LOCAL
 const WORKER_URL = useProd
-  ? "https://remote-bundler.fumabase.com"
-  : "http://localhost";
+  ? 'https://remote-bundler.fumabase.com'
+  : 'http://localhost'
 
 if (useProd) {
-  console.log(`using prod url`, WORKER_URL);
+  console.log(`using prod url`, WORKER_URL)
 }
 
 const DEFAULT_EXTERNAL_PACKAGES = [
-  "react",
-  "react-dom",
-  "react/jsx-runtime",
-  "react/jsx-dev-runtime",
-];
+  'react',
+  'react-dom',
+  'react/jsx-runtime',
+  'react/jsx-dev-runtime',
+]
 
 // Mock KV namespace for local testing
 const mockKVNamespace = {
@@ -27,53 +26,51 @@ const mockKVNamespace = {
   },
   get: async (key: string) => {
     // Mock implementation - return null
-    return null;
+    return null
   },
   getWithMetadata: async (key: string) => {
     // Mock implementation - return empty object
-    return { value: null, metadata: null };
+    return { value: null, metadata: null }
   },
-};
+}
 
 const fetchImplementation = useProd
   ? fetch
   : async (url: string | Request, init?: RequestInit) => {
       // For local testing, use app.handle directly
-      const request = typeof url === "string" ? new Request(url, init) : url;
+      const request = typeof url === 'string' ? new Request(url, init) : url
 
       return await app.handle(request, {
         state: {
           jsCache: mockKVNamespace as any,
           BUN_CONTAINER: {} as any, // Mock container namespace for tests
-        }
-      } as any);
-    };
+        },
+      } as any)
+    }
 
-
-
-describe("Remote Bundler Worker", () => {
-  it("should transform TSX code with React and generate Tailwind CSS", async () => {
+describe('Remote Bundler Worker', () => {
+  it('should transform TSX code with React and generate Tailwind CSS', async () => {
     const response = await fetchImplementation(`${WORKER_URL}/api/bundle`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         files: [
           {
-            path: "app.tsx",
+            path: 'app.tsx',
             content:
               'const App = () => <div className="p-4 bg-blue-500 text-white">Hello</div>; export default App;',
           },
         ],
         externalPackages: DEFAULT_EXTERNAL_PACKAGES,
       }),
-    });
+    })
 
-    if (!response.ok) throw new Error(await response.text());
-    const result = (await response.json()) as BundleResult;
-    const serverTiming = response.headers.get("Server-Timing");
+    if (!response.ok) throw new Error(await response.text())
+    const result = (await response.json()) as BundleResult
+    const serverTiming = response.headers.get('Server-Timing')
     expect(serverTiming).toMatchInlineSnapshot(
       `"import-esbuild;dur=0, import-wasm;dur=0, esbuild-init;dur=0, parse-body;dur=0, hash-generation;dur=0, tailwind-css;dur=0, esbuild-build;dur=0, parallel-build;dur=0, html-generation;dur=0, kv-storage;dur=361, total;dur=361, cfL4;desc="?proto=TCP&rtt=13858&min_rtt=12943&rtt_var=5507&sent=4&recv=5&lost=0&retrans=0&sent_bytes=2856&recv_bytes=976&delivery_rate=222514&cwnd=251&unsent_bytes=0&cid=12edcbc7a5714166&ts=1840&x=0""`,
-    );
+    )
     expect(result).toMatchInlineSnapshot(`
       {
         "files": {
@@ -91,40 +88,40 @@ describe("Remote Bundler Worker", () => {
         "success": true,
         "warnings": [],
       }
-    `);
+    `)
 
     // Fetch and verify the JS output
     if (result.success && result.jsUrl) {
-      const jsResponse = await fetchImplementation(result.jsUrl);
-      const jsContent = await jsResponse.text();
+      const jsResponse = await fetchImplementation(result.jsUrl)
+      const jsContent = await jsResponse.text()
       await expect(jsContent).toMatchFileSnapshot(
-        "./snapshots/simple-tsx-output.js",
-      );
+        './snapshots/simple-tsx-output.js',
+      )
     }
-  });
+  })
 
-  it("should extract Tailwind classes with hover and responsive modifiers", async () => {
+  it('should extract Tailwind classes with hover and responsive modifiers', async () => {
     const response = await fetchImplementation(`${WORKER_URL}/api/bundle`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         files: [
           {
-            path: "button.tsx",
+            path: 'button.tsx',
             content:
               'const Button = () => <button className="xxx p-4 bg-blue-500 text-white hover:bg-blue-600 md:p-6">Click</button>; export default Button;',
           },
         ],
         externalPackages: DEFAULT_EXTERNAL_PACKAGES,
       }),
-    });
+    })
 
-    if (!response.ok) throw new Error(await response.text());
-    const result = (await response.json()) as BundleSuccessResult;
-    const serverTiming = response.headers.get("Server-Timing");
+    if (!response.ok) throw new Error(await response.text())
+    const result = (await response.json()) as BundleSuccessResult
+    const serverTiming = response.headers.get('Server-Timing')
     expect(serverTiming).toMatchInlineSnapshot(
       `"import-esbuild;dur=0, import-wasm;dur=0, parse-body;dur=0, hash-generation;dur=0, tailwind-css;dur=0, esbuild-build;dur=0, parallel-build;dur=0, html-generation;dur=0, kv-storage;dur=95, total;dur=95, cfL4;desc="?proto=TCP&rtt=13671&min_rtt=12927&rtt_var=3417&sent=11&recv=9&lost=0&retrans=0&sent_bytes=6112&recv_bytes=1750&delivery_rate=332640&cwnd=256&unsent_bytes=0&cid=12edcbc7a5714166&ts=2522&x=0""`,
-    );
+    )
     expect(result).toMatchInlineSnapshot(`
       {
         "files": {
@@ -142,18 +139,20 @@ describe("Remote Bundler Worker", () => {
         "success": true,
         "warnings": [],
       }
-    `);
-    expect(await fetchImplementation(result.jsUrl).then(x => x.text())).toMatchFileSnapshot('snapshots/commonjs-issue.js')
-  });
+    `)
+    expect(
+      await fetchImplementation(result.jsUrl).then((x) => x.text()),
+    ).toMatchFileSnapshot('snapshots/commonjs-issue.js')
+  })
 
-  it("should handle template literals with conditional classes", async () => {
+  it('should handle template literals with conditional classes', async () => {
     const response = await fetchImplementation(`${WORKER_URL}/api/bundle`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         files: [
           {
-            path: "card.tsx",
+            path: 'card.tsx',
             content: `const Card = ({ isActive }) => {
           const baseClass = "p-6 rounded-xl shadow-lg";
           return <div className={\`\${baseClass} \${isActive ? "bg-green-500" : "bg-gray-200"}\`}>Content</div>;
@@ -162,14 +161,14 @@ describe("Remote Bundler Worker", () => {
         ],
         externalPackages: DEFAULT_EXTERNAL_PACKAGES,
       }),
-    });
+    })
 
-    if (!response.ok) throw new Error(await response.text());
-    const result = (await response.json()) as BundleResult;
-    const serverTiming = response.headers.get("Server-Timing");
+    if (!response.ok) throw new Error(await response.text())
+    const result = (await response.json()) as BundleResult
+    const serverTiming = response.headers.get('Server-Timing')
     expect(serverTiming).toMatchInlineSnapshot(
       `"import-esbuild;dur=0, import-wasm;dur=0, parse-body;dur=0, hash-generation;dur=0, tailwind-css;dur=0, esbuild-build;dur=0, parallel-build;dur=0, html-generation;dur=0, kv-storage;dur=93, total;dur=93, cfL4;desc="?proto=TCP&rtt=15569&min_rtt=12732&rtt_var=6145&sent=19&recv=14&lost=0&retrans=1&sent_bytes=8935&recv_bytes=2623&delivery_rate=332640&cwnd=256&unsent_bytes=0&cid=12edcbc7a5714166&ts=3173&x=0""`,
-    );
+    )
     expect(result).toMatchInlineSnapshot(`
       {
         "files": {
@@ -187,19 +186,19 @@ describe("Remote Bundler Worker", () => {
         "success": true,
         "warnings": [],
       }
-    `);
-  });
+    `)
+  })
 
   it(
-    "should resolve npm imports when resolveImports is true",
+    'should resolve npm imports when resolveImports is true',
     async () => {
       const response = await fetchImplementation(`${WORKER_URL}/api/bundle`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           files: [
             {
-              path: "app.tsx",
+              path: 'app.tsx',
               content: `import { format } from 'date-fns';
               const App = () => <div className="text-lg font-bold">{format(new Date(), 'yyyy-MM-dd')}</div>;
               export default App
@@ -208,48 +207,50 @@ describe("Remote Bundler Worker", () => {
           ],
           externalPackages: DEFAULT_EXTERNAL_PACKAGES,
         }),
-      });
+      })
 
-      if (!response.ok) throw new Error(await response.text());
-      const result = (await response.json()) as BundleResult;
-      const serverTiming = response.headers.get("Server-Timing");
+      if (!response.ok) throw new Error(await response.text())
+      const result = (await response.json()) as BundleResult
+      const serverTiming = response.headers.get('Server-Timing')
       expect(serverTiming).toMatchInlineSnapshot(
         `"import-esbuild;dur=0, import-wasm;dur=0, parse-body;dur=0, hash-generation;dur=0, tailwind-css;dur=0, esbuild-build;dur=1084, parallel-build;dur=1084, html-generation;dur=0, kv-storage;dur=1363, total;dur=2447, cfL4;desc="?proto=TCP&rtt=17817&min_rtt=12732&rtt_var=9105&sent=22&recv=16&lost=0&retrans=1&sent_bytes=10328&recv_bytes=3219&delivery_rate=332640&cwnd=256&unsent_bytes=0&cid=12edcbc7a5714166&ts=6373&x=0""`,
-      );
-      expect(result.success).toMatchInlineSnapshot(`true`);
+      )
+      expect(result.success).toMatchInlineSnapshot(`true`)
     },
     { timeout: 60000 },
-  );
+  )
 
-  it("should handle missing code parameter", async () => {
+  it('should handle missing code parameter', async () => {
     const response = await fetchImplementation(`${WORKER_URL}/api/bundle`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         files: [],
       }),
-    });
+    })
 
-    const result = (await response.json()) as BundleResult;
-    const serverTiming = response.headers.get("Server-Timing");
-    expect(serverTiming).toMatchInlineSnapshot(`"cfL4;desc="?proto=TCP&rtt=29465&min_rtt=12732&rtt_var=30125&sent=27&recv=19&lost=0&retrans=2&sent_bytes=11784&recv_bytes=3502&delivery_rate=332640&cwnd=256&unsent_bytes=0&cid=12edcbc7a5714166&ts=6511&x=0""`);
-    expect(response.status).toMatchInlineSnapshot(`400`);
+    const result = (await response.json()) as BundleResult
+    const serverTiming = response.headers.get('Server-Timing')
+    expect(serverTiming).toMatchInlineSnapshot(
+      `"cfL4;desc="?proto=TCP&rtt=29465&min_rtt=12732&rtt_var=30125&sent=27&recv=19&lost=0&retrans=2&sent_bytes=11784&recv_bytes=3502&delivery_rate=332640&cwnd=256&unsent_bytes=0&cid=12edcbc7a5714166&ts=6511&x=0""`,
+    )
+    expect(response.status).toMatchInlineSnapshot(`400`)
     expect(result).toMatchInlineSnapshot(`
       {
         "error": "No files provided",
         "success": false,
       }
-    `);
-  });
+    `)
+  })
 
-  it("should handle complex Tailwind utilities including gradients and animations", async () => {
+  it('should handle complex Tailwind utilities including gradients and animations', async () => {
     const response = await fetchImplementation(`${WORKER_URL}/api/bundle`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         files: [
           {
-            path: "hero.tsx",
+            path: 'hero.tsx',
             content: `const Hero = () => (
           <div className="bg-gradient-to-r from-purple-400 via-pink-500 to-red-500 animate-pulse transition-all duration-300">
             <h1 className="text-4xl font-bold text-transparent bg-clip-text">Gradient Text</h1>
@@ -259,14 +260,14 @@ describe("Remote Bundler Worker", () => {
         ],
         externalPackages: DEFAULT_EXTERNAL_PACKAGES,
       }),
-    });
+    })
 
-    if (!response.ok) throw new Error(await response.text());
-    const result = (await response.json()) as BundleResult;
-    const serverTiming = response.headers.get("Server-Timing");
+    if (!response.ok) throw new Error(await response.text())
+    const result = (await response.json()) as BundleResult
+    const serverTiming = response.headers.get('Server-Timing')
     expect(serverTiming).toMatchInlineSnapshot(
       `"import-esbuild;dur=0, import-wasm;dur=0, esbuild-init;dur=0, parse-body;dur=1, hash-generation;dur=0, tailwind-css;dur=0, esbuild-build;dur=0, parallel-build;dur=0, html-generation;dur=0, kv-storage;dur=114, total;dur=115, cfL4;desc="?proto=TCP&rtt=14706&min_rtt=14487&rtt_var=5589&sent=3&recv=5&lost=0&retrans=0&sent_bytes=234&recv_bytes=1452&delivery_rate=99399&cwnd=203&unsent_bytes=0&cid=49d5ce80bdb95652&ts=1464&x=0""`,
-    );
+    )
     expect(result).toMatchInlineSnapshot(`
       {
         "files": {
@@ -284,40 +285,40 @@ describe("Remote Bundler Worker", () => {
         "success": true,
         "warnings": [],
       }
-    `);
-  });
+    `)
+  })
 
-  it("should handle OPTIONS request for CORS preflight", async () => {
+  it('should handle OPTIONS request for CORS preflight', async () => {
     const response = await fetchImplementation(`${WORKER_URL}/api/bundle`, {
-      method: "OPTIONS",
+      method: 'OPTIONS',
       headers: {
-        Origin: "https://example.com",
-        "Access-Control-Request-Method": "POST",
-        "Access-Control-Request-Headers": "Content-Type",
+        Origin: 'https://example.com',
+        'Access-Control-Request-Method': 'POST',
+        'Access-Control-Request-Headers': 'Content-Type',
       },
-    });
+    })
 
-    if (!response.ok) throw new Error(await response.text());
-    expect(response.status).toBe(200);
+    if (!response.ok) throw new Error(await response.text())
+    expect(response.status).toBe(200)
     expect(
-      response.headers.get("Access-Control-Allow-Origin"),
-    ).toMatchInlineSnapshot(`"*"`);
+      response.headers.get('Access-Control-Allow-Origin'),
+    ).toMatchInlineSnapshot(`"*"`)
     expect(
-      response.headers.get("Access-Control-Allow-Methods"),
-    ).toMatchInlineSnapshot(`"OPTIONS, GET, POST, PUT, PATCH, DELETE"`);
+      response.headers.get('Access-Control-Allow-Methods'),
+    ).toMatchInlineSnapshot(`"OPTIONS, GET, POST, PUT, PATCH, DELETE"`)
     expect(
-      response.headers.get("Access-Control-Allow-Headers"),
-    ).toMatchInlineSnapshot(`"*"`);
-  });
+      response.headers.get('Access-Control-Allow-Headers'),
+    ).toMatchInlineSnapshot(`"*"`)
+  })
 
-  it("should handle multiple input files with imports between them", async () => {
+  it('should handle multiple input files with imports between them', async () => {
     const response = await fetchImplementation(`${WORKER_URL}/api/bundle`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         files: [
           {
-            path: "utils.ts",
+            path: 'utils.ts',
             content: `
               export const formatPrice = (price: number) => {
                 return new Intl.NumberFormat('en-US', {
@@ -333,7 +334,7 @@ describe("Remote Bundler Worker", () => {
             `,
           },
           {
-            path: "components/Button.tsx",
+            path: 'components/Button.tsx',
             content: `
               import React from 'react';
 
@@ -355,7 +356,7 @@ describe("Remote Bundler Worker", () => {
             `,
           },
           {
-            path: "app.tsx",
+            path: 'app.tsx',
             content: `
               import React from 'react';
               import { Button } from './components/Button';
@@ -384,34 +385,34 @@ describe("Remote Bundler Worker", () => {
             `,
           },
         ],
-        entryPoint: "app.tsx",
+        entryPoint: 'app.tsx',
         // No external packages so it can be evaluated with Deno
       }),
-    });
+    })
 
-    if (!response.ok) throw new Error(await response.text());
-    const result = (await response.json()) as BundleResult;
-    const serverTiming = response.headers.get("Server-Timing");
+    if (!response.ok) throw new Error(await response.text())
+    const result = (await response.json()) as BundleResult
+    const serverTiming = response.headers.get('Server-Timing')
     expect(serverTiming).toMatchInlineSnapshot(
       `"import-esbuild;dur=0, import-wasm;dur=0, parse-body;dur=0, hash-generation;dur=0, tailwind-css;dur=0, esbuild-build;dur=89, parallel-build;dur=89, html-generation;dur=0, kv-storage;dur=82, total;dur=171, cfL4;desc="?proto=TCP&rtt=15267&min_rtt=14487&rtt_var=4069&sent=11&recv=10&lost=0&retrans=0&sent_bytes=2184&recv_bytes=4273&delivery_rate=403542&cwnd=208&unsent_bytes=0&cid=49d5ce80bdb95652&ts=2184&x=0""`,
-    );
+    )
 
     if (result.success) {
-      expect(result.jsUrl).toBeDefined();
-      expect(result.files).toBeDefined();
+      expect(result.jsUrl).toBeDefined()
+      expect(result.files).toBeDefined()
 
       // Check that multiple files were processed
-      expect(result.rawOutputs).toBeDefined();
-      expect(result.rawOutputs.length).toBeGreaterThan(0);
+      expect(result.rawOutputs).toBeDefined()
+      expect(result.rawOutputs.length).toBeGreaterThan(0)
 
       // Evaluate with Deno to verify the bundle works
-      const exports = await evaluateBundleExportsWithDeno(result.jsUrl);
+      const exports = await evaluateBundleExportsWithDeno(result.jsUrl)
 
       expect(exports).toMatchInlineSnapshot(`
         [
           "default",
         ]
-      `);
+      `)
     }
 
     // Verify the output contains expected content
@@ -432,26 +433,26 @@ describe("Remote Bundler Worker", () => {
         "success": true,
         "warnings": [],
       }
-    `);
+    `)
 
     // Fetch and verify the JS output
     if (result.success && result.jsUrl) {
-      const jsResponse = await fetchImplementation(result.jsUrl);
-      const jsContent = await jsResponse.text();
+      const jsResponse = await fetchImplementation(result.jsUrl)
+      const jsContent = await jsResponse.text()
       await expect(jsContent).toMatchFileSnapshot(
-        "./snapshots/multiple-files-output.js",
-      );
+        './snapshots/multiple-files-output.js',
+      )
     }
-  });
+  })
 
-  it("should handle dynamic imports and React.lazy with code splitting", async () => {
+  it('should handle dynamic imports and React.lazy with code splitting', async () => {
     const response = await fetchImplementation(`${WORKER_URL}/api/bundle`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         files: [
           {
-            path: "LazyComponent.tsx",
+            path: 'LazyComponent.tsx',
             content: `
               import React from 'react';
 
@@ -468,7 +469,7 @@ describe("Remote Bundler Worker", () => {
             `,
           },
           {
-            path: "DynamicModule.ts",
+            path: 'DynamicModule.ts',
             content: `
               export const dynamicFunction = (x: number, y: number) => {
                 return x * y + 100;
@@ -485,7 +486,7 @@ describe("Remote Bundler Worker", () => {
             `,
           },
           {
-            path: "app.tsx",
+            path: 'app.tsx',
             content: `
               import React, { Suspense, lazy, useState, useEffect } from 'react';
 
@@ -542,13 +543,13 @@ describe("Remote Bundler Worker", () => {
             `,
           },
         ],
-        entryPoint: "app.tsx",
+        entryPoint: 'app.tsx',
         externalPackages: DEFAULT_EXTERNAL_PACKAGES,
       }),
-    });
+    })
 
-    if (!response.ok) throw new Error(await response.text());
-    const result = (await response.json()) as BundleResult;
+    if (!response.ok) throw new Error(await response.text())
+    const result = (await response.json()) as BundleResult
 
     expect(result).toMatchInlineSnapshot(`
       {
@@ -579,30 +580,30 @@ describe("Remote Bundler Worker", () => {
         "success": true,
         "warnings": [],
       }
-    `);
+    `)
 
-    const serverTiming = response.headers.get("Server-Timing");
+    const serverTiming = response.headers.get('Server-Timing')
     expect(serverTiming).toMatchInlineSnapshot(
       `"import-esbuild;dur=0, import-wasm;dur=0, parse-body;dur=0, hash-generation;dur=0, tailwind-css;dur=0, esbuild-build;dur=0, parallel-build;dur=0, html-generation;dur=0, kv-storage;dur=125, total;dur=125, cfL4;desc="?proto=TCP&rtt=22905&min_rtt=12673&rtt_var=18155&sent=37&recv=29&lost=0&retrans=2&sent_bytes=19865&recv_bytes=7703&delivery_rate=608065&cwnd=256&unsent_bytes=0&cid=12edcbc7a5714166&ts=9554&x=0""`,
-    );
+    )
 
     if (result.success) {
       // Check if multiple files were generated (main bundle + chunks)
-      const fileCount = Object.keys(result.files).length;
-      console.log("Generated files:", Object.keys(result.files));
+      const fileCount = Object.keys(result.files).length
+      console.log('Generated files:', Object.keys(result.files))
 
       // We expect at least the main JS file and its source map
-      expect(fileCount).toBeGreaterThanOrEqual(2);
+      expect(fileCount).toBeGreaterThanOrEqual(2)
 
       // Check raw outputs for chunks
       const hasChunks = result.rawOutputs.some(
-        (output) => output.type === "chunk",
-      );
-      console.log("Has chunks:", hasChunks);
+        (output) => output.type === 'chunk',
+      )
+      console.log('Has chunks:', hasChunks)
       console.log(
-        "Raw outputs:",
+        'Raw outputs:',
         result.rawOutputs.map((o) => ({ path: o.path, type: o.type })),
-      );
+      )
 
       // Skip Deno evaluation for this test since React is external
       // The bundle successfully demonstrates code splitting with chunks
@@ -610,23 +611,23 @@ describe("Remote Bundler Worker", () => {
 
     // Fetch and verify the main JS output
     if (result.success && result.jsUrl) {
-      const jsResponse = await fetchImplementation(result.jsUrl);
-      const jsContent = await jsResponse.text();
+      const jsResponse = await fetchImplementation(result.jsUrl)
+      const jsContent = await jsResponse.text()
       await expect(jsContent).toMatchFileSnapshot(
-        "./snapshots/dynamic-imports-output.js",
-      );
+        './snapshots/dynamic-imports-output.js',
+      )
     }
-  });
+  })
 
-  it("should execute bundled code with Deno", async () => {
+  it('should execute bundled code with Deno', async () => {
     // First, bundle a React component
     const response = await fetchImplementation(`${WORKER_URL}/api/bundle`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         files: [
           {
-            path: "app.tsx",
+            path: 'app.tsx',
             content: `
             import React from 'react';
 
@@ -642,10 +643,10 @@ describe("Remote Bundler Worker", () => {
           },
         ],
       }),
-    });
+    })
 
-    if (!response.ok) throw new Error(await response.text());
-    const result = (await response.json()) as BundleResult;
+    if (!response.ok) throw new Error(await response.text())
+    const result = (await response.json()) as BundleResult
     expect(result).toMatchInlineSnapshot(`
       {
         "files": {
@@ -663,31 +664,31 @@ describe("Remote Bundler Worker", () => {
         "success": true,
         "warnings": [],
       }
-    `);
+    `)
 
     // Execute the bundled code using Deno and check the exports
     if (!result.success) {
-      throw new Error("Bundle failed");
+      throw new Error('Bundle failed')
     }
 
-    const exports = await evaluateBundleExportsWithDeno(result.jsUrl);
+    const exports = await evaluateBundleExportsWithDeno(result.jsUrl)
     expect(exports).toMatchInlineSnapshot(`
       [
         "add",
         "default",
         "multiply",
       ]
-    `);
-  });
+    `)
+  })
 
-  it("should return formatted error for syntax errors", async () => {
+  it('should return formatted error for syntax errors', async () => {
     const response = await fetchImplementation(`${WORKER_URL}/api/bundle`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         files: [
           {
-            path: "app.tsx",
+            path: 'app.tsx',
             content: `
             const App = () => {
               // Missing closing bracket for function
@@ -704,9 +705,9 @@ describe("Remote Bundler Worker", () => {
         ],
         externalPackages: DEFAULT_EXTERNAL_PACKAGES,
       }),
-    });
+    })
 
-    const result = (await response.json()) as BundleResult;
+    const result = (await response.json()) as BundleResult
     expect(result).toMatchInlineSnapshot(`
       {
         "error": "Build failed with 1 error:
@@ -720,17 +721,17 @@ describe("Remote Bundler Worker", () => {
       ",
         "success": false,
       }
-    `);
-  });
+    `)
+  })
 
-  it("should return formatted error for non-existent npm package", async () => {
+  it('should return formatted error for non-existent npm package', async () => {
     const response = await fetchImplementation(`${WORKER_URL}/api/bundle`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         files: [
           {
-            path: "app.tsx",
+            path: 'app.tsx',
             content: `
             import { someFunction } from 'package-that-definitely-does-not-exist-12345';
 
@@ -744,9 +745,9 @@ describe("Remote Bundler Worker", () => {
         ],
         externalPackages: [], // Not marking as external so it tries to resolve
       }),
-    });
+    })
 
-    const result = (await response.json()) as BundleResult;
+    const result = (await response.json()) as BundleResult
 
     expect(result).toMatchInlineSnapshot(`
       {
@@ -761,6 +762,6 @@ describe("Remote Bundler Worker", () => {
       ",
         "success": false,
       }
-    `);
-  });
-});
+    `)
+  })
+})

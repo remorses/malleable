@@ -4,6 +4,7 @@
     "dev": "wrangler dev",
     "demo": "vite",
     "test": "pnpm vitest -u --run",
+    "prettier": "prettier --write src",
     "test:local": "USE_LOCAL=1 pnpm vitest -u --run",
     "deployment": "pnpm tsc && wrangler deploy --minify"
   },

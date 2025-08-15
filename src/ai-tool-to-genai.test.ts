@@ -1,15 +1,15 @@
-import { describe, it, expect } from 'vitest';
-import { tool } from 'ai';
-import { z } from 'zod';
-import { Type } from '@google/genai';
-import type { FunctionDeclaration, FunctionCall } from '@google/genai';
-import { 
-  aiToolToGenAIFunction, 
+import { describe, it, expect } from 'vitest'
+import { tool } from 'ai'
+import { z } from 'zod'
+import { Type } from '@google/genai'
+import type { FunctionDeclaration, FunctionCall } from '@google/genai'
+import {
+  aiToolToGenAIFunction,
   aiToolToGenAIFunctionWithName,
   aiToolsToGenAITools,
   aiToolToCallableTool,
-  extractSchemaFromTool
-} from './ai-tool-to-genai.js';
+  extractSchemaFromTool,
+} from './ai-tool-to-genai.js'
 
 describe('AI Tool to GenAI Conversion', () => {
   it('should convert a simple Zod-based tool', () => {
@@ -17,19 +17,19 @@ describe('AI Tool to GenAI Conversion', () => {
       description: 'Get the current weather for a location',
       inputSchema: z.object({
         location: z.string().describe('The city name'),
-        unit: z.enum(['celsius', 'fahrenheit']).optional()
+        unit: z.enum(['celsius', 'fahrenheit']).optional(),
       }),
       execute: async ({ location, unit }) => {
         return {
           temperature: 72,
           unit: unit || 'fahrenheit',
-          condition: 'sunny'
-        };
-      }
-    });
-    
-    const genAIFunction = aiToolToGenAIFunction(weatherTool);
-    
+          condition: 'sunny',
+        }
+      },
+    })
+
+    const genAIFunction = aiToolToGenAIFunction(weatherTool)
+
     expect(genAIFunction).toMatchInlineSnapshot(`
       {
         "description": "Get the current weather for a location",
@@ -54,8 +54,8 @@ describe('AI Tool to GenAI Conversion', () => {
           "type": "OBJECT",
         },
       }
-    `);
-  });
+    `)
+  })
 
   it('should use custom name when provided', () => {
     const calculateTool = tool({
@@ -63,23 +63,30 @@ describe('AI Tool to GenAI Conversion', () => {
       inputSchema: z.object({
         a: z.number(),
         b: z.number(),
-        operation: z.enum(['add', 'subtract', 'multiply', 'divide'])
+        operation: z.enum(['add', 'subtract', 'multiply', 'divide']),
       }),
       execute: async ({ a, b, operation }) => {
         switch (operation) {
-          case 'add': return a + b;
-          case 'subtract': return a - b;
-          case 'multiply': return a * b;
-          case 'divide': return a / b;
+          case 'add':
+            return a + b
+          case 'subtract':
+            return a - b
+          case 'multiply':
+            return a * b
+          case 'divide':
+            return a / b
         }
-      }
-    });
-    
-    const genAIFunction = aiToolToGenAIFunctionWithName(calculateTool, 'calculator');
-    
-    expect(genAIFunction.name).toBe('calculator');
-    expect(genAIFunction.description).toBe('Perform a calculation');
-  });
+      },
+    })
+
+    const genAIFunction = aiToolToGenAIFunctionWithName(
+      calculateTool,
+      'calculator',
+    )
+
+    expect(genAIFunction.name).toBe('calculator')
+    expect(genAIFunction.description).toBe('Perform a calculation')
+  })
 
   it('should handle complex nested schemas', () => {
     const complexTool = tool({
@@ -88,16 +95,16 @@ describe('AI Tool to GenAI Conversion', () => {
         user: z.object({
           name: z.string(),
           age: z.number().int().min(0).max(150),
-          email: z.string().email()
+          email: z.string().email(),
         }),
         preferences: z.array(z.string()),
-        metadata: z.record(z.string(), z.unknown()).optional()
+        metadata: z.record(z.string(), z.unknown()).optional(),
       }),
-      execute: async (input) => input
-    });
-    
-    const genAIFunction = aiToolToGenAIFunction(complexTool);
-    
+      execute: async (input) => input,
+    })
+
+    const genAIFunction = aiToolToGenAIFunction(complexTool)
+
     expect(genAIFunction.parameters).toMatchInlineSnapshot(`
       {
         "properties": {
@@ -140,30 +147,30 @@ describe('AI Tool to GenAI Conversion', () => {
         ],
         "type": "OBJECT",
       }
-    `);
-  });
+    `)
+  })
 
   it('should convert multiple tools to GenAI tools format', () => {
     const tools = {
       weather: tool({
         description: 'Get weather',
         inputSchema: z.object({
-          location: z.string()
+          location: z.string(),
         }),
-        execute: async ({ location }) => ({ temp: 72 })
+        execute: async ({ location }) => ({ temp: 72 }),
       }),
       search: tool({
         description: 'Search the web',
         inputSchema: z.object({
           query: z.string(),
-          limit: z.number().optional()
+          limit: z.number().optional(),
         }),
-        execute: async ({ query }) => ({ results: [] })
-      })
-    };
-    
-    const genAITools = aiToolsToGenAITools(tools);
-    
+        execute: async ({ query }) => ({ results: [] }),
+      }),
+    }
+
+    const genAITools = aiToolsToGenAITools(tools)
+
     expect(genAITools).toMatchInlineSnapshot(`
       [
         {
@@ -205,19 +212,19 @@ describe('AI Tool to GenAI Conversion', () => {
           ],
         },
       ]
-    `);
-  });
+    `)
+  })
 
   it('should extract schema from tool', () => {
     const testTool = tool({
       inputSchema: z.object({
-        test: z.string()
+        test: z.string(),
       }),
-      execute: async () => {}
-    });
-    
-    const schema = extractSchemaFromTool(testTool);
-    
+      execute: async () => {},
+    })
+
+    const schema = extractSchemaFromTool(testTool)
+
     expect(schema).toMatchInlineSnapshot(`
       {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -232,18 +239,18 @@ describe('AI Tool to GenAI Conversion', () => {
         ],
         "type": "object",
       }
-    `);
-  });
+    `)
+  })
 
   it('should handle tools with no input schema', () => {
     const simpleTool = tool({
       description: 'Simple tool with no inputs',
       inputSchema: z.object({}),
-      execute: async () => ({ result: 'done' })
-    });
-    
-    const genAIFunction = aiToolToGenAIFunction(simpleTool);
-    
+      execute: async () => ({ result: 'done' }),
+    })
+
+    const genAIFunction = aiToolToGenAIFunction(simpleTool)
+
     expect(genAIFunction).toMatchInlineSnapshot(`
       {
         "description": "Simple tool with no inputs",
@@ -253,20 +260,20 @@ describe('AI Tool to GenAI Conversion', () => {
           "type": "OBJECT",
         },
       }
-    `);
-  });
+    `)
+  })
 
   it('should handle union types', () => {
     const unionTool = tool({
       description: 'Tool with union types',
       inputSchema: z.object({
-        value: z.union([z.string(), z.number(), z.boolean()])
+        value: z.union([z.string(), z.number(), z.boolean()]),
       }),
-      execute: async ({ value }) => ({ received: value })
-    });
-    
-    const genAIFunction = aiToolToGenAIFunction(unionTool);
-    
+      execute: async ({ value }) => ({ received: value }),
+    })
+
+    const genAIFunction = aiToolToGenAIFunction(unionTool)
+
     expect(genAIFunction.parameters?.properties?.value).toMatchInlineSnapshot(`
       {
         "anyOf": [
@@ -282,25 +289,25 @@ describe('AI Tool to GenAI Conversion', () => {
           },
         ],
       }
-    `);
-  });
+    `)
+  })
 
   it('should create a CallableTool', async () => {
     const weatherTool = tool({
       description: 'Get weather',
       inputSchema: z.object({
-        location: z.string()
+        location: z.string(),
       }),
-      execute: async ({ location }) => ({ 
+      execute: async ({ location }) => ({
         temperature: 72,
-        location 
-      })
-    });
-    
-    const callableTool = aiToolToCallableTool(weatherTool, 'weather');
-    
+        location,
+      }),
+    })
+
+    const callableTool = aiToolToCallableTool(weatherTool, 'weather')
+
     // Test tool() method
-    const genAITool = await callableTool.tool();
+    const genAITool = await callableTool.tool()
     expect(genAITool.functionDeclarations).toMatchInlineSnapshot(`
       [
         {
@@ -319,16 +326,16 @@ describe('AI Tool to GenAI Conversion', () => {
           },
         },
       ]
-    `);
-    
+    `)
+
     // Test callTool() method
     const functionCall: FunctionCall = {
       id: 'call_123',
       name: 'weather',
-      args: { location: 'San Francisco' }
-    };
-    
-    const parts = await callableTool.callTool([functionCall]);
+      args: { location: 'San Francisco' },
+    }
+
+    const parts = await callableTool.callTool([functionCall])
     expect(parts).toMatchInlineSnapshot(`
       [
         {
@@ -344,32 +351,32 @@ describe('AI Tool to GenAI Conversion', () => {
           },
         },
       ]
-    `);
-  });
+    `)
+  })
 
   it('should handle tool execution errors', async () => {
     const errorTool = tool({
       description: 'Tool that throws',
       inputSchema: z.object({
-        trigger: z.boolean()
+        trigger: z.boolean(),
       }),
       execute: async ({ trigger }) => {
         if (trigger) {
-          throw new Error('Tool execution failed');
+          throw new Error('Tool execution failed')
         }
-        return { success: true };
-      }
-    });
-    
-    const callableTool = aiToolToCallableTool(errorTool, 'error_tool');
-    
+        return { success: true }
+      },
+    })
+
+    const callableTool = aiToolToCallableTool(errorTool, 'error_tool')
+
     const functionCall: FunctionCall = {
       id: 'call_error',
       name: 'error_tool',
-      args: { trigger: true }
-    };
-    
-    const parts = await callableTool.callTool([functionCall]);
+      args: { trigger: true },
+    }
+
+    const parts = await callableTool.callTool([functionCall])
     expect(parts).toMatchInlineSnapshot(`
       [
         {
@@ -382,6 +389,6 @@ describe('AI Tool to GenAI Conversion', () => {
           },
         },
       ]
-    `);
-  });
-});
+    `)
+  })
+})

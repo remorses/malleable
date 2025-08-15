@@ -5,14 +5,14 @@ export class DurableObject {
 
 export interface DurableObjectState {
   storage: {
-    sql: any;
-    setAlarm: (time: number) => Promise<void>;
-    deleteAlarm: () => Promise<void>;
-    getAlarm: () => Promise<number | null>;
-  };
+    sql: any
+    setAlarm: (time: number) => Promise<void>
+    deleteAlarm: () => Promise<void>
+    getAlarm: () => Promise<number | null>
+  }
 }
 
 export interface DurableObjectNamespace {
-  idFromName: (name: string) => string;
-  get: (id: string) => any;
+  idFromName: (name: string) => string
+  get: (id: string) => any
 }
