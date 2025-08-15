@@ -1,24 +1,24 @@
 import { Spiceflow } from 'spiceflow'
 import { z } from 'zod'
 
-import { generateTailwindCSS, shadcnTheme } from "./generate-tailwind.js"
-import { createEsmShPlugin } from "./esm-https-plugin.js"
-import { createLocalResolverPlugin } from "./local-resolver-plugin.js"
-import { createVirtualEntryPlugin } from "./virtual-entry-plugin.js"
-import { logger, createRequestLogger } from "./logger.js"
+import { generateTailwindCSS, shadcnTheme } from './generate-tailwind.js'
+import { createEsmShPlugin } from './esm-https-plugin.js'
+import { createLocalResolverPlugin } from './local-resolver-plugin.js'
+import { createVirtualEntryPlugin } from './virtual-entry-plugin.js'
+import { logger, createRequestLogger } from './logger.js'
 import { Container, getContainer, getRandom } from '@cloudflare/containers'
 import { createSpiceflowClient } from 'spiceflow/client'
 import type { ContainerApp } from './bun-server.js'
 import { IMPORTMAP } from './importmap.js'
+import { waitUntil } from 'cloudflare:workers'
 
 // Bun container using the @cloudflare/containers utility
 export class BunContainer extends Container {
   // Configure default port for the container
   defaultPort = 8080
 
-
   // Sleep after 1 second of inactivity for quick cleanup
-  sleepAfter = "1m"
+  sleepAfter = '1m'
 
   // Lifecycle hooks
   // override onStart(): void {
@@ -32,7 +32,6 @@ export class BunContainer extends Container {
   override onError(error: unknown): void {
     console.error('Container error:', error)
   }
-
 }
 
 interface Env {
@@ -46,13 +45,16 @@ interface State extends Env {
 
 // Helper to create a Spiceflow client from a container stub
 function getContainerClient(stub: DurableObjectStub<BunContainer>) {
-  const customFetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+  const customFetch = async (
+    input: RequestInfo | URL,
+    init?: RequestInit,
+  ): Promise<Response> => {
     const request = new Request(input, init)
     return stub.fetch(request)
   }
 
   return createSpiceflowClient<ContainerApp>('http://container:8080', {
-    fetch: customFetch as typeof fetch
+    fetch: customFetch as typeof fetch,
   })
 }
 
@@ -64,20 +66,20 @@ async function generateHash(input: string): Promise<string> {
   const data = encoder.encode(input)
   const hashBuffer = await crypto.subtle.digest('SHA-256', data)
   const hashArray = Array.from(new Uint8Array(hashBuffer))
-  const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('')
+  const hashHex = hashArray.map((b) => b.toString(16).padStart(2, '0')).join('')
   return hashHex.substring(0, 16) // Use first 16 chars for shorter URLs
 }
 
 // Schema for bundle API
 const fileSchema = z.object({
   path: z.string(),
-  content: z.string()
+  content: z.string(),
 })
 
 const bundleSchema = z.object({
   files: z.array(fileSchema),
   entryPoint: z.string().optional(),
-  externalPackages: z.array(z.string()).default([])
+  externalPackages: z.array(z.string()).default([]),
 })
 
 // Tagged template for HTML syntax highlighting
@@ -90,10 +92,12 @@ const app = new Spiceflow()
     method: 'POST',
     path: '/api/prerender',
     request: z.object({
-      files: z.array(z.object({
-        path: z.string(),
-        content: z.string()
-      })),
+      files: z.array(
+        z.object({
+          path: z.string(),
+          content: z.string(),
+        }),
+      ),
       entryPoint: z.string().optional(),
       cssUrls: z.array(z.string()).default([]),
       bootstrapModules: z.array(z.string()).default([]),
@@ -104,7 +108,10 @@ const app = new Spiceflow()
         const body = await request.json()
 
         // Use load-balanced container pool with 3 instances
-        const containerStub = await getRandom(state.BUN_CONTAINER, 1) as DurableObjectStub<BunContainer>
+        const containerStub = (await getRandom(
+          state.BUN_CONTAINER,
+          1,
+        )) as DurableObjectStub<BunContainer>
 
         // Use the Spiceflow client to prerender
         const client = getContainerClient(containerStub)
@@ -113,28 +120,34 @@ const app = new Spiceflow()
           entryPoint: body.entryPoint,
           cssUrls: body.cssUrls,
           bootstrapModules: body.bootstrapModules,
-          importmap: body.importmap || IMPORTMAP
+          importmap: body.importmap || IMPORTMAP,
         })
 
         if (error) {
-          return Response.json({
-            success: false,
-            error: error.message || error
-          }, { status: 500 })
+          return Response.json(
+            {
+              success: false,
+              error: error.message || error,
+            },
+            { status: 500 },
+          )
         }
 
         return Response.json({
           success: true,
           html: data.html,
-          renderTime: data.renderTime
+          renderTime: data.renderTime,
         })
       } catch (error: any) {
-        return Response.json({
-          success: false,
-          error: error.message || 'Failed to prerender'
-        }, { status: 500 })
+        return Response.json(
+          {
+            success: false,
+            error: error.message || 'Failed to prerender',
+          },
+          { status: 500 },
+        )
       }
-    }
+    },
   })
   .route({
     method: 'OPTIONS',
@@ -144,12 +157,13 @@ const app = new Spiceflow()
         status: 200,
         headers: {
           'Access-Control-Allow-Origin': '*',
-          'Access-Control-Allow-Methods': 'OPTIONS, GET, POST, PUT, PATCH, DELETE',
+          'Access-Control-Allow-Methods':
+            'OPTIONS, GET, POST, PUT, PATCH, DELETE',
           'Access-Control-Allow-Headers': '*',
           'Access-Control-Max-Age': '86400',
-        }
+        },
       })
-    }
+    },
   })
   .route({
     method: 'POST',
@@ -164,7 +178,9 @@ const app = new Spiceflow()
       reqLogger.time(`import-esbuild`)
       const [esbuild, wasm] = await Promise.all([
         import('esbuild-wasm'),
-        import("../node_modules/esbuild-wasm/esbuild.wasm").then(mod => mod.default)
+        import('../node_modules/esbuild-wasm/esbuild.wasm').then(
+          (mod) => mod.default,
+        ),
       ])
       reqLogger.timeEnd(`import-esbuild`)
 
@@ -172,7 +188,7 @@ const app = new Spiceflow()
         reqLogger.time(`esbuild-init`)
         await esbuild.initialize({
           wasmModule: process.env.VITEST ? undefined : wasm,
-          worker: false
+          worker: false,
         })
         init = true
         reqLogger.timeEnd(`esbuild-init`)
@@ -182,32 +198,32 @@ const app = new Spiceflow()
         reqLogger.time(`parse-body`)
         const body = await request.json()
         reqLogger.timeEnd(`parse-body`)
-        const {
-          files,
-          entryPoint,
-          externalPackages = []
-        } = body
+        const { files, entryPoint, externalPackages = [] } = body
 
         // Determine actual entry point
         const actualEntryPoint = entryPoint || files[0]?.path
 
         if (!actualEntryPoint) {
-          return Response.json({
-            error: 'No files provided',
-            success: false
-          }, { status: 400 })
+          return Response.json(
+            {
+              error: 'No files provided',
+              success: false,
+            },
+            { status: 400 },
+          )
         }
 
         // Validate entry point exists
-        const entryFile = files.find(f => f.path === actualEntryPoint)
+        const entryFile = files.find((f) => f.path === actualEntryPoint)
         if (!entryFile) {
-          return Response.json({
-            error: `Entry point "${actualEntryPoint}" not found in provided files`,
-            success: false
-          }, { status: 400 })
+          return Response.json(
+            {
+              error: `Entry point "${actualEntryPoint}" not found in provided files`,
+              success: false,
+            },
+            { status: 400 },
+          )
         }
-
-
 
         // Generate hash for the entry point name
         reqLogger.time(`hash-generation`)
@@ -215,245 +231,259 @@ const app = new Spiceflow()
           files: files.sort((a, b) => a.path.localeCompare(b.path)),
           entryPoint: actualEntryPoint,
           externalPackages: externalPackages.sort(),
-          tailwindConfig: JSON.stringify(shadcnTheme)
+          tailwindConfig: JSON.stringify(shadcnTheme),
         })
         const entryHash = await generateHash(hashInput)
         reqLogger.timeEnd(`hash-generation`)
-
-
 
         // Prepare CSS URL for the virtual entry
         const baseUrl = new URL(request.url).origin
         const cssUrl = `${baseUrl}/bundle/${entryHash}.css`
 
-
         // Collect all code for CSS extraction
-        const allCode = files.map(f => f.content).join('\n')
+        const allCode = files.map((f) => f.content).join('\n')
 
         // Run esbuild and Tailwind CSS extraction concurrently
         reqLogger.time(`parallel-build`)
         const [result, css] = await Promise.all([
-            // Build with esbuild using virtual entry
-            (async () => {
-              reqLogger.time(`esbuild-build`)
-              const res = await esbuild.build({
-                entryPoints: { [entryHash]: 'virtual:entry' },
-                outdir: './',
-                bundle: true,
-                format: 'esm',
-                splitting: true,
-                sourcemap: false,
-                target: 'es2020',
-                platform: 'browser',
-                write: false,
-                minify: false,
-                jsx: 'automatic',
-                plugins: [
-                  createVirtualEntryPlugin({
-                    actualEntryPath: actualEntryPoint,
-                    cssUrl,
-                    baseUrl
-                  }),
-                  createLocalResolverPlugin({
-                    files,
-                  }),
-                  createEsmShPlugin({ externalPackages })
-                ],
-                absWorkingDir: '/',
-                loader: {
-                  '.tsx': 'tsx',
-                  '.ts': 'tsx',
-                  '.jsx': 'tsx',
-                  '.js': 'tsx',
-                  '.css': 'css'
-                },
-                // Configure output filenames - [name] will be our hash
-                entryNames: '[name]',                   // entry outputs use hash as name
-                chunkNames: 'chunks/[name]-[hash]',     // shared/lazy chunks
-                assetNames: 'assets/[name]-[hash]',     // emitted assets
-              })
-              reqLogger.timeEnd(`esbuild-build`)
-              return res
-            })(),
-            // Generate Tailwind CSS
-            (async () => {
-              reqLogger.time(`tailwind-css`)
-              const styles = await generateTailwindCSS(allCode)
-              reqLogger.timeEnd(`tailwind-css`)
-              return styles
-            })()
-          ])
-          reqLogger.timeEnd(`parallel-build`)
-
-          const outputFiles = result.outputFiles || []
-          const warnings = result.warnings
-
-
-          // Store all output files in KV
-          const ttl = 60 * 60 * 24 * 7 // 7 days in seconds
-          const fileUrls: Record<string, string> = {}
-
-          // Prepare files for storage
-          const filesToStore: Array<{ filename: string, text: string, isJs: boolean }> = []
-
-          for (const file of outputFiles) {
-            // Extract filename from path (remove leading ./)
-            const filename = file.path.replace(/^\.?\//, '')
-            filesToStore.push({
-              filename,
-              text: file.text,
-              isJs: filename.endsWith('.js')
+          // Build with esbuild using virtual entry
+          (async () => {
+            reqLogger.time(`esbuild-build`)
+            const res = await esbuild.build({
+              entryPoints: { [entryHash]: 'virtual:entry' },
+              outdir: './',
+              bundle: true,
+              format: 'esm',
+              splitting: true,
+              sourcemap: false,
+              target: 'es2020',
+              platform: 'browser',
+              write: false,
+              minify: false,
+              jsx: 'automatic',
+              plugins: [
+                createVirtualEntryPlugin({
+                  actualEntryPath: actualEntryPoint,
+                  cssUrl,
+                  baseUrl,
+                }),
+                createLocalResolverPlugin({
+                  files,
+                }),
+                createEsmShPlugin({ externalPackages }),
+              ],
+              absWorkingDir: '/',
+              loader: {
+                '.tsx': 'tsx',
+                '.ts': 'tsx',
+                '.jsx': 'tsx',
+                '.js': 'tsx',
+                '.css': 'css',
+              },
+              // Configure output filenames - [name] will be our hash
+              entryNames: '[name]', // entry outputs use hash as name
+              chunkNames: 'chunks/[name]-[hash]', // shared/lazy chunks
+              assetNames: 'assets/[name]-[hash]', // emitted assets
             })
-            fileUrls[filename] = `${new URL(request.url).origin}/bundle/${filename}`
-          }
+            reqLogger.timeEnd(`esbuild-build`)
+            return res
+          })(),
+          // Generate Tailwind CSS
+          (async () => {
+            reqLogger.time(`tailwind-css`)
+            const styles = await generateTailwindCSS(allCode)
+            reqLogger.timeEnd(`tailwind-css`)
+            return styles
+          })(),
+        ])
+        reqLogger.timeEnd(`parallel-build`)
 
-          let serverTimingHeader = reqLogger.getServerTimingHeader()
+        const outputFiles = result.outputFiles || []
+        const warnings = result.warnings
 
-          // Now store all files with metadata
-          const kvPromises: Promise<void>[] = []
+        // Store all output files in KV
+        const ttl = 60 * 60 * 24 * 7 // 7 days in seconds
+        const fileUrls: Record<string, string> = {}
 
-          // Store CSS file
+        // Prepare files for storage
+        const filesToStore: Array<{
+          filename: string
+          text: string
+          isJs: boolean
+        }> = []
+
+        for (const file of outputFiles) {
+          // Extract filename from path (remove leading ./)
+          const filename = file.path.replace(/^\.?\//, '')
           filesToStore.push({
-            filename: `${entryHash}.css`,
-            text: css,
-            isJs: false
+            filename,
+            text: file.text,
+            isJs: filename.endsWith('.js'),
           })
+          fileUrls[filename] =
+            `${new URL(request.url).origin}/bundle/${filename}`
+        }
 
+        let serverTimingHeader = reqLogger.getServerTimingHeader()
 
+        // Now store all files with metadata
+        const kvPromises: Promise<void>[] = []
 
-          // The main entry file will be named with our hash
-          const mainJsUrl = fileUrls[`${entryHash}.js`] || undefined
+        // Store CSS file
+        filesToStore.push({
+          filename: `${entryHash}.css`,
+          text: css,
+          isJs: false,
+        })
 
-          // Collect all CSS file URLs
-          const cssUrls: string[] = [cssUrl]
-          for (const [filename, url] of Object.entries(fileUrls)) {
-            if (filename.endsWith('.css')) {
-              cssUrls.push(url)
-            }
+        // The main entry file will be named with our hash
+        const mainJsUrl = fileUrls[`${entryHash}.js`] || undefined
+
+        // Collect all CSS file URLs
+        const cssUrls: string[] = [cssUrl]
+        for (const [filename, url] of Object.entries(fileUrls)) {
+          if (filename.endsWith('.css')) {
+            cssUrls.push(url)
           }
+        }
 
-          // Generate initial HTML for client-side rendering
-          reqLogger.time(`html-generation`)
-          const htmlContent = html`<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>React App</title>
-    ${cssUrls.map(url => `<link rel="stylesheet" href="${url}">`).join('\n    ')}
-    <script type="importmap">
-    ${IMPORTMAP}
-    </script>
-</head>
-<body>
-    <div id="root"></div>
-    <script type="module">
-        import React from 'react';
-        import ReactDOM from 'react-dom/client';
-        import App from '${mainJsUrl}';
+        // Generate initial HTML for client-side rendering
+        reqLogger.time(`html-generation`)
+        const htmlContent = html`<!DOCTYPE html>
+          <html lang="en">
+            <head>
+              <meta charset="UTF-8" />
+              <meta
+                name="viewport"
+                content="width=device-width, initial-scale=1.0"
+              />
+              <title>React App</title>
+              ${cssUrls
+                .map((url) => `<link rel="stylesheet" href="${url}">`)
+                .join('\n    ')}
+              <script type="importmap">
+                ${IMPORTMAP}
+              </script>
+            </head>
+            <body>
+              <div id="root"></div>
+              <script type="module">
+                import React from 'react'
+                import ReactDOM from 'react-dom/client'
+                import App from '${mainJsUrl}'
 
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(React.createElement(App));
-    </script>
-</body>
-</html>`;
-          reqLogger.timeEnd(`html-generation`)
+                const root = ReactDOM.createRoot(
+                  document.getElementById('root'),
+                )
+                root.render(React.createElement(App))
+              </script>
+            </body>
+          </html>`
+        reqLogger.timeEnd(`html-generation`)
 
-          // Store HTML in KV
-          const htmlKey = `${entryHash}.html`;
-          filesToStore.push({
-            filename: htmlKey,
-            text: htmlContent,
-            isJs: false
-          });
+        // Store HTML in KV
+        const htmlKey = `${entryHash}.html`
+        filesToStore.push({
+          filename: htmlKey,
+          text: htmlContent,
+          isJs: false,
+        })
 
+        // Store other files with metadata for JS files
+        reqLogger.time(`kv-storage`)
+        await Promise.all(
+          filesToStore.map((file) => {
+            const metadata = file.isJs
+              ? { serverTiming: serverTimingHeader }
+              : undefined
 
-          // Store other files with metadata for JS files
-          reqLogger.time(`kv-storage`)
-          await Promise.all(
-            filesToStore.map(file => {
-              const metadata = file.isJs
-                ? { serverTiming: serverTimingHeader }
-                : undefined
-
-              console.log(`storing in jsCache`, file.filename)
-              return state.jsCache.put(file.filename, file.text, {
-                expirationTtl: ttl,
-                metadata
-              })
+            console.log(`storing in jsCache`, file.filename)
+            return state.jsCache.put(file.filename, file.text, {
+              expirationTtl: ttl,
+              metadata,
             })
-          )
-          reqLogger.timeEnd(`kv-storage`)
+          }),
+        )
+        reqLogger.timeEnd(`kv-storage`)
 
+        reqLogger.timeEnd(`total`)
 
-          reqLogger.timeEnd(`total`)
+        waitUntil(
+          (async () => {
+            try {
+              // Use load-balanced container pool for background prerendering
+              const containerStub = (await getRandom(
+                state.BUN_CONTAINER,
+                3,
+              )) as DurableObjectStub<BunContainer>
 
+              // Use the Spiceflow client to prerender
+              const client = getContainerClient(containerStub)
+              const { data, error } = await client.prerender.post({
+                files,
+                entryPoint: actualEntryPoint,
+                cssUrls,
+                bootstrapModules: mainJsUrl ? [mainJsUrl] : [],
+                importmap: IMPORTMAP,
+              })
 
-          // Start prerendering in the background (non-blocking)
-          if (state.waitUntil) {
-            state.waitUntil(
-              (async () => {
-                try {
-                  // Use load-balanced container pool for background prerendering
-                  const containerStub = await getRandom(state.BUN_CONTAINER, 3) as DurableObjectStub<BunContainer>
+              if (!error && data.html) {
+                // Update the HTML in KV with prerendered content
+                console.log(`Updating ${htmlKey} with prerendered HTML`)
+                await state.jsCache.put(htmlKey, data.html, {
+                  expirationTtl: ttl,
+                })
+              } else {
+                console.error('Prerender error:', error || 'No HTML returned')
+              }
+            } catch (error) {
+              console.error('Background prerender error:', error)
+            }
+          })(),
+        )
 
-                  // Use the Spiceflow client to prerender
-                  const client = getContainerClient(containerStub)
-                  const { data, error } = await client.prerender.post({
-                    files,
-                    entryPoint: actualEntryPoint,
-                    cssUrls,
-                    bootstrapModules: mainJsUrl ? [mainJsUrl] : [],
-                    importmap: IMPORTMAP
-                  })
+        // Create HTML URL
+        const htmlUrl = `${baseUrl}/bundle/${htmlKey}`
 
-                  if (!error && data.html) {
-                    // Update the HTML in KV with prerendered content
-                    console.log(`Updating ${htmlKey} with prerendered HTML`)
-                    await state.jsCache.put(htmlKey, data.html, {
-                      expirationTtl: ttl
-                    })
-                  } else {
-                    console.error('Prerender error:', error || 'No HTML returned')
-                  }
-                } catch (error) {
-                  console.error('Background prerender error:', error)
-                }
-              })()
-            )
-          }
+        // Create raw esbuild output metadata (without text content)
+        const rawOutputs = outputFiles.map((file) => ({
+          path: file.path,
+          size: file.contents.byteLength,
+          type: file.path.endsWith('.map')
+            ? 'sourcemap'
+            : file.path.includes('chunks/')
+              ? 'chunk'
+              : 'entry',
+        }))
 
-          // Create HTML URL
-          const htmlUrl = `${baseUrl}/bundle/${htmlKey}`;
-
-          // Create raw esbuild output metadata (without text content)
-          const rawOutputs = outputFiles.map(file => ({
-            path: file.path,
-            size: file.contents.byteLength,
-            type: file.path.endsWith('.map') ? 'sourcemap' :
-                  file.path.includes('chunks/') ? 'chunk' : 'entry'
-          }))
-
-          // Return URLs for all files (CSS is now injected via JS)
-          return Response.json({
+        // Return URLs for all files (CSS is now injected via JS)
+        return Response.json(
+          {
             jsUrl: mainJsUrl,
             htmlUrl,
             files: fileUrls,
             rawOutputs,
             warnings,
-            success: true
-          }, {
+            success: true,
+          },
+          {
             headers: {
               'Access-Control-Allow-Origin': '*',
-              'Access-Control-Allow-Methods': 'OPTIONS, GET, POST, PUT, PATCH, DELETE',
+              'Access-Control-Allow-Methods':
+                'OPTIONS, GET, POST, PUT, PATCH, DELETE',
               'Access-Control-Allow-Headers': '*',
-              'Server-Timing': reqLogger.getServerTimingHeader()
-            }
-          })
+              'Server-Timing': reqLogger.getServerTimingHeader(),
+            },
+          },
+        )
       } catch (error: any) {
         // Make sure to end any timers that might still be running
-        try { reqLogger.timeEnd(`parallel-build`) } catch {}
-        try { reqLogger.timeEnd(`total`) } catch {}
+        try {
+          reqLogger.timeEnd(`parallel-build`)
+        } catch {}
+        try {
+          reqLogger.timeEnd(`total`)
+        } catch {}
         logger.error(`Request error:`, error)
 
         // Format the error nicely using esbuild's built-in formatMessages if it's a build error
@@ -480,22 +510,26 @@ const app = new Spiceflow()
           warningText = formatted.join('\n')
         }
 
-        return Response.json({
-          error: error?.message || 'Build failed',
-          errorText,
-          warningText: warningText || undefined,
-          success: false
-        }, {
-          status: error?.errors ? 400 : 500,
-          headers: {
-            'Access-Control-Allow-Origin': '*',
-            'Access-Control-Allow-Methods': 'OPTIONS, GET, POST, PUT, PATCH, DELETE',
-            'Access-Control-Allow-Headers': '*',
-            'Server-Timing': reqLogger.getServerTimingHeader()
-          }
-        })
+        return Response.json(
+          {
+            error: error?.message || 'Build failed',
+            errorText,
+            warningText: warningText || undefined,
+            success: false,
+          },
+          {
+            status: error?.errors ? 400 : 500,
+            headers: {
+              'Access-Control-Allow-Origin': '*',
+              'Access-Control-Allow-Methods':
+                'OPTIONS, GET, POST, PUT, PATCH, DELETE',
+              'Access-Control-Allow-Headers': '*',
+              'Server-Timing': reqLogger.getServerTimingHeader(),
+            },
+          },
+        )
       }
-    }
+    },
   })
   .route({
     method: 'GET',
@@ -508,7 +542,10 @@ const app = new Spiceflow()
       }
 
       // Get content and metadata from KV
-      const kvResult = await state.jsCache.getWithMetadata(key) as { value: string | null, metadata: { serverTiming?: string } | null }
+      const kvResult = (await state.jsCache.getWithMetadata(key)) as {
+        value: string | null
+        metadata: { serverTiming?: string } | null
+      }
 
       if (!kvResult.value) {
         console.log('not found', key, params)
@@ -541,7 +578,7 @@ const app = new Spiceflow()
       }
 
       return new Response(kvResult.value, { headers })
-    }
+    },
   })
 
   .route({
@@ -710,14 +747,14 @@ const app = new Spiceflow()
         }
     </script>
 </body>
-</html>`;
+</html>`
 
       return new Response(htmlString, {
         headers: {
-          'content-type': 'text/html;charset=UTF-8'
-        }
+          'content-type': 'text/html;charset=UTF-8',
+        },
       })
-    }
+    },
   })
 
 export { app }
@@ -726,8 +763,8 @@ export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext) {
     const state: State = {
       ...env,
-      waitUntil: ctx.waitUntil.bind(ctx)
+      waitUntil: ctx.waitUntil.bind(ctx),
     }
     return await app.handle(request, { state } as any)
-  }
+  },
 }
