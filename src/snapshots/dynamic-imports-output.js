@@ -4,12 +4,12 @@ import React2 from "react";
 // local:/app.tsx
 import { Suspense, lazy, useState, useEffect } from "react";
 import { jsx, jsxs } from "react/jsx-runtime";
-var LazyComponent = lazy(() => import("../chunks/LazyComponent-QWYJ2LE2.js"));
+var LazyComponent = lazy(() => import("./chunks/LazyComponent-QWYJ2LE2.js"));
 var App = () => {
   const [dynamicModule, setDynamicModule] = useState(null);
   const [showLazy, setShowLazy] = useState(false);
   useEffect(() => {
-    import("../chunks/DynamicModule-5NLYDKFO.js").then((module) => {
+    import("./chunks/DynamicModule-5NLYDKFO.js").then((module) => {
       setDynamicModule(module);
       console.log("Dynamic module loaded:", module);
     });
@@ -34,7 +34,7 @@ var App = () => {
   ] });
 };
 async function loadDynamicData() {
-  const module = await import("../chunks/DynamicModule-5NLYDKFO.js");
+  const module = await import("./chunks/DynamicModule-5NLYDKFO.js");
   return module.dynamicData;
 }
 var app_default = App;
@@ -44,7 +44,7 @@ import { Fragment, jsx as jsx2, jsxs as jsxs2 } from "react/jsx-runtime";
 var OriginalDefault = app_default;
 var WrappedComponent = (props) => {
   return /* @__PURE__ */ jsxs2(Fragment, { children: [
-    /* @__PURE__ */ jsx2("link", { rel: "stylesheet", href: "https://remote-bundler.fumabase.com/bundle/test-0gd2v/index.css" }),
+    /* @__PURE__ */ jsx2("link", { rel: "stylesheet", href: "https://remote-bundler.fumabase.com/bundle/test-tln21n/index.css" }),
     OriginalDefault ? /* @__PURE__ */ jsx2(OriginalDefault, { ...props }) : null
   ] });
 };

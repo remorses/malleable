@@ -11,7 +11,7 @@ import { Fragment, jsx as jsx2, jsxs } from "react/jsx-runtime";
 var OriginalDefault = app_default;
 var WrappedComponent = (props) => {
   return /* @__PURE__ */ jsxs(Fragment, { children: [
-    /* @__PURE__ */ jsx2("link", { rel: "stylesheet", href: "https://remote-bundler.fumabase.com/bundle/test-u30rf/index.css" }),
+    /* @__PURE__ */ jsx2("link", { rel: "stylesheet", href: "https://remote-bundler.fumabase.com/bundle/test-9cjwu/index.css" }),
     OriginalDefault ? /* @__PURE__ */ jsx2(OriginalDefault, { ...props }) : null
   ] });
 };

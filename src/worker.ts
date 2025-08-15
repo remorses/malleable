@@ -26,7 +26,7 @@ export class BunContainer extends Container<Env> {
   async prerender(input: PrerenderRequest) {
     const res = await this.containerFetch('http://localhost/prerender', {
       body: JSON.stringify(input),
-      method: 'POST'
+      method: 'POST',
     })
     if (!res.ok) throw new Error(`failed prerender in Bun: ${await res.text()}`)
     const json = (await res.json()) as PrerenderResult
@@ -49,7 +49,7 @@ export class BunContainer extends Container<Env> {
     return {
       html: '',
       renderTime: 0,
-      debounced: true
+      debounced: true,
     } as PrerenderResult
   }
 
@@ -60,7 +60,9 @@ export class BunContainer extends Container<Env> {
 
     for (const [key, payload] of allKeys) {
       const siteId = key.replace('prerenderPayload:', '')
-      const deadline = await this.ctx.storage.get<number>(`prerenderDeadline:${siteId}`)
+      const deadline = await this.ctx.storage.get<number>(
+        `prerenderDeadline:${siteId}`,
+      )
 
       // Check if this task is ready to run
       if (deadline && deadline <= Date.now()) {
@@ -72,8 +74,14 @@ export class BunContainer extends Container<Env> {
           if (result.html && this.env.jsCache) {
             const htmlKey = `${siteId}/index.html`
 
-            await this.env.jsCache.put(htmlKey, result.html)
-            console.log(`Stored prerendered HTML for ${htmlKey} in KV from alarm`)
+            await this.env.jsCache.put(htmlKey, result.html, {
+              metadata: {
+                prerendered: 'true',
+              },
+            })
+            console.log(
+              `Stored prerendered HTML for ${htmlKey} in KV from alarm`,
+            )
           }
         } catch (error) {
           console.error(`Alarm prerender error for site ${siteId}:`, error)
@@ -114,7 +122,12 @@ const bundleSchema = z.object({
   files: z.array(fileSchema),
   entryPoint: z.string().optional(),
   externalPackages: z.array(z.string()).default([]),
-  siteId: z.string(),
+  siteId: z
+    .string()
+    .regex(
+      /^[a-zA-Z0-9_-]+$/,
+      'Only alphanumeric, underscore, and dash characters are allowed',
+    ),
 })
 
 // Tagged template for HTML syntax highlighting
@@ -250,12 +263,9 @@ const app = new Spiceflow()
           )
         }
 
-        // Use siteId for all storage keys
-        const storageKey = siteId
-
         // Prepare CSS URL for the virtual entry
         const baseUrl = new URL(request.url).origin
-        const cssUrl = `${baseUrl}/bundle/${storageKey}/index.css`
+        const cssUrl = `${baseUrl}/bundle/${siteId}/index.css`
 
         // Collect all code for CSS extraction
         const allCode = files.map((f) => f.content).join('\n')
@@ -267,8 +277,8 @@ const app = new Spiceflow()
           (async () => {
             reqLogger.time(`esbuild-build`)
             const res = await esbuild.build({
-              entryPoints: { [`${storageKey}/index`]: 'virtual:entry' },
-              outdir: './',
+              entryPoints: { [`index`]: 'virtual:entry' },
+              outdir: `./${siteId}`,
               bundle: true,
               format: 'esm',
               splitting: true,
@@ -347,13 +357,13 @@ const app = new Spiceflow()
 
         // Store CSS file
         filesToStore.push({
-          filename: `${storageKey}/index.css`,
+          filename: `${siteId}/index.css`,
           text: css,
           isJs: false,
         })
 
         // The main entry file will be at siteId/index.js
-        const mainJsUrl = fileUrls[`${storageKey}/index.js`] || undefined
+        const mainJsUrl = fileUrls[`${siteId}/index.js`] || undefined
 
         // Collect all CSS file URLs
         const cssUrls: string[] = [cssUrl]
@@ -398,7 +408,7 @@ const app = new Spiceflow()
         reqLogger.timeEnd(`html-generation`)
 
         // Store HTML in KV
-        const htmlKey = `${storageKey}/index.html`
+        const htmlKey = `${siteId}/index.html`
         filesToStore.push({
           filename: htmlKey,
           text: htmlContent,
@@ -414,7 +424,11 @@ const app = new Spiceflow()
               : undefined
 
             console.log(`storing in jsCache`, file.filename)
-            return state.jsCache.put(file.filename, file.text, metadata ? { metadata } : undefined)
+            return state.jsCache.put(
+              file.filename,
+              file.text,
+              metadata ? { metadata } : undefined,
+            )
           }),
         )
         reqLogger.timeEnd(`kv-storage`)
@@ -439,7 +453,7 @@ const app = new Spiceflow()
                   cssUrls,
                   bootstrapModules: mainJsUrl ? [mainJsUrl] : [],
                   importmap: IMPORTMAP,
-                  siteId: storageKey,
+                  siteId: siteId,
                 },
                 10000, // 10 second debounce delay
               )
