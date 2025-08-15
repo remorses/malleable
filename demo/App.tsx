@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react'
 
-import type { BundleResult } from "../src/types.js";
+import type { BundleResult } from '../src/types.js'
 import importMap from 'virtual:importmap'
 import { createOpenAI } from '@ai-sdk/openai'
 import { streamText, tool } from 'ai'
@@ -22,8 +22,11 @@ export default function App() {
   const [code, setCode] = useState('')
 
   const [isGenerating, setIsGenerating] = useState(false)
-  const [apiKey, setApiKey] = useState(() => localStorage.getItem('openai-api-key') || '')
-  const [PreviewComponent, setPreviewComponent] = useState<React.ComponentType | null>(null)
+  const [apiKey, setApiKey] = useState(
+    () => localStorage.getItem('openai-api-key') || '',
+  )
+  const [PreviewComponent, setPreviewComponent] =
+    useState<React.ComponentType | null>(null)
 
   useEffect(() => {
     setupImportMap()
@@ -43,7 +46,7 @@ export default function App() {
         apiKey: apiKey || localStorage.getItem('openai-api-key')!,
       })
 
-      const { textStream } = await streamText({
+      const { textStream } = streamText({
         model: openai('gpt-5-mini'),
         system: `
 
@@ -65,17 +68,22 @@ the goal is to create beautiful components following user query. do not create t
         prompt: prompt,
         tools: {
           generate_component: tool({
-            description: 'Generate a React component with TypeScript and Tailwind CSS',
+            description:
+              'Generate a React component with TypeScript and Tailwind CSS',
             inputSchema: z.object({
-              code: z.string().describe('The complete React component code with TypeScript and Tailwind CSS')
+              code: z
+                .string()
+                .describe(
+                  'The complete React component code with TypeScript and Tailwind CSS',
+                ),
             }),
             execute: async ({ code }) => {
               setCode(code)
               // Bundle the generated code
               await bundleAndRender(code)
               return { success: true }
-            }
-          })
+            },
+          }),
         },
         toolChoice: 'required',
       })
@@ -87,7 +95,9 @@ the goal is to create beautiful components following user query. do not create t
       }
     } catch (error) {
       console.error('Generation error:', error)
-      alert('Error generating component. Please check your API key and try again.')
+      alert(
+        'Error generating component. Please check your API key and try again.',
+      )
     } finally {
       setIsGenerating(false)
     }
@@ -95,27 +105,29 @@ the goal is to create beautiful components following user query. do not create t
 
   const bundleAndRender = async (componentCode: string) => {
     try {
-      const response = await fetch('https://remote-bundler.fumabase.com/api/bundle', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
+      const response = await fetch(
+        'https://remote-bundler.fumabase.com/api/bundle',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            files: [
+              {
+                path: 'Component.tsx',
+                content: componentCode,
+              },
+            ],
+            externalPackages: ['react', 'react-dom', 'react/jsx-runtime'],
+          }),
         },
-        body: JSON.stringify({
-          files: [{
-            path: 'Component.tsx',
-            content: componentCode
-          }],
-          externalPackages: ['react', 'react-dom', 'react/jsx-runtime']
-        })
-      })
+      )
 
-      const result = await response.json() as BundleResult
+      const result = (await response.json()) as BundleResult
 
       if (result.success) {
-
-
         try {
-
           const importUrl = result.jsUrl
 
           // Dynamically import the module
@@ -128,7 +140,6 @@ the goal is to create beautiful components following user query. do not create t
           }
         } catch (evalError) {
           console.error('Import error:', evalError)
-
         }
       } else {
         console.error('Bundle error:', result.error)
@@ -139,17 +150,21 @@ the goal is to create beautiful components following user query. do not create t
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="container mx-auto p-4">
-        <h1 className="text-3xl font-bold mb-6 text-foreground">AI Component Builder</h1>
+    <div className='min-h-screen bg-background'>
+      <div className='container mx-auto p-4'>
+        <h1 className='text-3xl font-bold mb-6 text-foreground'>
+          AI Component Builder
+        </h1>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className='grid grid-cols-1 lg:grid-cols-2 gap-6'>
           {/* Input Section */}
-          <div className="space-y-4">
+          <div className='space-y-4'>
             <div>
-              <label className="block text-sm font-medium mb-2 text-foreground">
+              <label className='block text-sm font-medium mb-2 text-foreground'>
                 Describe your component
-                <span className="text-xs text-muted-foreground ml-2">(⌘+Enter to submit)</span>
+                <span className='text-xs text-muted-foreground ml-2'>
+                  (⌘+Enter to submit)
+                </span>
               </label>
               <textarea
                 value={prompt}
@@ -162,41 +177,42 @@ the goal is to create beautiful components following user query. do not create t
                     }
                   }
                 }}
-                className="w-full h-32 p-3 border border-input rounded-md bg-background text-foreground"
-                placeholder="A beautiful card component with a title, description, and action button..."
+                className='w-full h-32 p-3 border border-input rounded-md bg-background text-foreground'
+                placeholder='A beautiful card component with a title, description, and action button...'
               />
             </div>
 
             <button
               onClick={generateComponent}
               disabled={isGenerating || !prompt}
-              className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 disabled:opacity-50"
+              className='px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 disabled:opacity-50'
             >
               {isGenerating ? 'Generating...' : 'Generate Component'}
             </button>
 
             {code && (
               <div>
-                <h3 className="text-lg font-semibold mb-2 text-foreground">Generated Code</h3>
-                <pre className="p-4 bg-muted rounded-md overflow-auto max-h-96">
-                  <code className="text-sm text-muted-foreground">{code}</code>
+                <h3 className='text-lg font-semibold mb-2 text-foreground'>
+                  Generated Code
+                </h3>
+                <pre className='p-4 bg-muted rounded-md overflow-auto max-h-96'>
+                  <code className='text-sm text-muted-foreground'>{code}</code>
                 </pre>
               </div>
             )}
           </div>
 
           {/* Preview Section */}
-          <div className="space-y-4">
+          <div className='space-y-4'>
             <div>
-              <h3 className="text-lg font-semibold mb-2 text-foreground">Preview</h3>
+              <h3 className='text-lg font-semibold mb-2 text-foreground'>
+                Preview
+              </h3>
 
-              <div className="border border-border rounded-md p-4 min-h-[400px] bg-card flex flex-col items-center justify-center">
-
+              <div className='border border-border rounded-md p-4 min-h-[400px] bg-card flex flex-col items-center justify-center'>
                 {PreviewComponent && <PreviewComponent />}
               </div>
             </div>
-
-
           </div>
         </div>
       </div>
