@@ -26,10 +26,9 @@ export interface LiveAPIState {
 }
 
 export interface LiveAPIClientOptions extends LiveClientOptions {
-  model: string;
+  model?: string;
   onStateChange?: (state: LiveAPIState) => void;
-  tools?: CallableTool[];
-  config?: Partial<LiveConnectConfig>;
+  config?: Partial<LiveConnectConfig> & {tools: CallableTool[]};
 }
 
 export class LiveAPIClient {
@@ -59,11 +58,11 @@ export class LiveAPIClient {
   private tools: CallableTool[] = [];
 
   constructor(options: LiveAPIClientOptions) {
-    const { model, onStateChange, tools, config, ...clientOptions } = options;
-    this.model = model;
+    const { model, onStateChange, config, ...clientOptions } = options;
+    this.model = model ?? 'models/gemini-2.5-flash-preview-native-audio-dialog'
     this.client = new GoogleGenAI(clientOptions);
     this.onStateChange = onStateChange;
-    this.tools = tools || [];
+    this.tools = config?.tools || [];
 
     // Merge provided config with defaults
     if (config) {
@@ -119,6 +118,7 @@ export class LiveAPIClient {
   }
 
   private log(message: string) {
+
     const newEvents = [...this.state.logs, message];
 
     if (newEvents.length > 200) {
@@ -330,6 +330,8 @@ export class LiveAPIClient {
           this.log(
             "client-toolResponse: " + JSON.stringify({ functionResponses }),
           );
+        } else {
+          console.log(`no tool call response!`)
         }
       }
     } catch (error) {

@@ -7,6 +7,7 @@ import { useStore } from './store'
 import type { BundleResult } from '../src/types.js'
 import type { BundleInput } from '../src/worker.js'
 import importMap from 'virtual:importmap'
+import { Modality } from '@google/genai'
 
 // Setup import map in the document
 function setupImportMap() {
@@ -33,7 +34,7 @@ const tools = {
     execute: async ({ code }) => {
       // Set isGenerating to true when tool is called
       useStore.setState({ code, isGenerating: true })
-      // Bundle the generated code
+      console.log(`llm triggered generate code tool`, code)
       await bundleAndRender(code)
       // Set isGenerating to false after bundling
       useStore.setState({ isGenerating: false })
@@ -73,7 +74,10 @@ const bundleAndRender = async (componentCode: string) => {
         const importUrl = result.jsUrl
 
         // Dynamically import the module
-        const module = await import(/* @vite-ignore */ importUrl)
+        // Add a timestamp query to bust cache
+        const urlWithTimestamp = new URL(importUrl)
+        urlWithTimestamp.searchParams.set('t', Date.now().toString())
+        const module = await import(/* @vite-ignore */ urlWithTimestamp.toString())
         const Component = module.default
 
         // Set the component to render in preview
@@ -102,45 +106,50 @@ if (!apiKey) {
   }
 }
 
-const liveClient = new LiveAPIClient({
-  apiKey,
-  model: 'models/gemini-2.0-flash-exp',
-  tools: callableToolsFromObject(tools),
-  config: {
-    systemInstruction: {
-      parts: [
-        {
-          text: `You are an expert React developer. When asked to create a component, use the generate_component tool to output the code.
-The component MUST:
-- Use functional components with hooks
-- Use Tailwind CSS classes for styling (including shadcn/ui theme colors like bg-primary, text-foreground, etc.)
-- ALWAYS export the component as default with: export default ComponentName. do not use any props
-- Use js or typescript
-- Be self-contained
-- Use modern React patterns
-- Import React at the top if needed
-
-do not use props. create a modern styled and rich component
-
-the goal is to create beautiful components following user query. do not create too simple components`,
-        },
-      ],
-    },
-  },
-  onStateChange: (state) => {
-    // Update zustand store with LiveAPI state (excluding volumes)
-    useStore.setState({
-      connected: state.connected,
-      muted: state.muted,
-      logs: state.logs,
-    })
-  },
-})
-
-// Auto-connect at global scope if API key exists
-if (apiKey) {
-  liveClient.connect()
+declare global {
+  // Add LiveAPIClient to globalThis for TypeScript
+  // eslint-disable-next-line no-var
+  var client: LiveAPIClient | undefined
 }
+
+const liveClient =
+  globalThis.client ||
+  new LiveAPIClient({
+    apiKey,
+
+    config: {
+      tools: callableToolsFromObject(tools),
+      responseModalities: [Modality.AUDIO],
+            systemInstruction: {
+              parts: [
+                {
+                  text: `You are an expert React developer. When asked to create a component, use the generate_component tool to output the code.
+      The component MUST:
+      - Use functional components with hooks
+      - Use Tailwind CSS classes for styling (including shadcn/ui theme colors like bg-primary, text-foreground, etc.)
+      - ALWAYS export the component as default with: export default ComponentName. do not use any props
+      - Use js or typescript
+      - Be self-contained
+      - Use modern React patterns
+      - Import React at the top if needed
+
+      do not use props. create a modern styled and rich component
+
+      the goal is to create beautiful components following user query. do not create too simple components`,
+                },
+              ],
+            },
+    },
+    onStateChange: (state) => {
+      // Update zustand store with LiveAPI state (excluding volumes)
+      useStore.setState({
+        connected: state.connected,
+        muted: state.muted,
+        logs: state.logs,
+      })
+    },
+  })
+globalThis.client = liveClient
 
 export default function App() {
   const {
