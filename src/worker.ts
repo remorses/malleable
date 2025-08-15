@@ -128,6 +128,7 @@ const bundleSchema = z.object({
       /^[a-zA-Z0-9_-]+$/,
       'Only alphanumeric, underscore, and dash characters are allowed',
     ),
+  prerenderDebounceTime: z.number().min(0).max(60000).default(10000),
 })
 
 // Tagged template for HTML syntax highlighting
@@ -237,7 +238,7 @@ const app = new Spiceflow()
         reqLogger.time(`parse-body`)
         const body = await request.json()
         reqLogger.timeEnd(`parse-body`)
-        const { files, entryPoint, externalPackages = [], siteId } = body
+        const { files, entryPoint, externalPackages = [], siteId, prerenderDebounceTime = 10000 } = body
 
         // Determine actual entry point
         const actualEntryPoint = entryPoint || files[0]?.path
@@ -456,7 +457,7 @@ const app = new Spiceflow()
                   importmap: IMPORTMAP,
                   siteId: siteId,
                 },
-                10000, // 10 second debounce delay
+                prerenderDebounceTime,
               )
 
               // The actual prerendering will happen in the alarm handler
