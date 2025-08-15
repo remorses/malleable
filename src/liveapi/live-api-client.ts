@@ -29,6 +29,7 @@ export interface LiveAPIClientOptions extends LiveClientOptions {
   model: string;
   onStateChange?: (state: LiveAPIState) => void;
   tools?: CallableTool[];
+  config?: Partial<LiveConnectConfig>;
 }
 
 export class LiveAPIClient {
@@ -58,11 +59,16 @@ export class LiveAPIClient {
   private tools: CallableTool[] = [];
 
   constructor(options: LiveAPIClientOptions) {
-    const { model, onStateChange, tools, ...clientOptions } = options;
+    const { model, onStateChange, tools, config, ...clientOptions } = options;
     this.model = model;
     this.client = new GoogleGenAI(clientOptions);
     this.onStateChange = onStateChange;
     this.tools = tools || [];
+
+    // Merge provided config with defaults
+    if (config) {
+      this.state.config = { ...this.state.config, ...config };
+    }
 
     this.audioRecorder = new AudioRecorder(16000);
     this.setupAudioRecorder();

@@ -224,6 +224,7 @@ export function aiToolToCallableTool(
   }
 }
 
+
 /**
  * Helper to extract schema from AI SDK tool
  */
@@ -236,4 +237,15 @@ export function extractSchemaFromTool(tool: Tool<any, any>): any {
 
   // Convert Zod schema to JSON Schema
   return toJSONSchema(inputSchema)
+}
+
+/**
+ * Given an object of tools, creates an array of CallableTool
+ */
+export function callableToolsFromObject(
+  tools: Record<string, Tool<any, any>>,
+): CallableTool[] {
+  return Object.entries(tools).map(([name, tool]) =>
+    aiToolToCallableTool(tool, name),
+  )
 }

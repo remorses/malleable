@@ -11,7 +11,11 @@ import { createSpiceflowClient } from 'spiceflow/client'
 import type { ContainerApp } from './bun-server.js'
 import { IMPORTMAP } from './importmap.js'
 import { waitUntil } from 'cloudflare:workers'
-import { PrerenderRequest, PrerenderResult } from './prerender.tsx'
+import {
+  PrerenderRequest,
+  prerenderRequestSchema,
+  PrerenderResult,
+} from './prerender.tsx'
 import { DurableObject } from './mocks/cloudflare-workers.ts'
 
 // Bun container using the @cloudflare/containers utility
@@ -104,10 +108,6 @@ interface Env {
   BUN_CONTAINER: DurableObjectNamespace<BunContainer>
 }
 
-interface State extends Env {
-  waitUntil?: (promise: Promise<any>) => void
-}
-
 // Helper to create a Spiceflow client from a container stub
 
 let init = false
@@ -131,35 +131,26 @@ const bundleSchema = z.object({
   prerenderDebounceTime: z.number().min(0).max(60000).default(10000),
 })
 
+export type BundleInput = z.infer<typeof bundleSchema>
+
 // Tagged template for HTML syntax highlighting
 const html = (strings: TemplateStringsArray, ...values: any[]) =>
   strings.reduce((acc, str, i) => acc + str + (values[i] || ''), '')
 
 // Create app with state
 const app = new Spiceflow()
+  .state('env', {} as Env)
   .route({
     method: 'POST',
     path: '/api/prerender',
-    request: z.object({
-      files: z.array(
-        z.object({
-          path: z.string(),
-          content: z.string(),
-        }),
-      ),
-      entryPoint: z.string().optional(),
-      cssUrls: z.array(z.string()).default([]),
-      bootstrapModules: z.array(z.string()).default([]),
-      importmap: z.string().optional(),
-      siteId: z.string(),
-    }),
-    async handler({ request, state }: any) {
+    request: prerenderRequestSchema,
+    async handler({ request, state }) {
       try {
         const body = await request.json()
 
         // Use load-balanced container pool with 3 instances
         const containerStub = (await getRandom(
-          state.BUN_CONTAINER,
+          state.env.BUN_CONTAINER,
           1,
         )) as DurableObjectStub<BunContainer>
 
@@ -178,7 +169,7 @@ const app = new Spiceflow()
           html: data.html,
           renderTime: data.renderTime,
         })
-      } catch (error: any) {
+      } catch (error) {
         return Response.json(
           {
             success: false,
@@ -209,7 +200,7 @@ const app = new Spiceflow()
     method: 'POST',
     path: '/api/bundle',
     request: bundleSchema,
-    async handler({ request, state }: any) {
+    async handler({ request, state }) {
       // Create request-scoped logger
       const reqLogger = createRequestLogger()
 
@@ -238,7 +229,13 @@ const app = new Spiceflow()
         reqLogger.time(`parse-body`)
         const body = await request.json()
         reqLogger.timeEnd(`parse-body`)
-        const { files, entryPoint, externalPackages = [], siteId, prerenderDebounceTime = 10000 } = body
+        const {
+          files,
+          entryPoint,
+          externalPackages = [],
+          siteId,
+          prerenderDebounceTime = 10000,
+        } = body
 
         // Determine actual entry point
         const actualEntryPoint = entryPoint || files[0]?.path
@@ -426,7 +423,7 @@ const app = new Spiceflow()
               : undefined
 
             console.log(`${siteId}: storing in jsCache`, file.filename)
-            return state.jsCache.put(
+            return state.env.jsCache.put(
               file.filename,
               file.text,
               metadata ? { metadata } : undefined,
@@ -442,7 +439,7 @@ const app = new Spiceflow()
             try {
               // Use load-balanced container pool for background prerendering
               const containerStub = (await getRandom(
-                state.BUN_CONTAINER,
+                state.env.BUN_CONTAINER,
                 3,
               )) as DurableObjectStub<BunContainer>
 
@@ -501,7 +498,7 @@ const app = new Spiceflow()
             },
           },
         )
-      } catch (error: any) {
+      } catch (error) {
         // Make sure to end any timers that might still be running
         try {
           reqLogger.timeEnd(`parallel-build`)
@@ -559,7 +556,7 @@ const app = new Spiceflow()
   .route({
     method: 'GET',
     path: '/bundle/*',
-    async handler({ params, state }: any) {
+    async handler({ params, state }) {
       const key = params['*']
 
       if (!key) {
@@ -567,7 +564,7 @@ const app = new Spiceflow()
       }
 
       // Get content and metadata from KV
-      const kvResult = (await state.jsCache.getWithMetadata(key)) as {
+      const kvResult = (await state.env.jsCache.getWithMetadata(key)) as {
         value: string | null
         metadata: { serverTiming?: string } | null
       }
@@ -788,8 +785,9 @@ export { app }
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext) {
-    const state: State = {
+    const state = {
       ...env,
+      env,
       waitUntil: ctx.waitUntil.bind(ctx),
     }
     return await app.handle(request, { state } as any)
