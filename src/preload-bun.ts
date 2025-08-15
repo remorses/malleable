@@ -3,6 +3,7 @@ import { createEsmShPlugin } from './esm-https-plugin.ts'
 
 plugin(
   createEsmShPlugin({
-    externalPackages: ['react', 'react-dom', 'react/jsx-runtime'],
+    externalPackages: true,
+    resolveNpmPackages: false,
   }) as any,
 )

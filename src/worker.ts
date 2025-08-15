@@ -12,32 +12,78 @@ import type { ContainerApp } from './bun-server.js'
 import { IMPORTMAP } from './importmap.js'
 import { waitUntil } from 'cloudflare:workers'
 import { PrerenderRequest, PrerenderResult } from './prerender.tsx'
+import { DurableObject } from './mocks/cloudflare-workers.ts'
 
 // Bun container using the @cloudflare/containers utility
-export class BunContainer extends Container {
+export class BunContainer extends Container<Env> {
   // Configure default port for the container
   defaultPort = 8080
 
   // Sleep after 1 second of inactivity for quick cleanup
   sleepAfter = '1m'
 
-  // Lifecycle hooks
-  // override onStart(): void {
-  //   console.log('Bun container started!')
-  // }
-
-  // override onStop(): void {
-  //   console.log('Bun container stopped')
-  // }
-  //
-  //
+  // Original prerender method
   async prerender(input: PrerenderRequest) {
     const res = await this.containerFetch('http://localhost/prerender', {
       body: JSON.stringify(input),
+      method: 'POST'
     })
     if (!res.ok) throw new Error(`failed prerender in Bun: ${await res.text()}`)
     const json = (await res.json()) as PrerenderResult
     return json
+  }
+
+  // Debounced prerender method
+  async debouncedPrerender(input: PrerenderRequest, delayMs: number = 500) {
+    const siteId = input.siteId || 'default'
+
+    // Store the payload for this specific site
+    await this.ctx.storage.put(`prerenderPayload:${siteId}`, input)
+
+    // Set alarm with debounce - overwrites any previous alarm for this site
+    const when = Date.now() + delayMs
+    await this.ctx.storage.put(`prerenderDeadline:${siteId}`, when)
+    await this.ctx.storage.setAlarm(when)
+
+    // Return immediately for background processing
+    return {
+      html: '',
+      renderTime: 0,
+      debounced: true
+    } as PrerenderResult
+  }
+
+  // Handle the alarm to do the actual prerendering
+  async alarm() {
+    // Get all pending prerender tasks
+    const allKeys = await this.ctx.storage.list({ prefix: 'prerenderPayload:' })
+
+    for (const [key, payload] of allKeys) {
+      const siteId = key.replace('prerenderPayload:', '')
+      const deadline = await this.ctx.storage.get<number>(`prerenderDeadline:${siteId}`)
+
+      // Check if this task is ready to run
+      if (deadline && deadline <= Date.now()) {
+        try {
+          // Use prerender to do the actual work
+          const result = await this.prerender(payload as PrerenderRequest)
+
+          // Store the prerendered HTML in KV
+          if (result.html && this.env.jsCache) {
+            const htmlKey = `${siteId}/index.html`
+
+            await this.env.jsCache.put(htmlKey, result.html)
+            console.log(`Stored prerendered HTML for ${htmlKey} in KV from alarm`)
+          }
+        } catch (error) {
+          console.error(`Alarm prerender error for site ${siteId}:`, error)
+        } finally {
+          // Clean up storage for this site
+          await this.ctx.storage.delete(`prerenderPayload:${siteId}`)
+          await this.ctx.storage.delete(`prerenderDeadline:${siteId}`)
+        }
+      }
+    }
   }
 
   override onError(error: unknown): void {
@@ -58,16 +104,6 @@ interface State extends Env {
 
 let init = false
 
-// Generate hash for cache key
-async function generateHash(input: string): Promise<string> {
-  const encoder = new TextEncoder()
-  const data = encoder.encode(input)
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data)
-  const hashArray = Array.from(new Uint8Array(hashBuffer))
-  const hashHex = hashArray.map((b) => b.toString(16).padStart(2, '0')).join('')
-  return hashHex.substring(0, 16) // Use first 16 chars for shorter URLs
-}
-
 // Schema for bundle API
 const fileSchema = z.object({
   path: z.string(),
@@ -78,6 +114,7 @@ const bundleSchema = z.object({
   files: z.array(fileSchema),
   entryPoint: z.string().optional(),
   externalPackages: z.array(z.string()).default([]),
+  siteId: z.string(),
 })
 
 // Tagged template for HTML syntax highlighting
@@ -100,6 +137,7 @@ const app = new Spiceflow()
       cssUrls: z.array(z.string()).default([]),
       bootstrapModules: z.array(z.string()).default([]),
       importmap: z.string().optional(),
+      siteId: z.string().optional(),
     }),
     async handler({ request, state }: any) {
       try {
@@ -111,8 +149,7 @@ const app = new Spiceflow()
           1,
         )) as DurableObjectStub<BunContainer>
 
-        // Use the Spiceflow client to prerender
-
+        // Use direct method call for prerender
         const data = await containerStub.prerender({
           files: body.files,
           entryPoint: body.entryPoint,
@@ -186,7 +223,7 @@ const app = new Spiceflow()
         reqLogger.time(`parse-body`)
         const body = await request.json()
         reqLogger.timeEnd(`parse-body`)
-        const { files, entryPoint, externalPackages = [] } = body
+        const { files, entryPoint, externalPackages = [], siteId } = body
 
         // Determine actual entry point
         const actualEntryPoint = entryPoint || files[0]?.path
@@ -213,20 +250,12 @@ const app = new Spiceflow()
           )
         }
 
-        // Generate hash for the entry point name
-        reqLogger.time(`hash-generation`)
-        const hashInput = JSON.stringify({
-          files: files.sort((a, b) => a.path.localeCompare(b.path)),
-          entryPoint: actualEntryPoint,
-          externalPackages: externalPackages.sort(),
-          tailwindConfig: JSON.stringify(shadcnTheme),
-        })
-        const entryHash = await generateHash(hashInput)
-        reqLogger.timeEnd(`hash-generation`)
+        // Use siteId for all storage keys
+        const storageKey = siteId
 
         // Prepare CSS URL for the virtual entry
         const baseUrl = new URL(request.url).origin
-        const cssUrl = `${baseUrl}/bundle/${entryHash}.css`
+        const cssUrl = `${baseUrl}/bundle/${storageKey}/index.css`
 
         // Collect all code for CSS extraction
         const allCode = files.map((f) => f.content).join('\n')
@@ -238,7 +267,7 @@ const app = new Spiceflow()
           (async () => {
             reqLogger.time(`esbuild-build`)
             const res = await esbuild.build({
-              entryPoints: { [entryHash]: 'virtual:entry' },
+              entryPoints: { [`${storageKey}/index`]: 'virtual:entry' },
               outdir: './',
               bundle: true,
               format: 'esm',
@@ -268,10 +297,10 @@ const app = new Spiceflow()
                 '.js': 'tsx',
                 '.css': 'css',
               },
-              // Configure output filenames - [name] will be our hash
-              entryNames: '[name]', // entry outputs use hash as name
-              chunkNames: 'chunks/[name]-[hash]', // shared/lazy chunks
-              assetNames: 'assets/[name]-[hash]', // emitted assets
+              // Configure output filenames
+              entryNames: '[dir]/[name]', // Will produce siteId/index.js
+              chunkNames: '[dir]/chunks/[name]-[hash]', // Will produce siteId/chunks/*.js
+              assetNames: '[dir]/assets/[name]-[hash]', // Will produce siteId/assets/*
             })
             reqLogger.timeEnd(`esbuild-build`)
             return res
@@ -290,7 +319,6 @@ const app = new Spiceflow()
         const warnings = result.warnings
 
         // Store all output files in KV
-        const ttl = 60 * 60 * 24 * 7 // 7 days in seconds
         const fileUrls: Record<string, string> = {}
 
         // Prepare files for storage
@@ -319,13 +347,13 @@ const app = new Spiceflow()
 
         // Store CSS file
         filesToStore.push({
-          filename: `${entryHash}.css`,
+          filename: `${storageKey}/index.css`,
           text: css,
           isJs: false,
         })
 
-        // The main entry file will be named with our hash
-        const mainJsUrl = fileUrls[`${entryHash}.js`] || undefined
+        // The main entry file will be at siteId/index.js
+        const mainJsUrl = fileUrls[`${storageKey}/index.js`] || undefined
 
         // Collect all CSS file URLs
         const cssUrls: string[] = [cssUrl]
@@ -370,7 +398,7 @@ const app = new Spiceflow()
         reqLogger.timeEnd(`html-generation`)
 
         // Store HTML in KV
-        const htmlKey = `${entryHash}.html`
+        const htmlKey = `${storageKey}/index.html`
         filesToStore.push({
           filename: htmlKey,
           text: htmlContent,
@@ -386,10 +414,7 @@ const app = new Spiceflow()
               : undefined
 
             console.log(`storing in jsCache`, file.filename)
-            return state.jsCache.put(file.filename, file.text, {
-              expirationTtl: ttl,
-              metadata,
-            })
+            return state.jsCache.put(file.filename, file.text, metadata ? { metadata } : undefined)
           }),
         )
         reqLogger.timeEnd(`kv-storage`)
@@ -405,23 +430,21 @@ const app = new Spiceflow()
                 3,
               )) as DurableObjectStub<BunContainer>
 
-              // Use the Spiceflow client to prerender
+              // Use direct method call for debounced prerender
+              // Multiple rapid requests will be debounced
+              await containerStub.debouncedPrerender(
+                {
+                  files,
+                  entryPoint: actualEntryPoint,
+                  cssUrls,
+                  bootstrapModules: mainJsUrl ? [mainJsUrl] : [],
+                  importmap: IMPORTMAP,
+                  siteId: storageKey,
+                },
+                10000, // 10 second debounce delay
+              )
 
-              const data = await containerStub.prerender({
-                files,
-                entryPoint: actualEntryPoint,
-                cssUrls,
-                bootstrapModules: mainJsUrl ? [mainJsUrl] : [],
-                importmap: IMPORTMAP,
-              })
-
-              if (data.html) {
-                // Update the HTML in KV with prerendered content
-                console.log(`Updating ${htmlKey} with prerendered HTML`)
-                await state.jsCache.put(htmlKey, data.html, {
-                  expirationTtl: ttl,
-                })
-              }
+              // The actual prerendering will happen in the alarm handler
             } catch (error) {
               console.error('Background prerender error:', error)
             }

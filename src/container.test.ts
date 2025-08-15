@@ -61,13 +61,13 @@ describe('Container Prerendering', { timeout: 30000 }, ({}) => {
           hydrateRoot(root, React.createElement(App));
         }
         </script><script type="module" src="https://example.com/bundle.js" async=""></script></body></html>",
-          "renderTime": 41.447329999999965,
+          "renderTime": 3535.727413,
           "success": true,
         }
       `)
     } else {
       expect(result.error).toMatchInlineSnapshot(
-        `"Failed to start container: The container is not running, consider calling start()"`,
+        `"failed prerender in Bun: Failed to start container: The container is not running, consider calling start()"`,
       )
     }
   })
@@ -134,7 +134,7 @@ describe('Container Prerendering', { timeout: 30000 }, ({}) => {
         }
       });
       </script></body></html>",
-        "renderTime": 6.72291400000006,
+        "renderTime": 6.658699999999953,
         "success": true,
       }
     `)
@@ -177,7 +177,7 @@ describe('Container Prerendering', { timeout: 30000 }, ({}) => {
     expect(result).toMatchInlineSnapshot(`
       {
         "html": "",
-        "renderTime": 23.053619000000026,
+        "renderTime": 1575.6821070000005,
         "success": true,
       }
     `)
@@ -209,8 +209,9 @@ describe('Container Prerendering', { timeout: 30000 }, ({}) => {
 
     expect(result).toMatchInlineSnapshot(`
       {
-        "error": "Failed to start container: The container is not running, consider calling start()",
-        "success": false,
+        "html": "",
+        "renderTime": 1.5849439999992683,
+        "success": true,
       }
     `)
   })
@@ -254,7 +255,7 @@ describe('Container Prerendering', { timeout: 30000 }, ({}) => {
         }
       });
       </script></body></html>",
-        "renderTime": 4.116624999999999,
+        "renderTime": 7.779461000000083,
         "success": true,
       }
     `)
@@ -308,7 +309,7 @@ describe('Container Prerendering', { timeout: 30000 }, ({}) => {
         }
       });
       </script></body></html>",
-        "renderTime": 2.663381999999956,
+        "renderTime": 3.7143430000005537,
         "success": true,
       }
     `)

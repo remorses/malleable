@@ -3,8 +3,9 @@ import type { Plugin } from 'esbuild-wasm'
 import { logger } from './logger.ts'
 
 export interface PluginOptions {
-  externalPackages?: string[]
+  externalPackages?: string[] | true
   cdnUrl?: string
+  resolveNpmPackages?: boolean
 }
 
 // Global caches that persist across requests
@@ -12,7 +13,22 @@ const globalCodeCache = new Map<string, string>()
 const globalRedirectCache = new Map<string, string>()
 
 export function createEsmShPlugin(options: PluginOptions = {}): Plugin {
-  const { externalPackages = [], cdnUrl = 'https://esm.sh' } = options
+  const {
+    resolveNpmPackages = true,
+    externalPackages: externalPackagesOption = [],
+    cdnUrl = 'https://esm.sh',
+  } = options
+
+  const externalPackages: string[] =
+    externalPackagesOption === true ? [] : externalPackagesOption
+
+  function isExternalPackage(path: string): boolean {
+    if (externalPackagesOption === true) return true
+    const packageName = getPackageName(path)
+    return externalPackages.some(
+      (pkg) => pkg === packageName || path.startsWith(pkg + '/'),
+    )
+  }
 
   return {
     name: 'esm-sh-plugin',
@@ -26,7 +42,7 @@ export function createEsmShPlugin(options: PluginOptions = {}): Plugin {
       })
 
       // Handle relative imports from within http-url namespace
-      build.onResolve({ filter: /.*/, namespace: 'http-url' }, (args) => {
+      build.onResolve({ filter: /.*/, namespace: 'http-url' }, async (args) => {
         // For relative imports, resolve against the importer URL
         if (args.path.startsWith('.')) {
           const url = new URL(args.path, args.importer).toString().trim()
@@ -48,12 +64,7 @@ export function createEsmShPlugin(options: PluginOptions = {}): Plugin {
 
         // For bare imports within http-url namespace, resolve through esm.sh
         if (!args.path.startsWith('http')) {
-          const packageName = getPackageName(args.path)
-          if (
-            externalPackages.some(
-              (pkg) => pkg === packageName || args.path.startsWith(pkg + '/'),
-            )
-          ) {
+          if (isExternalPackage(args.path)) {
             return {
               path: args.path,
               external: true,
@@ -81,45 +92,41 @@ export function createEsmShPlugin(options: PluginOptions = {}): Plugin {
         }
       })
 
-      // Handle npm packages in the default (file) namespace
-      build.onResolve({ filter: /.*/ }, (args) => {
-        // Skip if already processed or is a relative/absolute path
-        if (
-          args.path.startsWith('.') ||
-          args.path.startsWith('/') ||
-          args.path.startsWith('\0')
-        ) {
-          return null
-        }
-
-        // Check if package should be external
-        const packageName = getPackageName(args.path)
-        if (
-          externalPackages.some(
-            (pkg) => pkg === packageName || args.path.startsWith(pkg + '/'),
-          )
-        ) {
-          return {
-            path: args.path,
-            external: true,
+      if (resolveNpmPackages) {
+        build.onResolve({ filter: /.*/ }, (args) => {
+          // Skip if already processed or is a relative/absolute path
+          if (
+            args.path.startsWith('.') ||
+            args.path.startsWith('/') ||
+            args.path.startsWith('\0')
+          ) {
+            return null
           }
-        }
 
-        // Resolve through esm.sh with external query params
-        const externalsQuery =
-          externalPackages.length > 0
-            ? '?' +
-              new URLSearchParams({
-                external: externalPackages.join(','),
-              }).toString()
-            : ''
-        const url = `${cdnUrl}/${args.path}${externalsQuery}`.trim()
+          // Check if package should be external
+          if (isExternalPackage(args.path)) {
+            return {
+              path: args.path,
+              external: true,
+            }
+          }
 
-        return {
-          path: url,
-          namespace: 'http-url',
-        }
-      })
+          // Resolve through esm.sh with external query params
+          const externalsQuery =
+            externalPackages.length > 0
+              ? '?' +
+                new URLSearchParams({
+                  external: externalPackages.join(','),
+                }).toString()
+              : ''
+          const url = `${cdnUrl}/${args.path}${externalsQuery}`.trim()
+
+          return {
+            path: url,
+            namespace: 'http-url',
+          }
+        })
+      }
 
       // Load content from http-url namespace
       build.onLoad({ filter: /.*/, namespace: 'http-url' }, async (args) => {

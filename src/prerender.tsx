@@ -18,6 +18,7 @@ export const prerenderRequestSchema = z.object({
   bootstrapModules: z.array(z.string()).default([]),
   importmap: z.string().optional(),
   runNpmInstall: z.boolean().default(false).optional(),
+  siteId: z.string().optional(),
 })
 
 export const prerenderResultSchema = z.object({
