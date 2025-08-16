@@ -28,6 +28,7 @@ export interface LiveAPIState {
 export interface LiveAPIClientOptions extends LiveClientOptions {
   model?: string
   onStateChange?: (state: LiveAPIState) => void
+  onMessage?: (message: LiveServerMessage) => void
   enableGoogleSearch?: boolean
   config?: Partial<LiveConnectConfig> & {
     tools: Array<CallableTool & { name: string }>
@@ -48,7 +49,8 @@ export class LiveAPIClient {
     outVolume: 0,
     logs: [],
     config: {
-      // temperature: 0,
+      inputAudioTranscription: {}, // transcribes your input speech
+      outputAudioTranscription: {}, // transcribes the model's spoken audio
       mediaResolution: MediaResolution.MEDIA_RESOLUTION_MEDIUM,
       contextWindowCompression: {
         triggerTokens: '25600',
@@ -58,14 +60,16 @@ export class LiveAPIClient {
   }
 
   private onStateChange?: (state: LiveAPIState) => void
+  private onMessageCallback?: (message: LiveServerMessage) => void
 
   private tools: Array<CallableTool & { name: string }> = []
 
   constructor(options: LiveAPIClientOptions) {
-    const { model, onStateChange, config, ...clientOptions } = options
+    const { model, onStateChange, onMessage, config, ...clientOptions } = options
     this.model = model ?? 'models/gemini-2.5-flash-preview-native-audio-dialog'
     this.client = new GoogleGenAI(clientOptions)
     this.onStateChange = onStateChange
+    this.onMessageCallback = onMessage
     this.tools = config?.tools || []
 
     if (options.enableGoogleSearch) {
@@ -208,6 +212,9 @@ export class LiveAPIClient {
   }
 
   private async onMessage(message: LiveServerMessage) {
+    // Call the external callback if provided
+    this.onMessageCallback?.(message)
+    
     if (message.setupComplete) {
       this.log('setupcomplete')
       return

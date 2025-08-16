@@ -69,6 +69,32 @@ export class LiveMessageAssembler {
       }
     }
 
+    // Handle input transcription (user's audio transcription)
+    if (message.serverContent?.inputTranscription?.text) {
+      updates.push({
+        part: {
+          type: 'text',
+          text: message.serverContent.inputTranscription.text,
+
+        } as TextUIPart,
+        role: 'user',
+        isFinal: message.serverContent.inputTranscription.finished || false,
+      })
+    }
+
+    // Handle output transcription (model's audio transcription)
+    if (message.serverContent?.outputTranscription?.text) {
+      updates.push({
+        part: {
+          type: 'text',
+          text: message.serverContent.outputTranscription.text,
+
+        } as TextUIPart,
+        role: 'assistant',
+        isFinal: message.serverContent.outputTranscription.finished || false,
+      })
+    }
+
     // Handle tool calls
     if (message.toolCall?.functionCalls) {
       for (const functionCall of message.toolCall.functionCalls) {
@@ -154,7 +180,7 @@ export class LiveMessageAssembler {
       // Skip empty marker parts
       if (
         update.part.type === 'text' &&
-        (update.part as TextUIPart).text === '' &&
+        (update.part).text === '' &&
         update.isFinal
       ) {
         // This is just a turn completion marker

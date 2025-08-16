@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { subscribeWithSelector } from 'zustand/middleware'
 import type { LiveAPIState } from '../src/liveapi/live-api-client'
+import type { UIMessage } from 'ai'
 
 interface AppState {
   // LiveAPI state
@@ -13,6 +14,7 @@ interface AppState {
   code: string
   isGenerating: boolean
   previewComponent: React.ComponentType | null
+  uiMessages: UIMessage[]
 }
 
 export const useStore = create<AppState>()(
@@ -27,6 +29,7 @@ export const useStore = create<AppState>()(
     code: '',
     isGenerating: false,
     previewComponent: null,
+    uiMessages: [],
   }))
 )
 

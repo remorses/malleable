@@ -1,11 +1,14 @@
-import React, { useEffect } from 'react'
+import React, { useEffect, useRef } from 'react'
 import { LiveAPIClient } from '../src/liveapi/live-api-client'
 import { callableToolsFromObject } from '../src/liveapi/ai-tool-to-genai'
+import { LiveMessageAssembler } from '../src/liveapi/genai-to-ui-message'
 import { tool } from 'ai'
 import { z } from 'zod'
 import { useStore } from './store'
 import type { BundleResult } from '../src/types.js'
 import type { BundleInput } from '../src/worker.js'
+import type { UIMessage } from 'ai'
+import type { LiveServerMessage } from '@google/genai'
 import importMap from 'virtual:importmap'
 import { Modality } from '@google/genai'
 
@@ -104,12 +107,35 @@ declare global {
   // Add LiveAPIClient to globalThis for TypeScript
   // eslint-disable-next-line no-var
   var client: LiveAPIClient | undefined
+  // eslint-disable-next-line no-var
+  var messageAssembler: LiveMessageAssembler | undefined
 }
+
+// Create message assembler instance
+const messageAssembler = globalThis.messageAssembler || new LiveMessageAssembler()
+globalThis.messageAssembler = messageAssembler
 
 const liveClient =
   globalThis.client ||
   new LiveAPIClient({
     apiKey,
+
+    onMessage: (message: LiveServerMessage) => {
+      // Process the message through the assembler
+      const updates = messageAssembler.processServerMessage(message)
+      const completedMessages = messageAssembler.addParts(updates)
+      
+      // Update uiMessages in state
+      if (completedMessages.length > 0) {
+        console.log('Assembled UI Messages:', JSON.stringify(completedMessages, null, 2))
+        
+        // Update uiMessages state
+        const currentMessages = useStore.getState().uiMessages
+        useStore.setState({ 
+          uiMessages: [...currentMessages, ...completedMessages]
+        })
+      }
+    },
 
     config: {
       tools: callableToolsFromObject(tools),
@@ -180,6 +206,7 @@ export default function App() {
     code,
     isGenerating,
     previewComponent: PreviewComponent,
+    uiMessages,
   } = useStore()
 
   useEffect(() => {
@@ -259,6 +286,26 @@ export default function App() {
               </div>
               <pre className='p-3 bg-muted rounded-md overflow-auto h-48 text-xs font-mono'>
                 {logs.length > 0 ? logs.join('\n') : 'No logs yet...'}
+              </pre>
+            </div>
+
+            {/* UI Messages */}
+            <div>
+              <div className='flex justify-between items-center mb-2'>
+                <h3 className='text-lg font-semibold text-foreground'>
+                  UI Messages
+                </h3>
+                <button
+                  onClick={() => useStore.setState({ uiMessages: [] })}
+                  className='text-xs text-muted-foreground hover:text-foreground'
+                >
+                  Clear
+                </button>
+              </div>
+              <pre className='p-3 bg-muted rounded-md overflow-auto h-48 text-xs font-mono'>
+                {uiMessages.length > 0 
+                  ? JSON.stringify(uiMessages, null, 2) 
+                  : 'No UI messages yet...'}
               </pre>
             </div>
           </div>
