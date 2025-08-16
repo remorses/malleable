@@ -1,0 +1,128 @@
+[
+  {
+    "id": "msg_1755354205676_294",
+    "role": "user",
+    "parts": [
+      {
+        "type": "text",
+        "text": " <noise> ಹಾಯ್ So basically I want you to generate a component. A button."
+      }
+    ]
+  },
+  {
+    "id": "msg_1755354205676_295",
+    "role": "assistant",
+    "parts": [
+      {
+        "type": "text",
+        "text": "Hello, how can I help you today?Sure, what kind of component do you need?"
+      },
+      {
+        "type": "tool-call",
+        "toolCallId": "exec-1755354205676-6p6xdc",
+        "toolName": "executableCode",
+        "state": "input-available",
+        "input": {
+          "language": "PYTHON",
+          "code": "print(\n    default_api.generate_component(\n        code=\"\"\"\nimport React from 'react';\n\nconst Button = () => {\n  return (\n    <button className=\"bg-primary text-primary-foreground hover:bg-primary/90 px-4 py-2 rounded-md\">\n      Click me\n    </button>\n  );\n};\n\nexport default Button;\n\"\"\"\n    )\n)"
+        }
+      },
+      {
+        "type": "tool-call",
+        "toolCallId": "function-call-3801354532401717052",
+        "toolName": "generate_component",
+        "state": "input-available",
+        "input": {
+          "code": "\nimport React from 'react';\n\nconst Button = () => {\n  return (\n    <button className=\"bg-primary text-primary-foreground hover:bg-primary/90 px-4 py-2 rounded-md\">\n      Click me\n    </button>\n  );\n};\n\nexport default Button;\n"
+        }
+      },
+      {
+        "type": "tool-result",
+        "toolCallId": "exec-1755354205676-lbv7r",
+        "toolName": "executableCode",
+        "state": "output-available",
+        "input": {},
+        "output": "{'output': {'success': True}}\n"
+      },
+      {
+        "type": "tool-call",
+        "toolCallId": "exec-1755354205676-6kuea",
+        "toolName": "executableCode",
+        "state": "input-available",
+        "input": {
+          "language": "PYTHON",
+          "code": "print(\n    default_api.generate_component(\n        code=\"\"\"\nimport React from 'react';\n\nconst Button = () => {\n  return (\n    <button className=\"bg-primary text-primary-foreground hover:bg-primary/90 px-4 py-2 rounded-md\">\n      Click me\n    </button>\n  );\n};\n\nexport default Button;\n\"\"\"\n    )\n)"
+        }
+      },
+      {
+        "type": "tool-call",
+        "toolCallId": "function-call-12097728093424691612",
+        "toolName": "generate_component",
+        "state": "input-available",
+        "input": {
+          "code": "\nimport React from 'react';\n\nconst Button = () => {\n  return (\n    <button className=\"bg-primary text-primary-foreground hover:bg-primary/90 px-4 py-2 rounded-md\">\n      Click me\n    </button>\n  );\n};\n\nexport default Button;\n"
+        }
+      },
+      {
+        "type": "tool-result",
+        "toolCallId": "exec-1755354205676-2xnfwd",
+        "toolName": "executableCode",
+        "state": "output-available",
+        "input": {},
+        "output": "{'output': {'success': True}}\n"
+      },
+      {
+        "type": "text",
+        "text": "I've generated"
+      }
+    ]
+  },
+  {
+    "id": "msg_1755354205677_471",
+    "role": "user",
+    "parts": [
+      {
+        "type": "text",
+        "text": " Thank you."
+      }
+    ]
+  },
+  {
+    "id": "msg_1755354205677_472",
+    "role": "assistant",
+    "parts": [
+      {
+        "type": "text",
+        "text": "You're welcome. Is there anything else I can help you with today?"
+      }
+    ]
+  },
+  {
+    "id": "msg_1755354205677_566",
+    "role": "assistant",
+    "parts": [
+      {
+        "type": "tool-call",
+        "toolCallId": "exec-1755354205677-v76w1b",
+        "toolName": "executableCode",
+        "state": "input-available",
+        "input": {
+          "language": "PYTHON",
+          "code": "print(\"Hello, world!\")"
+        }
+      },
+      {
+        "type": "tool-result",
+        "toolCallId": "exec-1755354205677-vs159s",
+        "toolName": "executableCode",
+        "state": "output-available",
+        "input": {},
+        "output": "Hello, world!\n"
+      },
+      {
+        "type": "text",
+        "text": "I've executed the Python code, and it printed \"Hello, world!\"."
+      }
+    ]
+  }
+]
