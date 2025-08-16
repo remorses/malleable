@@ -24,6 +24,8 @@ import type {
   UIMessageChunk
 } from 'ai'
 
+import { createIdGenerator } from 'ai'
+
 /**
  * Represents a part that can be added to a UI message
  */
@@ -34,13 +36,31 @@ export type UIPartUpdate = {
 }
 
 /**
+ * Options for creating a LiveMessageAssembler
+ */
+export interface LiveMessageAssemblerOptions {
+  /**
+   * Optional ID generator function. If not provided, uses createIdGenerator from ai package.
+   */
+  idGenerator?: () => string
+}
+
+/**
  * Manages the assembly of websocket messages into UI messages
  */
 export class LiveMessageAssembler {
   private currentUserParts: UIMessagePart<UIDataTypes, UITools>[] = []
   private currentAssistantParts: UIMessagePart<UIDataTypes, UITools>[] = []
-  private messageIdCounter = 0
   private allMessages: UIMessage[] = [] // Store all completed messages
+  private idGenerator: () => string
+
+  constructor(options: LiveMessageAssemblerOptions = {}) {
+    // Use provided idGenerator or create a default one
+    this.idGenerator = options.idGenerator ?? createIdGenerator({
+      prefix: 'msg',
+      size: 24
+    })
+  }
 
   /**
    * Main method to process a server message and return all current UI messages
@@ -86,7 +106,6 @@ export class LiveMessageAssembler {
     this.currentUserParts = []
     this.currentAssistantParts = []
     this.allMessages = []
-    this.messageIdCounter = 0
   }
 
   /**
@@ -459,7 +478,7 @@ export class LiveMessageAssembler {
     if (part.codeExecutionResult) {
       return {
         type: 'tool-result',
-        toolCallId: `exec-${Date.now()}-${Math.random().toString(36).substring(7)}`,
+        toolCallId: this.idGenerator(),
         toolName: 'executableCode',
         state: part.codeExecutionResult.outcome === 'OUTCOME_OK' ? 'output-available' : 'output-error',
         input: {},
@@ -471,7 +490,7 @@ export class LiveMessageAssembler {
     if (part.executableCode) {
       return {
         type: 'tool-call',
-        toolCallId: `exec-${Date.now()}-${Math.random().toString(36).substring(7)}`,
+        toolCallId: this.idGenerator(),
         toolName: 'executableCode',
         state: 'input-available',
         input: {
@@ -492,7 +511,7 @@ export class LiveMessageAssembler {
   ): ToolUIPart<UITools> {
     return {
       type: 'tool-call',
-      toolCallId: functionCall.id || this.generateId(),
+      toolCallId: functionCall.id || this.idGenerator(),
       toolName: functionCall.name,
       state: 'input-available',
       input: functionCall.args || {},
@@ -512,7 +531,7 @@ export class LiveMessageAssembler {
     if (isError) {
       return {
         type: 'tool-result',
-        toolCallId: response.id || this.generateId(),
+        toolCallId: response.id || this.idGenerator(),
         toolName: response.name,
         state: 'output-error',
         input: {},
@@ -522,7 +541,7 @@ export class LiveMessageAssembler {
 
     return {
       type: 'tool-result',
-      toolCallId: response.id || this.generateId(),
+      toolCallId: response.id || this.idGenerator(),
       toolName: response.name,
       state: 'output-available',
       input: {},
@@ -538,7 +557,7 @@ export class LiveMessageAssembler {
     parts: UIMessagePart<UIDataTypes, UITools>[],
   ): UIMessage {
     return {
-      id: this.generateId(),
+      id: this.idGenerator(),
       role,
       parts: [...parts], // Create a copy
     }
@@ -553,13 +572,6 @@ export class LiveMessageAssembler {
     if (role === 'system' || role === 'user' || role === 'assistant')
       return role
     return 'user'
-  }
-
-  /**
-   * Generate unique ID
-   */
-  private generateId(): string {
-    return `msg_${Date.now()}_${++this.messageIdCounter}`
   }
 }
 

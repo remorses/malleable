@@ -18,10 +18,18 @@ import exampleMessages from './mixtures/example.json' with { type: 'json' }
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
+// Helper to create stable ID generator for tests
+function createStableIdGenerator(prefix = 'test') {
+  let counter = 0
+  return () => `${prefix}_${++counter}`
+}
+
 // Process example.json messages
 describe('Example JSON Processing', () => {
   it('should process all messages from example.json and save snapshot', () => {
-    const assembler = new LiveMessageAssembler()
+    const assembler = new LiveMessageAssembler({ 
+      idGenerator: createStableIdGenerator('msg') 
+    })
     let allMessages: any[] = []
 
     // Process each message
@@ -84,7 +92,9 @@ describe('Partial Stream Processing', () => {
 
   endIndexes.forEach(endIndex => {
     it(`should process messages up to index ${endIndex} and save snapshot`, () => {
-      const assembler = new LiveMessageAssembler()
+      const assembler = new LiveMessageAssembler({ 
+        idGenerator: createStableIdGenerator('msg') 
+      })
       let allMessages: any[] = []
 
       // Process messages up to endIndex
@@ -319,7 +329,9 @@ export const EXAMPLE_MULTIPART_MESSAGE: LiveServerMessage = {
 
 describe('LiveMessageAssembler', () => {
   it('should convert server setup complete message', () => {
-    const assembler = new LiveMessageAssembler()
+    const assembler = new LiveMessageAssembler({ 
+      idGenerator: createStableIdGenerator('msg') 
+    })
     const message = EXAMPLE_WEBSOCKET_CONVERSATION.server[0]
     const parts = assembler.processServerMessage(message)
 
@@ -329,7 +341,9 @@ describe('LiveMessageAssembler', () => {
   })
 
   it('should convert server content message to text parts', () => {
-    const assembler = new LiveMessageAssembler()
+    const assembler = new LiveMessageAssembler({ 
+      idGenerator: createStableIdGenerator('msg') 
+    })
     const message = EXAMPLE_WEBSOCKET_CONVERSATION.server[1]
     const parts = assembler.processServerMessage(message)
 
@@ -349,7 +363,9 @@ describe('LiveMessageAssembler', () => {
   })
 
   it('should convert tool call message to tool parts', () => {
-    const assembler = new LiveMessageAssembler()
+    const assembler = new LiveMessageAssembler({ 
+      idGenerator: createStableIdGenerator('msg') 
+    })
     const message = EXAMPLE_WEBSOCKET_CONVERSATION.server[2]
     const parts = assembler.processServerMessage(message)
 
@@ -374,7 +390,9 @@ describe('LiveMessageAssembler', () => {
   })
 
   it('should handle turn complete flag', () => {
-    const assembler = new LiveMessageAssembler()
+    const assembler = new LiveMessageAssembler({ 
+      idGenerator: createStableIdGenerator('msg') 
+    })
     const message = EXAMPLE_WEBSOCKET_CONVERSATION.server[3]
     const parts = assembler.processServerMessage(message)
 
@@ -402,7 +420,9 @@ describe('LiveMessageAssembler', () => {
   })
 
   it('should convert client content message', () => {
-    const assembler = new LiveMessageAssembler()
+    const assembler = new LiveMessageAssembler({ 
+      idGenerator: createStableIdGenerator('msg') 
+    })
     const message = EXAMPLE_WEBSOCKET_CONVERSATION.client[1]
     const parts = assembler.processClientMessage(message)
 
@@ -430,7 +450,9 @@ describe('LiveMessageAssembler', () => {
   })
 
   it('should convert tool response message', () => {
-    const assembler = new LiveMessageAssembler()
+    const assembler = new LiveMessageAssembler({ 
+      idGenerator: createStableIdGenerator('msg') 
+    })
     const message = EXAMPLE_WEBSOCKET_CONVERSATION.client[2]
     const parts = assembler.processClientMessage(message)
 
@@ -458,7 +480,9 @@ describe('LiveMessageAssembler', () => {
   })
 
   it('should handle realtime input streaming', () => {
-    const assembler = new LiveMessageAssembler()
+    const assembler = new LiveMessageAssembler({ 
+      idGenerator: createStableIdGenerator('msg') 
+    })
     const startMessage = EXAMPLE_WEBSOCKET_CONVERSATION.client[3]
     const endMessage = EXAMPLE_WEBSOCKET_CONVERSATION.client[4]
 
@@ -494,7 +518,9 @@ describe('LiveMessageAssembler', () => {
   })
 
   it('should handle multipart content with code and images', () => {
-    const assembler = new LiveMessageAssembler()
+    const assembler = new LiveMessageAssembler({ 
+      idGenerator: createStableIdGenerator('msg') 
+    })
     const parts = assembler.processServerMessage(EXAMPLE_MULTIPART_MESSAGE)
 
     expect(parts).toMatchInlineSnapshot(`
@@ -519,7 +545,7 @@ describe('LiveMessageAssembler', () => {
               "language": "javascript",
             },
             "state": "input-available",
-            "toolCallId": "exec-1755354383070-1b5pca",
+            "toolCallId": "msg_1",
             "toolName": "executableCode",
             "type": "tool-call",
           },
@@ -540,7 +566,7 @@ describe('LiveMessageAssembler', () => {
             "input": {},
             "output": "{ "temperature": 72, "condition": "Partly cloudy" }",
             "state": "output-available",
-            "toolCallId": "exec-1755354383070-w3kgw",
+            "toolCallId": "msg_2",
             "toolName": "executableCode",
             "type": "tool-result",
           },
@@ -570,7 +596,9 @@ describe('LiveMessageAssembler', () => {
   })
 
   it('should assemble parts into complete messages', () => {
-    const assembler = new LiveMessageAssembler()
+    const assembler = new LiveMessageAssembler({ 
+      idGenerator: createStableIdGenerator('msg') 
+    })
 
     // Process user message
     const userParts = assembler.processClientMessage(
@@ -581,7 +609,7 @@ describe('LiveMessageAssembler', () => {
     expect(userMessages).toMatchInlineSnapshot(`
       [
         {
-          "id": "msg_1755354383071_1",
+          "id": "msg_1",
           "parts": [
             {
               "providerMetadata": undefined,
@@ -621,7 +649,7 @@ describe('LiveMessageAssembler', () => {
     expect(finalMessages).toMatchInlineSnapshot(`
       [
         {
-          "id": "msg_1755354383072_2",
+          "id": "msg_2",
           "parts": [
             {
               "providerMetadata": undefined,
@@ -651,7 +679,9 @@ describe('LiveMessageAssembler', () => {
   })
 
   it('should handle flush to get incomplete messages', () => {
-    const assembler = new LiveMessageAssembler()
+    const assembler = new LiveMessageAssembler({ 
+      idGenerator: createStableIdGenerator('msg') 
+    })
 
     // Add some parts without turn complete
     const parts = assembler.processServerMessage(
@@ -665,7 +695,7 @@ describe('LiveMessageAssembler', () => {
     expect(flushedMessages).toMatchInlineSnapshot(`
       [
         {
-          "id": "msg_1755354383072_1",
+          "id": "msg_1",
           "parts": [
             {
               "providerMetadata": undefined,
@@ -917,21 +947,43 @@ describe('mergeConsecutiveTextParts', () => {
 })
 
 describe('Message ID stability', () => {
-  it('should maintain stable IDs for existing messages when new messages are added', () => {
+  it('should use default createIdGenerator when no idGenerator is provided', () => {
     const assembler = new LiveMessageAssembler()
     
-    // Process first user message
-    const firstUserMessage: LiveClientMessage = {
-      clientContent: {
-        turns: [{
-          parts: [{ text: "First message" }],
-          role: 'user',
-        }],
+    // Process a message
+    const message: LiveServerMessage = {
+      serverContent: {
+        modelTurn: {
+          parts: [{ text: "Test message" }],
+          role: 'model',
+        },
         turnComplete: true,
       },
-    }
+    } as any
     
-    let messages = assembler.processMessage(firstUserMessage as any)
+    const messages = assembler.processMessage(message)
+    expect(messages).toHaveLength(1)
+    
+    // The default ID should start with 'msg-' prefix followed by 24 alphanumeric chars
+    expect(messages[0].id).toMatch(/^msg-[a-zA-Z0-9]{24}$/)
+  })
+  
+  it('should maintain stable IDs for existing messages when new messages are added', () => {
+    const assembler = new LiveMessageAssembler({ 
+      idGenerator: createStableIdGenerator('msg') 
+    })
+    
+    // Process first user message
+    const firstUserMessage: LiveServerMessage = {
+      serverContent: {
+        inputTranscription: {
+          text: "First message",
+          finished: true,
+        },
+      },
+    } as any
+    
+    let messages = assembler.processMessage(firstUserMessage)
     expect(messages).toHaveLength(1)
     const firstMessageId = messages[0].id
     
@@ -952,17 +1004,16 @@ describe('Message ID stability', () => {
     const secondMessageId = messages[1].id
     
     // Process another user message
-    const secondUserMessage: LiveClientMessage = {
-      clientContent: {
-        turns: [{
-          parts: [{ text: "Second message" }],
-          role: 'user',
-        }],
-        turnComplete: true,
+    const secondUserMessage: LiveServerMessage = {
+      serverContent: {
+        inputTranscription: {
+          text: "Second message",
+          finished: true,
+        },
       },
-    }
+    } as any
     
-    messages = assembler.processMessage(secondUserMessage as any)
+    messages = assembler.processMessage(secondUserMessage)
     expect(messages).toHaveLength(3)
     
     // Check that previous message IDs remain unchanged
@@ -997,7 +1048,9 @@ describe('Message ID stability', () => {
   })
   
   it('should maintain stable IDs even with incomplete messages and flushing', () => {
-    const assembler = new LiveMessageAssembler()
+    const assembler = new LiveMessageAssembler({ 
+      idGenerator: createStableIdGenerator('msg') 
+    })
     
     // Start streaming a message (incomplete)
     const streamStart: LiveServerMessage = {
@@ -1010,8 +1063,9 @@ describe('Message ID stability', () => {
       },
     } as any
     
+    // Process the incomplete message
     let messages = assembler.processMessage(streamStart)
-    expect(messages).toHaveLength(1) // Temporary message
+    expect(messages).toHaveLength(1) // Should have the temporary message
     
     // Continue streaming
     const streamContinue: LiveServerMessage = {
@@ -1025,7 +1079,7 @@ describe('Message ID stability', () => {
     } as any
     
     messages = assembler.processMessage(streamContinue)
-    expect(messages).toHaveLength(1) // Still temporary
+    expect(messages).toHaveLength(1) // Still one temporary message
     
     // Complete the message
     const streamEnd: LiveServerMessage = {
@@ -1043,17 +1097,16 @@ describe('Message ID stability', () => {
     const firstCompletedId = messages[0].id
     
     // Add another message and verify the first ID doesn't change
-    const newMessage: LiveClientMessage = {
-      clientContent: {
-        turns: [{
-          parts: [{ text: "New message" }],
-          role: 'user',
-        }],
-        turnComplete: true,
+    const newMessage: LiveServerMessage = {
+      serverContent: {
+        inputTranscription: {
+          text: "New message",
+          finished: true,
+        },
       },
-    }
+    } as any
     
-    messages = assembler.processMessage(newMessage as any)
+    messages = assembler.processMessage(newMessage)
     expect(messages).toHaveLength(2)
     expect(messages[0].id).toBe(firstCompletedId) // First message ID should remain stable
   })

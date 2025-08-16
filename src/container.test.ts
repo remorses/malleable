@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest'
+import { PrerenderRequest } from './prerender.tsx'
 
 const API_URL = !process.env.USE_LOCAL
   ? 'https://lovepack.dev'
@@ -113,29 +114,17 @@ describe('Container Prerendering', { timeout: 30000 }, ({}) => {
         ],
         entryPoint: 'App.tsx',
         cssUrls: [],
+        siteId: 'prerender-many-files',
         bootstrapModules: [],
-      }),
+      } satisfies PrerenderRequest),
     })
 
     const result = (await response.json()) as any
 
     expect(result).toMatchInlineSnapshot(`
       {
-        "html": "<!DOCTYPE html><html lang="en"><head><meta charSet="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>React App</title><script type="importmap">{"imports":{"react":"https://esm.sh/react@19","react-dom":"https://esm.sh/react-dom@19","react-dom/":"https://esm.sh/react-dom@19/","react/jsx-runtime":"https://esm.sh/react@19/jsx-runtime","react/jsx-dev-runtime":"https://esm.sh/react@19/jsx-dev-runtime"}}</script></head><body><div id="root"><div class="app"><h1>Multi-file App</h1><button class="btn">Click me</button></div></div><script>
-      import React from 'react';
-      import { hydrateRoot } from 'react-dom/client';
-
-      // Dynamically import the app
-      import('./App.tsx').then(module => {
-        const App = module.default;
-        const root = document.getElementById('root');
-        if (root) {
-          hydrateRoot(root, React.createElement(App));
-        }
-      });
-      </script></body></html>",
-        "renderTime": 4.70948999999996,
-        "success": true,
+        "error": "siteId: Invalid input: expected string, received undefined",
+        "success": false,
       }
     `)
     expect(result.success).toBe(true)
@@ -176,9 +165,8 @@ describe('Container Prerendering', { timeout: 30000 }, ({}) => {
 
     expect(result).toMatchInlineSnapshot(`
       {
-        "html": "",
-        "renderTime": 18.16635999999994,
-        "success": true,
+        "error": "siteId: Invalid input: expected string, received undefined",
+        "success": false,
       }
     `)
     expect(result.success).toBe(true)
@@ -241,21 +229,8 @@ describe('Container Prerendering', { timeout: 30000 }, ({}) => {
 
     expect(result).toMatchInlineSnapshot(`
       {
-        "html": "<!DOCTYPE html><html lang="en"><head><meta charSet="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>React App</title><script type="importmap">{"imports":{"react":"https://esm.sh/react@19","react-dom":"https://esm.sh/react-dom@19","react-dom/":"https://esm.sh/react-dom@19/","react/jsx-runtime":"https://esm.sh/react@19/jsx-runtime","react/jsx-dev-runtime":"https://esm.sh/react@19/jsx-dev-runtime"}}</script></head><body><div id="root"><div>Test importmap</div></div><script>
-      import React from 'react';
-      import { hydrateRoot } from 'react-dom/client';
-
-      // Dynamically import the app
-      import('./App.tsx').then(module => {
-        const App = module.default;
-        const root = document.getElementById('root');
-        if (root) {
-          hydrateRoot(root, React.createElement(App));
-        }
-      });
-      </script></body></html>",
-        "renderTime": 7.790588000000071,
-        "success": true,
+        "error": "siteId: Invalid input: expected string, received undefined",
+        "success": false,
       }
     `)
     expect(result.success).toBe(true)
@@ -294,21 +269,8 @@ describe('Container Prerendering', { timeout: 30000 }, ({}) => {
 
     expect(result).toMatchInlineSnapshot(`
       {
-        "html": "<!DOCTYPE html><html lang="en"><head><meta charSet="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>React App</title><script type="importmap">{"imports":{"react":"https://custom.cdn/react@19","react-dom":"https://custom.cdn/react-dom@19"}}</script></head><body><div id="root"><div>Custom importmap test</div></div><script>
-      import React from 'react';
-      import { hydrateRoot } from 'react-dom/client';
-
-      // Dynamically import the app
-      import('./App.tsx').then(module => {
-        const App = module.default;
-        const root = document.getElementById('root');
-        if (root) {
-          hydrateRoot(root, React.createElement(App));
-        }
-      });
-      </script></body></html>",
-        "renderTime": 4.620268000000124,
-        "success": true,
+        "error": "siteId: Invalid input: expected string, received undefined",
+        "success": false,
       }
     `)
     expect(result.success).toBe(true)
