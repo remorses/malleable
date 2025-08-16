@@ -9,7 +9,8 @@ import type {
   FunctionResponse,
 } from '@google/genai'
 import { Type, Modality, LiveServerMessage } from '@google/genai'
-import { LiveMessageAssembler } from './genai-to-ui-message.js'
+import { LiveMessageAssembler, mergeConsecutiveTextParts } from './genai-to-ui-message.js'
+import type { UIMessage } from 'ai'
 import { writeFileSync, mkdirSync } from 'fs'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
@@ -518,7 +519,7 @@ describe('LiveMessageAssembler', () => {
               "language": "javascript",
             },
             "state": "input-available",
-            "toolCallId": "exec-1755351834679-hl2a3",
+            "toolCallId": "exec-1755354205693-zrpbhb",
             "toolName": "executableCode",
             "type": "tool-call",
           },
@@ -539,7 +540,7 @@ describe('LiveMessageAssembler', () => {
             "input": {},
             "output": "{ "temperature": 72, "condition": "Partly cloudy" }",
             "state": "output-available",
-            "toolCallId": "exec-1755351834679-rajgj",
+            "toolCallId": "exec-1755354205693-d7t1ud",
             "toolName": "executableCode",
             "type": "tool-result",
           },
@@ -580,7 +581,7 @@ describe('LiveMessageAssembler', () => {
     expect(userMessages).toMatchInlineSnapshot(`
       [
         {
-          "id": "msg_1755351834679_1",
+          "id": "msg_1755354205693_1",
           "parts": [
             {
               "providerMetadata": undefined,
@@ -620,7 +621,7 @@ describe('LiveMessageAssembler', () => {
     expect(finalMessages).toMatchInlineSnapshot(`
       [
         {
-          "id": "msg_1755351834680_2",
+          "id": "msg_1755354205694_2",
           "parts": [
             {
               "providerMetadata": undefined,
@@ -664,7 +665,7 @@ describe('LiveMessageAssembler', () => {
     expect(flushedMessages).toMatchInlineSnapshot(`
       [
         {
-          "id": "msg_1755351834680_1",
+          "id": "msg_1755354205694_1",
           "parts": [
             {
               "providerMetadata": undefined,
@@ -675,6 +676,242 @@ describe('LiveMessageAssembler', () => {
           "role": "assistant",
         },
       ]
+    `)
+  })
+})
+
+describe('mergeConsecutiveTextParts', () => {
+  it('should merge consecutive text parts', () => {
+    const message: UIMessage = {
+      id: 'test-1',
+      role: 'assistant',
+      parts: [
+        { type: 'text', text: 'Hello ' },
+        { type: 'text', text: 'world' },
+        { type: 'text', text: '!' },
+      ],
+    }
+
+    const merged = mergeConsecutiveTextParts(message)
+
+    expect(merged).toMatchInlineSnapshot(`
+      {
+        "id": "test-1",
+        "parts": [
+          {
+            "text": "Hello world!",
+            "type": "text",
+          },
+        ],
+        "role": "assistant",
+      }
+    `)
+  })
+
+  it('should not merge non-consecutive text parts', () => {
+    const message: UIMessage = {
+      id: 'test-2',
+      role: 'assistant',
+      parts: [
+        { type: 'text', text: 'Hello' },
+        { 
+          type: 'tool-get_weather' as any, 
+          toolCallId: 'call-1',
+          state: 'input-available',
+          input: { location: 'SF' }
+        },
+        { type: 'text', text: 'World' },
+      ],
+    }
+
+    const merged = mergeConsecutiveTextParts(message)
+
+    expect(merged).toMatchInlineSnapshot(`
+      {
+        "id": "test-2",
+        "parts": [
+          {
+            "text": "Hello",
+            "type": "text",
+          },
+          {
+            "input": {
+              "location": "SF",
+            },
+            "state": "input-available",
+            "toolCallId": "call-1",
+            "type": "tool-get_weather",
+          },
+          {
+            "text": "World",
+            "type": "text",
+          },
+        ],
+        "role": "assistant",
+      }
+    `)
+  })
+
+  it('should preserve state from the latest text part', () => {
+    const message: UIMessage = {
+      id: 'test-3',
+      role: 'user',
+      parts: [
+        { type: 'text', text: 'Hello ', state: 'streaming' },
+        { type: 'text', text: 'world', state: 'done' },
+      ],
+    }
+
+    const merged = mergeConsecutiveTextParts(message)
+
+    expect(merged).toMatchInlineSnapshot(`
+      {
+        "id": "test-3",
+        "parts": [
+          {
+            "state": "done",
+            "text": "Hello world",
+            "type": "text",
+          },
+        ],
+        "role": "user",
+      }
+    `)
+  })
+
+  it('should merge provider metadata', () => {
+    const message: UIMessage = {
+      id: 'test-4',
+      role: 'assistant',
+      parts: [
+        { 
+          type: 'text', 
+          text: 'Thinking... ',
+          providerMetadata: { thought: { value: true } }
+        },
+        { 
+          type: 'text', 
+          text: 'The answer is 42.',
+          providerMetadata: { confidence: { value: 0.95 } }
+        },
+      ],
+    }
+
+    const merged = mergeConsecutiveTextParts(message)
+
+    expect(merged).toMatchInlineSnapshot(`
+      {
+        "id": "test-4",
+        "parts": [
+          {
+            "providerMetadata": {
+              "confidence": {
+                "value": 0.95,
+              },
+              "thought": {
+                "value": true,
+              },
+            },
+            "text": "Thinking... The answer is 42.",
+            "type": "text",
+          },
+        ],
+        "role": "assistant",
+      }
+    `)
+  })
+
+  it('should handle message with no text parts', () => {
+    const message: UIMessage = {
+      id: 'test-5',
+      role: 'assistant',
+      parts: [
+        { 
+          type: 'tool-calculator' as any, 
+          toolCallId: 'call-1',
+          state: 'input-available',
+          input: { a: 1, b: 2 }
+        },
+        { 
+          type: 'tool-calculator' as any, 
+          toolCallId: 'call-1',
+          state: 'output-available',
+          input: {},
+          output: { result: 3 }
+        },
+      ],
+    }
+
+    const merged = mergeConsecutiveTextParts(message)
+
+    expect(merged).toMatchInlineSnapshot(`
+      {
+        "id": "test-5",
+        "parts": [
+          {
+            "input": {
+              "a": 1,
+              "b": 2,
+            },
+            "state": "input-available",
+            "toolCallId": "call-1",
+            "type": "tool-calculator",
+          },
+          {
+            "input": {},
+            "output": {
+              "result": 3,
+            },
+            "state": "output-available",
+            "toolCallId": "call-1",
+            "type": "tool-calculator",
+          },
+        ],
+        "role": "assistant",
+      }
+    `)
+  })
+
+  it('should handle message with single text part', () => {
+    const message: UIMessage = {
+      id: 'test-6',
+      role: 'user',
+      parts: [
+        { type: 'text', text: 'Just one message' },
+      ],
+    }
+
+    const merged = mergeConsecutiveTextParts(message)
+
+    expect(merged).toMatchInlineSnapshot(`
+      {
+        "id": "test-6",
+        "parts": [
+          {
+            "text": "Just one message",
+            "type": "text",
+          },
+        ],
+        "role": "user",
+      }
+    `)
+  })
+
+  it('should handle empty message', () => {
+    const message: UIMessage = {
+      id: 'test-7',
+      role: 'assistant',
+      parts: [],
+    }
+
+    const merged = mergeConsecutiveTextParts(message)
+
+    expect(merged).toMatchInlineSnapshot(`
+      {
+        "id": "test-7",
+        "parts": [],
+        "role": "assistant",
+      }
     `)
   })
 })

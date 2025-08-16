@@ -67,7 +67,7 @@ export class LiveMessageAssembler {
 
     // Return all messages including any in-progress parts as temporary messages
     const allMessages = [...this.allMessages]
-    
+
     // Add temporary messages for any pending parts (not saved to history)
     if (this.currentUserParts.length > 0) {
       allMessages.push(this.createMessage('user', this.currentUserParts))
@@ -76,7 +76,7 @@ export class LiveMessageAssembler {
       allMessages.push(this.createMessage('assistant', this.currentAssistantParts))
     }
 
-    return allMessages
+    return (allMessages).map(mergeConsecutiveTextParts)
   }
 
   /**
@@ -324,7 +324,7 @@ export class LiveMessageAssembler {
    */
   flush(): UIMessage[] {
     const messages = this.flushPending()
-    
+
     // Add flushed messages to history
     this.allMessages.push(...messages)
 
@@ -365,7 +365,7 @@ export class LiveMessageAssembler {
     // Skip audio chunks - we don't want large data URLs
     // if (input.audio) { ... }
 
-    // Skip video chunks - we don't want large data URLs  
+    // Skip video chunks - we don't want large data URLs
     // if (input.video) { ... }
 
     // Handle media chunks - skip audio/video
@@ -373,11 +373,11 @@ export class LiveMessageAssembler {
       for (const chunk of input.mediaChunks) {
         if (chunk && typeof chunk === 'object' && chunk.mimeType) {
           // Skip audio and video chunks
-          if (chunk.mimeType?.startsWith('audio/') || 
+          if (chunk.mimeType?.startsWith('audio/') ||
               chunk.mimeType?.startsWith('video/')) {
             continue
           }
-          
+
           parts.push({
             type: 'data-url',
             data: {
@@ -420,11 +420,11 @@ export class LiveMessageAssembler {
     // Handle inline data - skip audio/video to avoid large data URLs
     if (part.inlineData) {
       // Skip audio and video data
-      if (part.inlineData.mimeType?.startsWith('audio/') || 
+      if (part.inlineData.mimeType?.startsWith('audio/') ||
           part.inlineData.mimeType?.startsWith('video/')) {
         return null
       }
-      
+
       const mimeType = part.inlineData.mimeType || 'application/octet-stream'
       return {
         type: 'data-url',
@@ -563,6 +563,61 @@ export class LiveMessageAssembler {
   }
 }
 
+
+/**
+ * Merge consecutive text parts in a UIMessage
+ * Uses reduce to combine adjacent text parts into single parts
+ */
+export function mergeConsecutiveTextParts(message: UIMessage): UIMessage {
+  const mergedParts = message.parts.reduce<UIMessagePart<UIDataTypes, UITools>[]>(
+    (acc, part) => {
+      const lastPart = acc[acc.length - 1]
+
+      // Check if both current and last parts are text parts
+      if (
+        part.type === 'text' &&
+        lastPart?.type === 'text'
+      ) {
+        // Merge the text content
+        const mergedTextPart: TextUIPart = {
+          type: 'text',
+          text: (lastPart as TextUIPart).text + (part as TextUIPart).text,
+        }
+
+        // Preserve state if it exists (use the latest state)
+        const currentTextPart = part as TextUIPart
+        if (currentTextPart.state) {
+          mergedTextPart.state = currentTextPart.state
+        } else if ((lastPart as TextUIPart).state) {
+          mergedTextPart.state = (lastPart as TextUIPart).state
+        }
+
+        // Merge provider metadata if both have it
+        const lastTextPart = lastPart as TextUIPart
+        if (lastTextPart.providerMetadata || currentTextPart.providerMetadata) {
+          mergedTextPart.providerMetadata = {
+            ...lastTextPart.providerMetadata,
+            ...currentTextPart.providerMetadata,
+          }
+        }
+
+        // Replace the last part with the merged part
+        acc[acc.length - 1] = mergedTextPart
+      } else {
+        // Not consecutive text parts, just add the current part
+        acc.push(part)
+      }
+
+      return acc
+    },
+    []
+  )
+
+  return {
+    ...message,
+    parts: mergedParts,
+  }
+}
 
 /**
  * Convert UIMessage back to GenAI format (for sending)

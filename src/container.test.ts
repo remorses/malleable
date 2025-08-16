@@ -61,7 +61,7 @@ describe('Container Prerendering', { timeout: 30000 }, ({}) => {
           hydrateRoot(root, React.createElement(App));
         }
         </script><script type="module" src="https://example.com/bundle.js" async=""></script></body></html>",
-          "renderTime": 48.624375999999984,
+          "renderTime": 285.0357919999999,
           "success": true,
         }
       `)
@@ -134,7 +134,7 @@ describe('Container Prerendering', { timeout: 30000 }, ({}) => {
         }
       });
       </script></body></html>",
-        "renderTime": 4.10737800000004,
+        "renderTime": 4.70948999999996,
         "success": true,
       }
     `)
@@ -177,7 +177,7 @@ describe('Container Prerendering', { timeout: 30000 }, ({}) => {
     expect(result).toMatchInlineSnapshot(`
       {
         "html": "",
-        "renderTime": 10.431362000000036,
+        "renderTime": 18.16635999999994,
         "success": true,
       }
     `)
@@ -210,7 +210,7 @@ describe('Container Prerendering', { timeout: 30000 }, ({}) => {
     expect(result).toMatchInlineSnapshot(`
       {
         "html": "",
-        "renderTime": 0.8925259999999753,
+        "renderTime": 1.4371390000001156,
         "success": true,
       }
     `)
@@ -255,7 +255,7 @@ describe('Container Prerendering', { timeout: 30000 }, ({}) => {
         }
       });
       </script></body></html>",
-        "renderTime": 7.395802000000003,
+        "renderTime": 7.790588000000071,
         "success": true,
       }
     `)
@@ -309,7 +309,7 @@ describe('Container Prerendering', { timeout: 30000 }, ({}) => {
         }
       });
       </script></body></html>",
-        "renderTime": 3.8140260000000126,
+        "renderTime": 4.620268000000124,
         "success": true,
       }
     `)
