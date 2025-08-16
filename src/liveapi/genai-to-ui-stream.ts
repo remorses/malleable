@@ -7,7 +7,7 @@ import { createIdGenerator } from 'ai'
  */
 export function liveServerMessageToUIMessageChunks(
   message: LiveServerMessage,
-  idGenerator: () => string = createIdGenerator({ prefix: 'msg', size: 24 })
+  idGenerator: () => string = createIdGenerator({ prefix: 'msg', size: 24 }),
 ): UIMessageChunk[] {
   const chunks: UIMessageChunk[] = []
 
@@ -19,7 +19,8 @@ export function liveServerMessageToUIMessageChunks(
         toolCallId: functionCall.id || idGenerator(),
         toolName: functionCall.name || 'unknown',
         input: functionCall.args || {},
-        providerExecuted: false
+
+        providerExecuted: false,
       })
     }
   }
@@ -31,9 +32,10 @@ export function liveServerMessageToUIMessageChunks(
       if (part.functionResponse) {
         chunks.push({
           type: 'tool-output-available',
+
           toolCallId: part.functionResponse.id || idGenerator(),
           output: part.functionResponse.response || '',
-          providerExecuted: false
+          providerExecuted: false,
         })
       }
     }
@@ -47,14 +49,17 @@ export function liveServerMessageToUIMessageChunks(
  */
 export function processLiveServerMessages(
   messages: LiveServerMessage[],
-  idGenerator?: () => string
+  idGenerator?: () => string,
 ): UIMessageChunk[] {
   const chunks: UIMessageChunk[] = []
-  
+
   for (const message of messages) {
-    const messageChunks = liveServerMessageToUIMessageChunks(message, idGenerator)
+    const messageChunks = liveServerMessageToUIMessageChunks(
+      message,
+      idGenerator,
+    )
     chunks.push(...messageChunks)
   }
-  
+
   return chunks
 }
