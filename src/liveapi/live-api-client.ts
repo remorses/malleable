@@ -212,8 +212,11 @@ export class LiveAPIClient {
   }
 
   private async onMessage(message: LiveServerMessage) {
+    // Clone the message to avoid reference issues
+    const clonedMessage = JSON.parse(JSON.stringify(message))
+    
     // Call the external callback if provided
-    this.onMessageCallback?.(message)
+    this.onMessageCallback?.(clonedMessage)
     
     if (message.setupComplete) {
       this.log('setupcomplete')

@@ -21,6 +21,7 @@ import type {
   DataUIPart,
   UIDataTypes,
   UITools,
+  UIMessageChunk
 } from 'ai'
 
 /**
@@ -39,9 +40,65 @@ export class LiveMessageAssembler {
   private currentUserParts: UIMessagePart<UIDataTypes, UITools>[] = []
   private currentAssistantParts: UIMessagePart<UIDataTypes, UITools>[] = []
   private messageIdCounter = 0
+  private allMessages: UIMessage[] = [] // Store all completed messages
+
+  /**
+   * Main method to process a server message and return all current UI messages
+   * This is the primary interface for using this assembler
+   */
+  processMessage(message: LiveServerMessage): UIMessage[] {
+    // Process the server message to get UI part updates
+    const updates = this.processServerMessage(message)
+
+    // Add parts to assembler and get newly completed messages
+    const newMessages = this.addParts(updates)
+
+    // Add new messages to our complete history
+    if (newMessages.length > 0) {
+      this.allMessages.push(...newMessages)
+    }
+
+    // Check if we should flush due to interruption
+    if (message.serverContent?.interrupted) {
+      // Flush any pending parts when interrupted
+      const flushedMessages = this.flushPending()
+      this.allMessages.push(...flushedMessages)
+    }
+
+    // Return all messages including any in-progress parts as temporary messages
+    const allMessages = [...this.allMessages]
+    
+    // Add temporary messages for any pending parts (not saved to history)
+    if (this.currentUserParts.length > 0) {
+      allMessages.push(this.createMessage('user', this.currentUserParts))
+    }
+    if (this.currentAssistantParts.length > 0) {
+      allMessages.push(this.createMessage('assistant', this.currentAssistantParts))
+    }
+
+    return allMessages
+  }
+
+  /**
+   * Clear all messages and reset state
+   */
+  clear(): void {
+    this.currentUserParts = []
+    this.currentAssistantParts = []
+    this.allMessages = []
+    this.messageIdCounter = 0
+  }
+
+  /**
+   * Get all current messages
+   */
+  getAllMessages(): UIMessage[] {
+    return [...this.allMessages]
+  }
 
   /**
    * Process a server websocket message and extract UI parts
+   * @internal - Use processMessage() instead
    */
   processServerMessage(message: LiveServerMessage): UIPartUpdate[] {
     const updates: UIPartUpdate[] = []
@@ -111,6 +168,7 @@ export class LiveMessageAssembler {
 
   /**
    * Process a client websocket message and extract UI parts
+   * @internal - Use processMessage() instead
    */
   processClientMessage(message: LiveClientMessage): UIPartUpdate[] {
     const updates: UIPartUpdate[] = []
@@ -172,6 +230,7 @@ export class LiveMessageAssembler {
 
   /**
    * Add parts to the assembler and get completed messages
+   * @internal - Use processMessage() instead
    */
   addParts(updates: UIPartUpdate[]): UIMessage[] {
     const completedMessages: UIMessage[] = []
@@ -231,6 +290,7 @@ export class LiveMessageAssembler {
 
   /**
    * Get current incomplete message parts
+   * @internal
    */
   getCurrentParts(
     role: 'user' | 'assistant',
@@ -241,9 +301,9 @@ export class LiveMessageAssembler {
   }
 
   /**
-   * Force flush any pending parts as messages
+   * Flush pending parts and return only the newly created messages
    */
-  flush(): UIMessage[] {
+  private flushPending(): UIMessage[] {
     const messages: UIMessage[] = []
 
     if (this.currentUserParts.length > 0) {
@@ -257,6 +317,19 @@ export class LiveMessageAssembler {
     }
 
     return messages
+  }
+
+  /**
+   * Force flush any pending parts as messages and add them to history
+   */
+  flush(): UIMessage[] {
+    const messages = this.flushPending()
+    
+    // Add flushed messages to history
+    this.allMessages.push(...messages)
+
+    // Return complete history
+    return [...this.allMessages]
   }
 
   /**
@@ -289,32 +362,22 @@ export class LiveMessageAssembler {
       } as TextUIPart)
     }
 
-    // Handle audio chunks
-    if (input.audio) {
-      parts.push({
-        type: 'data-url',
-        data: {
-          mimeType: 'audio/pcm',
-          url: `data:audio/pcm;base64,${input.audio}`,
-        },
-      } as DataUIPart<UIDataTypes>)
-    }
+    // Skip audio chunks - we don't want large data URLs
+    // if (input.audio) { ... }
 
-    // Handle video chunks
-    if (input.video) {
-      parts.push({
-        type: 'data-url',
-        data: {
-          mimeType: 'video/mp4',
-          url: `data:video/mp4;base64,${input.video}`,
-        },
-      } as DataUIPart<UIDataTypes>)
-    }
+    // Skip video chunks - we don't want large data URLs  
+    // if (input.video) { ... }
 
-    // Handle media chunks
+    // Handle media chunks - skip audio/video
     if (input.mediaChunks) {
       for (const chunk of input.mediaChunks) {
-        if (chunk && typeof chunk === 'object' && 'mimeType' in chunk) {
+        if (chunk && typeof chunk === 'object' && chunk.mimeType) {
+          // Skip audio and video chunks
+          if (chunk.mimeType?.startsWith('audio/') || 
+              chunk.mimeType?.startsWith('video/')) {
+            continue
+          }
+          
           parts.push({
             type: 'data-url',
             data: {
@@ -344,7 +407,7 @@ export class LiveMessageAssembler {
     }
 
     // Handle text parts
-    if ('text' in part && part.text) {
+    if ( part.text) {
       return {
         type: 'text',
         text: part.text,
@@ -354,8 +417,14 @@ export class LiveMessageAssembler {
       } as TextUIPart
     }
 
-    // Handle inline data
+    // Handle inline data - skip audio/video to avoid large data URLs
     if (part.inlineData) {
+      // Skip audio and video data
+      if (part.inlineData.mimeType?.startsWith('audio/') || 
+          part.inlineData.mimeType?.startsWith('video/')) {
+        return null
+      }
+      
       const mimeType = part.inlineData.mimeType || 'application/octet-stream'
       return {
         type: 'data-url',
@@ -377,34 +446,39 @@ export class LiveMessageAssembler {
     }
 
     // Handle function calls
-    if ('functionCall' in part && part.functionCall) {
+    if (part.functionCall) {
       return this.functionCallToToolPart(part.functionCall)
     }
 
     // Handle function responses
-    if ('functionResponse' in part && part.functionResponse) {
+    if (part.functionResponse) {
       return this.functionResponseToToolPart(part.functionResponse)
     }
 
-    // Handle code execution results
+    // Handle code execution results as tool results
     if (part.codeExecutionResult) {
       return {
-        type: 'text',
-        text: part.codeExecutionResult.output || '',
-        providerMetadata: {
-          codeExecution: { result: true },
-          outcome: { value: part.codeExecutionResult.outcome },
-        },
-      } as TextUIPart
+        type: 'tool-result',
+        toolCallId: `exec-${Date.now()}-${Math.random().toString(36).substring(7)}`,
+        toolName: 'executableCode',
+        state: part.codeExecutionResult.outcome === 'OUTCOME_OK' ? 'output-available' : 'output-error',
+        input: {},
+        output: part.codeExecutionResult.output || '',
+      } as ToolUIPart<UITools>
     }
 
-    // Handle executable code
+    // Handle executable code as tool calls
     if (part.executableCode) {
       return {
-        type: 'text',
-        text: `\`\`\`${part.executableCode.language || ''}\n${part.executableCode.code}\n\`\`\``,
-        providerMetadata: { executableCode: { value: true } },
-      } as TextUIPart
+        type: 'tool-call',
+        toolCallId: `exec-${Date.now()}-${Math.random().toString(36).substring(7)}`,
+        toolName: 'executableCode',
+        state: 'input-available',
+        input: {
+          language: part.executableCode.language || 'unknown',
+          code: part.executableCode.code || '',
+        },
+      } as ToolUIPart<UITools>
     }
 
     return null
@@ -419,9 +493,10 @@ export class LiveMessageAssembler {
     return {
       type: 'tool-call',
       toolCallId: functionCall.id || this.generateId(),
+      toolName: functionCall.name,
       state: 'input-available',
       input: functionCall.args || {},
-      rawInput: functionCall.args || {},
+      // Omit rawInput to reduce redundancy
     } as ToolUIPart<UITools>
   }
 
@@ -432,12 +507,13 @@ export class LiveMessageAssembler {
     response: FunctionResponse,
   ): ToolUIPart<UITools> {
     const responseData = response.response || {}
-    const isError = 'error' in responseData
+    const isError = responseData.error !== undefined
 
     if (isError) {
       return {
         type: 'tool-result',
         toolCallId: response.id || this.generateId(),
+        toolName: response.name,
         state: 'output-error',
         input: {},
         errorText: JSON.stringify(responseData.error),
@@ -447,6 +523,7 @@ export class LiveMessageAssembler {
     return {
       type: 'tool-result',
       toolCallId: response.id || this.generateId(),
+      toolName: response.name,
       state: 'output-available',
       input: {},
       output: responseData.output || responseData,
@@ -486,56 +563,6 @@ export class LiveMessageAssembler {
   }
 }
 
-/**
- * Simple conversion functions for one-off conversions
- */
-
-/**
- * Convert a single server message to UI parts
- */
-export function serverMessageToParts(
-  message: LiveServerMessage,
-): UIPartUpdate[] {
-  const assembler = new LiveMessageAssembler()
-  return assembler.processServerMessage(message)
-}
-
-/**
- * Convert a single client message to UI parts
- */
-export function clientMessageToParts(
-  message: LiveClientMessage,
-): UIPartUpdate[] {
-  const assembler = new LiveMessageAssembler()
-  return assembler.processClientMessage(message)
-}
-
-/**
- * Stream processor for converting websocket messages to UI messages
- */
-export async function* processWebSocketStream(
-  messages: AsyncIterable<LiveServerMessage | LiveClientMessage>,
-  isServerMessage: boolean = true,
-): AsyncGenerator<UIMessage> {
-  const assembler = new LiveMessageAssembler()
-
-  for await (const message of messages) {
-    const updates = isServerMessage
-      ? assembler.processServerMessage(message as LiveServerMessage)
-      : assembler.processClientMessage(message as LiveClientMessage)
-
-    const completedMessages = assembler.addParts(updates)
-    for (const msg of completedMessages) {
-      yield msg
-    }
-  }
-
-  // Flush any remaining parts
-  const finalMessages = assembler.flush()
-  for (const msg of finalMessages) {
-    yield msg
-  }
-}
 
 /**
  * Convert UIMessage back to GenAI format (for sending)
@@ -623,7 +650,8 @@ function uiPartToGenAIPart(
         if (
           dataPart.data &&
           typeof dataPart.data === 'object' &&
-          'url' in dataPart.data
+          'url' in dataPart.data &&
+          dataPart.data.url
         ) {
           // Extract base64 data from data URL
           const dataUrl = dataPart.data.url as string

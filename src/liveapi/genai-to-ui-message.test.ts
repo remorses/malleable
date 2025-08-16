@@ -10,6 +10,104 @@ import type {
 } from '@google/genai'
 import { Type, Modality, LiveServerMessage } from '@google/genai'
 import { LiveMessageAssembler } from './genai-to-ui-message.js'
+import { writeFileSync, mkdirSync } from 'fs'
+import { join, dirname } from 'path'
+import { fileURLToPath } from 'url'
+import exampleMessages from './mixtures/example.json' with { type: 'json' }
+
+const __dirname = dirname(fileURLToPath(import.meta.url))
+
+// Process example.json messages
+describe('Example JSON Processing', () => {
+  it('should process all messages from example.json and save snapshot', () => {
+    const assembler = new LiveMessageAssembler()
+    let allMessages: any[] = []
+
+    // Process each message
+    for (const message of exampleMessages) {
+      const uiMessages = assembler.processMessage(message as LiveServerMessage)
+      allMessages = uiMessages // Always get the complete state
+    }
+
+    // Create snapshots directory if it doesn't exist
+    const snapshotsDir = join(__dirname, 'snapshots')
+    mkdirSync(snapshotsDir, { recursive: true })
+
+    // Save the snapshot
+    const snapshotPath = join(snapshotsDir, 'example-ui-messages.json')
+    writeFileSync(snapshotPath, JSON.stringify(allMessages, null, 2))
+
+    // Verify we have messages
+    expect(allMessages.length).toBeGreaterThan(0)
+
+    // Basic structure check
+    if (allMessages.length > 0) {
+      expect(allMessages[0]).toHaveProperty('id')
+      expect(allMessages[0]).toHaveProperty('role')
+      expect(allMessages[0]).toHaveProperty('parts')
+    }
+  })
+})
+
+// Process partial streams
+describe('Partial Stream Processing', () => {
+  // Edge cases to test:
+  // 3 - Just after first user input
+  // 7 - Middle of assistant audio response  
+  // 789 - After turnComplete (message boundary)
+  // 812 - Just before user starts new input
+  // 889 - After user completes "generate a component"
+  // 1783 - After executableCode (tool call)
+  // 1796 - After toolCall function call
+  // 1809 - After codeExecutionResult (tool result)
+  // 1862 - After second codeExecutionResult
+  // 1914 - Just before interruption
+  // 1915 - At interruption point
+  // 1920 - After turnComplete following interruption
+  // 1947 - After final usageMetadata
+  const endIndexes = [
+    3,     // After first user input transcription
+    7,     // During assistant audio stream
+    789,   // After first turnComplete
+    812,   // Before next user input
+    889,   // After user says "generate a component"
+    1783,  // After executableCode part
+    1796,  // After toolCall functionCalls
+    1809,  // After first codeExecutionResult
+    1862,  // After second codeExecutionResult  
+    1914,  // Just before interrupted
+    1915,  // At interrupted=true
+    1920,  // After turnComplete post-interrupt
+    1947,  // After usage metadata
+  ]
+
+  endIndexes.forEach(endIndex => {
+    it(`should process messages up to index ${endIndex} and save snapshot`, () => {
+      const assembler = new LiveMessageAssembler()
+      let allMessages: any[] = []
+
+      // Process messages up to endIndex
+      const messagesToProcess = exampleMessages.slice(0, endIndex + 1)
+
+      for (const message of messagesToProcess) {
+        const uiMessages = assembler.processMessage(message as LiveServerMessage)
+        allMessages = uiMessages
+      }
+
+      // Create snapshots directory if it doesn't exist
+      const snapshotsDir = join(__dirname, 'snapshots')
+      mkdirSync(snapshotsDir, { recursive: true })
+
+      // Save the snapshot with padded index for proper sorting
+      const paddedIndex = String(endIndex).padStart(4, '0')
+      const snapshotPath = join(snapshotsDir, `partial-${paddedIndex}-ui-messages.json`)
+      writeFileSync(snapshotPath, JSON.stringify(allMessages, null, 2))
+
+      // Log info about this snapshot
+      console.log(`Snapshot for index ${endIndex}: ${allMessages.length} UI messages`)
+    })
+  })
+})
 
 // Example conversation flow with tool calls
 export const EXAMPLE_WEBSOCKET_CONVERSATION: {
@@ -263,12 +361,9 @@ describe('LiveMessageAssembler', () => {
               "location": "San Francisco",
               "unit": "fahrenheit",
             },
-            "rawInput": {
-              "location": "San Francisco",
-              "unit": "fahrenheit",
-            },
             "state": "input-available",
             "toolCallId": "call_123",
+            "toolName": "get_weather",
             "type": "tool-call",
           },
           "role": "assistant",
@@ -352,6 +447,7 @@ describe('LiveMessageAssembler', () => {
             },
             "state": "output-available",
             "toolCallId": "call_123",
+            "toolName": "get_weather",
             "type": "tool-result",
           },
           "role": "user",
@@ -414,18 +510,17 @@ describe('LiveMessageAssembler', () => {
         {
           "isFinal": false,
           "part": {
-            "providerMetadata": {
-              "executableCode": {
-                "value": true,
-              },
-            },
-            "text": "\`\`\`javascript
-      async function getWeather(city) {
+            "input": {
+              "code": "async function getWeather(city) {
         const response = await fetch(\`/api/weather?city=\${city}\`);
         return response.json();
-      }
-      \`\`\`",
-            "type": "text",
+      }",
+              "language": "javascript",
+            },
+            "state": "input-available",
+            "toolCallId": "exec-1755351834679-hl2a3",
+            "toolName": "executableCode",
+            "type": "tool-call",
           },
           "role": "assistant",
         },
@@ -441,16 +536,12 @@ describe('LiveMessageAssembler', () => {
         {
           "isFinal": false,
           "part": {
-            "providerMetadata": {
-              "codeExecution": {
-                "result": true,
-              },
-              "outcome": {
-                "value": "OUTCOME_OK",
-              },
-            },
-            "text": "{ "temperature": 72, "condition": "Partly cloudy" }",
-            "type": "text",
+            "input": {},
+            "output": "{ "temperature": 72, "condition": "Partly cloudy" }",
+            "state": "output-available",
+            "toolCallId": "exec-1755351834679-rajgj",
+            "toolName": "executableCode",
+            "type": "tool-result",
           },
           "role": "assistant",
         },
@@ -489,7 +580,7 @@ describe('LiveMessageAssembler', () => {
     expect(userMessages).toMatchInlineSnapshot(`
       [
         {
-          "id": "msg_1755269676322_1",
+          "id": "msg_1755351834679_1",
           "parts": [
             {
               "providerMetadata": undefined,
@@ -529,7 +620,7 @@ describe('LiveMessageAssembler', () => {
     expect(finalMessages).toMatchInlineSnapshot(`
       [
         {
-          "id": "msg_1755269676323_2",
+          "id": "msg_1755351834680_2",
           "parts": [
             {
               "providerMetadata": undefined,
@@ -541,12 +632,9 @@ describe('LiveMessageAssembler', () => {
                 "location": "San Francisco",
                 "unit": "fahrenheit",
               },
-              "rawInput": {
-                "location": "San Francisco",
-                "unit": "fahrenheit",
-              },
               "state": "input-available",
               "toolCallId": "call_123",
+              "toolName": "get_weather",
               "type": "tool-call",
             },
             {
@@ -576,7 +664,7 @@ describe('LiveMessageAssembler', () => {
     expect(flushedMessages).toMatchInlineSnapshot(`
       [
         {
-          "id": "msg_1755269676323_1",
+          "id": "msg_1755351834680_1",
           "parts": [
             {
               "providerMetadata": undefined,

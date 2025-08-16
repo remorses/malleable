@@ -109,11 +109,16 @@ declare global {
   var client: LiveAPIClient | undefined
   // eslint-disable-next-line no-var
   var messageAssembler: LiveMessageAssembler | undefined
+  // eslint-disable-next-line no-var
+  var allMessages: LiveServerMessage[] | undefined
 }
 
 // Create message assembler instance
 const messageAssembler = globalThis.messageAssembler || new LiveMessageAssembler()
 globalThis.messageAssembler = messageAssembler
+
+// Initialize global messages array
+globalThis.allMessages = globalThis.allMessages || []
 
 const liveClient =
   globalThis.client ||
@@ -121,20 +126,17 @@ const liveClient =
     apiKey,
 
     onMessage: (message: LiveServerMessage) => {
-      // Process the message through the assembler
-      const updates = messageAssembler.processServerMessage(message)
-      const completedMessages = messageAssembler.addParts(updates)
+      // Store message in global variable
+      globalThis.allMessages = globalThis.allMessages || []
+      globalThis.allMessages.push(message)
       
-      // Update uiMessages in state
-      if (completedMessages.length > 0) {
-        console.log('Assembled UI Messages:', JSON.stringify(completedMessages, null, 2))
-        
-        // Update uiMessages state
-        const currentMessages = useStore.getState().uiMessages
-        useStore.setState({ 
-          uiMessages: [...currentMessages, ...completedMessages]
-        })
-      }
+      // Process the message and get all current UI messages
+      const allMessages = messageAssembler.processMessage(message)
+
+      // Set the complete message history (not accumulating with previous state)
+      useStore.setState({
+        uiMessages: [...allMessages]
+      })
     },
 
     config: {
@@ -211,6 +213,58 @@ export default function App() {
 
   useEffect(() => {
     setupImportMap()
+  }, [])
+
+  useEffect(() => {
+    const handleKeyPress = (e: KeyboardEvent) => {
+      // Check for Cmd+C (Mac) or Ctrl+C (Windows/Linux)
+      if ((e.metaKey || e.ctrlKey) && e.key === 'c') {
+        // Check if something is selected (to not interfere with normal copy)
+        const selection = window.getSelection()
+        if (!selection || selection.toString().length === 0) {
+          e.preventDefault()
+          
+          // Clone messages and remove base64 data
+          const messagesToCopy = globalThis.allMessages?.map(msg => {
+            const cloned = JSON.parse(JSON.stringify(msg))
+            
+            // Remove base64 data from serverContent
+            if (cloned.serverContent?.modelTurn?.parts) {
+              cloned.serverContent.modelTurn.parts = cloned.serverContent.modelTurn.parts.map((part: any) => {
+                if (part.inlineData?.data) {
+                  return {
+                    ...part,
+                    inlineData: {
+                      ...part.inlineData,
+                      data: '[BASE64_DATA_REMOVED]'
+                    }
+                  }
+                }
+                return part
+              })
+            }
+            
+            return cloned
+          }) || []
+          
+          // Copy to clipboard
+          navigator.clipboard.writeText(JSON.stringify(messagesToCopy, null, 2))
+            .then(() => {
+              console.log('Messages copied to clipboard (base64 data removed)')
+              // Add a temporary log entry to show it was copied
+              useStore.setState(state => ({ 
+                logs: [...state.logs, `[${new Date().toLocaleTimeString()}] Messages copied to clipboard`]
+              }))
+            })
+            .catch(err => {
+              console.error('Failed to copy messages:', err)
+            })
+        }
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyPress)
+    return () => window.removeEventListener('keydown', handleKeyPress)
   }, [])
 
   const handleConnect = async () => {
@@ -296,15 +350,18 @@ export default function App() {
                   UI Messages
                 </h3>
                 <button
-                  onClick={() => useStore.setState({ uiMessages: [] })}
+                  onClick={() => {
+                    messageAssembler.clear()
+                    useStore.setState({ uiMessages: [] })
+                  }}
                   className='text-xs text-muted-foreground hover:text-foreground'
                 >
                   Clear
                 </button>
               </div>
               <pre className='p-3 bg-muted rounded-md overflow-auto h-48 text-xs font-mono'>
-                {uiMessages.length > 0 
-                  ? JSON.stringify(uiMessages, null, 2) 
+                {uiMessages.length > 0
+                  ? JSON.stringify(uiMessages, null, 2)
                   : 'No UI messages yet...'}
               </pre>
             </div>

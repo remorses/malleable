@@ -12,6 +12,7 @@
     "skipLibCheck": true,
     "useUnknownInCatchVariables": false,
     "types": ["@cloudflare/workers-types", "@types/node"],
+    "resolveJsonModule": true,
     "jsx": "react"
   },
   "exclude": ["demo/**/*", "container_src/**/*"]
