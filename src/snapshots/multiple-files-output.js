@@ -385,7 +385,7 @@ var app_default = App;
 var OriginalDefault = app_default;
 var WrappedComponent = (props) => {
   return /* @__PURE__ */ C2(R, { children: [
-    /* @__PURE__ */ q2("link", { rel: "stylesheet", href: "https://remote-bundler.fumabase.com/bundle/test-nk1bz9/index.css" }),
+    /* @__PURE__ */ q2("link", { rel: "stylesheet", href: "https://remote-bundler.fumabase.com/bundle/test-n0bjfi/index.css" }),
     OriginalDefault ? /* @__PURE__ */ q2(OriginalDefault, { ...props }) : null
   ] });
 };

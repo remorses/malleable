@@ -45,7 +45,7 @@ describe('Prerender Module', () => {
         hydrateRoot(root, React.createElement(App));
       }
       </script><script type="module" src="https://example.com/bundle.js" async=""></script></body></html>",
-        "renderTime": 1286.749834,
+        "renderTime": 597.263625,
       }
     `)
   })
@@ -110,7 +110,7 @@ describe('Prerender Module', () => {
         }
       });
       </script></body></html>",
-        "renderTime": 362.579375,
+        "renderTime": 329.9725840000001,
       }
     `)
   })
@@ -141,16 +141,16 @@ describe('Prerender Module', () => {
     expect(result).toMatchInlineSnapshot(`
       {
         "error": "Transform failed with 2 errors:
-      /private/tmp/render_1755354207333/BadComponent.tsx:7:12: ERROR: The character "}" is not valid inside a JSX element
-      /private/tmp/render_1755354207333/BadComponent.tsx:8:10: ERROR: Unexpected end of file before a closing "div" tag",
+      /private/tmp/render_1755354383952/BadComponent.tsx:7:12: ERROR: The character "}" is not valid inside a JSX element
+      /private/tmp/render_1755354383952/BadComponent.tsx:8:10: ERROR: Unexpected end of file before a closing "div" tag",
         "html": "",
-        "renderTime": 339.7229159999997,
+        "renderTime": 364.86225000000013,
       }
     `)
   })
 
   it('should validate request schema', () => {
-    const validRequest = {
+    const validRequest: PrerenderRequest = {
       files: [
         {
           path: 'App.tsx',
@@ -159,6 +159,8 @@ describe('Prerender Module', () => {
       ],
       cssUrls: ['https://example.com/styles.css'],
       bootstrapModules: [],
+      siteId: 'validate-request-' + Math.random().toString(36).substring(7),
+      runNpmInstall: false,
     }
 
     const parsed = prerenderRequestSchema.parse(validRequest)
@@ -175,18 +177,23 @@ describe('Prerender Module', () => {
           },
         ],
         "runNpmInstall": false,
+        "siteId": "${parsed.siteId}",
       }
     `)
   })
 
   it('should use default values when not provided', () => {
-    const minimalRequest = {
+    const minimalRequest: PrerenderRequest = {
       files: [
         {
           path: 'App.tsx',
           content: 'export default function App() { return <div>Test</div>; }',
         },
       ],
+      cssUrls: [],
+      bootstrapModules: [],
+      siteId: 'minimal-request-' + Math.random().toString(36).substring(7),
+      runNpmInstall: false,
     }
 
     const parsed = prerenderRequestSchema.parse(minimalRequest)
@@ -201,6 +208,7 @@ describe('Prerender Module', () => {
           },
         ],
         "runNpmInstall": false,
+        "siteId": "${parsed.siteId}",
       }
     `)
   })
@@ -250,7 +258,7 @@ describe('Prerender Module', () => {
         }
       });
       </script></body></html>",
-        "renderTime": 360.85912499999995,
+        "renderTime": 352.771291,
       }
     `)
   })
@@ -270,7 +278,7 @@ describe('Prerender Module', () => {
       {
         "error": "No files provided",
         "html": "",
-        "renderTime": 0.05904199999986304,
+        "renderTime": 0.0742499999996653,
       }
     `)
   })

@@ -519,7 +519,7 @@ describe('LiveMessageAssembler', () => {
               "language": "javascript",
             },
             "state": "input-available",
-            "toolCallId": "exec-1755354205693-zrpbhb",
+            "toolCallId": "exec-1755354383070-1b5pca",
             "toolName": "executableCode",
             "type": "tool-call",
           },
@@ -540,7 +540,7 @@ describe('LiveMessageAssembler', () => {
             "input": {},
             "output": "{ "temperature": 72, "condition": "Partly cloudy" }",
             "state": "output-available",
-            "toolCallId": "exec-1755354205693-d7t1ud",
+            "toolCallId": "exec-1755354383070-w3kgw",
             "toolName": "executableCode",
             "type": "tool-result",
           },
@@ -581,7 +581,7 @@ describe('LiveMessageAssembler', () => {
     expect(userMessages).toMatchInlineSnapshot(`
       [
         {
-          "id": "msg_1755354205693_1",
+          "id": "msg_1755354383071_1",
           "parts": [
             {
               "providerMetadata": undefined,
@@ -621,7 +621,7 @@ describe('LiveMessageAssembler', () => {
     expect(finalMessages).toMatchInlineSnapshot(`
       [
         {
-          "id": "msg_1755354205694_2",
+          "id": "msg_1755354383072_2",
           "parts": [
             {
               "providerMetadata": undefined,
@@ -665,7 +665,7 @@ describe('LiveMessageAssembler', () => {
     expect(flushedMessages).toMatchInlineSnapshot(`
       [
         {
-          "id": "msg_1755354205694_1",
+          "id": "msg_1755354383072_1",
           "parts": [
             {
               "providerMetadata": undefined,
@@ -913,5 +913,148 @@ describe('mergeConsecutiveTextParts', () => {
         "role": "assistant",
       }
     `)
+  })
+})
+
+describe('Message ID stability', () => {
+  it('should maintain stable IDs for existing messages when new messages are added', () => {
+    const assembler = new LiveMessageAssembler()
+    
+    // Process first user message
+    const firstUserMessage: LiveClientMessage = {
+      clientContent: {
+        turns: [{
+          parts: [{ text: "First message" }],
+          role: 'user',
+        }],
+        turnComplete: true,
+      },
+    }
+    
+    let messages = assembler.processMessage(firstUserMessage as any)
+    expect(messages).toHaveLength(1)
+    const firstMessageId = messages[0].id
+    
+    // Process assistant response
+    const assistantMessage: LiveServerMessage = {
+      serverContent: {
+        modelTurn: {
+          parts: [{ text: "First response" }],
+          role: 'model',
+        },
+        turnComplete: true,
+      },
+    } as any
+    
+    messages = assembler.processMessage(assistantMessage)
+    expect(messages).toHaveLength(2)
+    expect(messages[0].id).toBe(firstMessageId) // First message ID should not change
+    const secondMessageId = messages[1].id
+    
+    // Process another user message
+    const secondUserMessage: LiveClientMessage = {
+      clientContent: {
+        turns: [{
+          parts: [{ text: "Second message" }],
+          role: 'user',
+        }],
+        turnComplete: true,
+      },
+    }
+    
+    messages = assembler.processMessage(secondUserMessage as any)
+    expect(messages).toHaveLength(3)
+    
+    // Check that previous message IDs remain unchanged
+    expect(messages[0].id).toBe(firstMessageId)
+    expect(messages[1].id).toBe(secondMessageId)
+    const thirdMessageId = messages[2].id
+    
+    // Process another assistant response
+    const secondAssistantMessage: LiveServerMessage = {
+      serverContent: {
+        modelTurn: {
+          parts: [{ text: "Second response" }],
+          role: 'model',
+        },
+        turnComplete: true,
+      },
+    } as any
+    
+    messages = assembler.processMessage(secondAssistantMessage)
+    expect(messages).toHaveLength(4)
+    
+    // All previous message IDs should remain stable
+    expect(messages[0].id).toBe(firstMessageId)
+    expect(messages[1].id).toBe(secondMessageId)
+    expect(messages[2].id).toBe(thirdMessageId)
+    
+    // Verify the content is correct too
+    expect(messages[0].parts[0]).toMatchObject({ type: 'text', text: 'First message' })
+    expect(messages[1].parts[0]).toMatchObject({ type: 'text', text: 'First response' })
+    expect(messages[2].parts[0]).toMatchObject({ type: 'text', text: 'Second message' })
+    expect(messages[3].parts[0]).toMatchObject({ type: 'text', text: 'Second response' })
+  })
+  
+  it('should maintain stable IDs even with incomplete messages and flushing', () => {
+    const assembler = new LiveMessageAssembler()
+    
+    // Start streaming a message (incomplete)
+    const streamStart: LiveServerMessage = {
+      serverContent: {
+        modelTurn: {
+          parts: [{ text: "Streaming..." }],
+          role: 'model',
+        },
+        turnComplete: false,
+      },
+    } as any
+    
+    let messages = assembler.processMessage(streamStart)
+    expect(messages).toHaveLength(1) // Temporary message
+    
+    // Continue streaming
+    const streamContinue: LiveServerMessage = {
+      serverContent: {
+        modelTurn: {
+          parts: [{ text: " more content" }],
+          role: 'model',
+        },
+        turnComplete: false,
+      },
+    } as any
+    
+    messages = assembler.processMessage(streamContinue)
+    expect(messages).toHaveLength(1) // Still temporary
+    
+    // Complete the message
+    const streamEnd: LiveServerMessage = {
+      serverContent: {
+        modelTurn: {
+          parts: [{ text: " done!" }],
+          role: 'model',
+        },
+        turnComplete: true,
+      },
+    } as any
+    
+    messages = assembler.processMessage(streamEnd)
+    expect(messages).toHaveLength(1)
+    const firstCompletedId = messages[0].id
+    
+    // Add another message and verify the first ID doesn't change
+    const newMessage: LiveClientMessage = {
+      clientContent: {
+        turns: [{
+          parts: [{ text: "New message" }],
+          role: 'user',
+        }],
+        turnComplete: true,
+      },
+    }
+    
+    messages = assembler.processMessage(newMessage as any)
+    expect(messages).toHaveLength(2)
+    expect(messages[0].id).toBe(firstCompletedId) // First message ID should remain stable
   })
 })

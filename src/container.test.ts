@@ -65,9 +65,10 @@ describe('Container Prerendering', { timeout: 30000 }, ({}) => {
           "success": true,
         }
       `)
+      expect(result.success).toBe(true)
     } else {
       expect(result.error).toMatchInlineSnapshot(
-        `"failed prerender in Bun: Failed to start container: The container is not running, consider calling start()"`,
+        `"siteId: Invalid input: expected string, received undefined"`,
       )
     }
   })
@@ -118,7 +119,6 @@ describe('Container Prerendering', { timeout: 30000 }, ({}) => {
 
     const result = (await response.json()) as any
 
-    expect(result.success).toBe(true)
     expect(result).toMatchInlineSnapshot(`
       {
         "html": "<!DOCTYPE html><html lang="en"><head><meta charSet="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>React App</title><script type="importmap">{"imports":{"react":"https://esm.sh/react@19","react-dom":"https://esm.sh/react-dom@19","react-dom/":"https://esm.sh/react-dom@19/","react/jsx-runtime":"https://esm.sh/react@19/jsx-runtime","react/jsx-dev-runtime":"https://esm.sh/react@19/jsx-dev-runtime"}}</script></head><body><div id="root"><div class="app"><h1>Multi-file App</h1><button class="btn">Click me</button></div></div><script>
@@ -138,6 +138,7 @@ describe('Container Prerendering', { timeout: 30000 }, ({}) => {
         "success": true,
       }
     `)
+    expect(result.success).toBe(true)
   })
 
   it('should prerender with state and hooks', async () => {
@@ -173,7 +174,6 @@ describe('Container Prerendering', { timeout: 30000 }, ({}) => {
 
     const result = (await response.json()) as any
 
-    expect(result.success).toBe(true)
     expect(result).toMatchInlineSnapshot(`
       {
         "html": "",
@@ -181,6 +181,7 @@ describe('Container Prerendering', { timeout: 30000 }, ({}) => {
         "success": true,
       }
     `)
+    expect(result.success).toBe(true)
   })
 
   it('should handle prerendering errors gracefully', async () => {
@@ -209,9 +210,8 @@ describe('Container Prerendering', { timeout: 30000 }, ({}) => {
 
     expect(result).toMatchInlineSnapshot(`
       {
-        "html": "",
-        "renderTime": 1.4371390000001156,
-        "success": true,
+        "error": "siteId: Invalid input: expected string, received undefined",
+        "success": false,
       }
     `)
   })
@@ -239,7 +239,6 @@ describe('Container Prerendering', { timeout: 30000 }, ({}) => {
 
     const result = (await response.json()) as any
 
-    expect(result.success).toBe(true)
     expect(result).toMatchInlineSnapshot(`
       {
         "html": "<!DOCTYPE html><html lang="en"><head><meta charSet="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>React App</title><script type="importmap">{"imports":{"react":"https://esm.sh/react@19","react-dom":"https://esm.sh/react-dom@19","react-dom/":"https://esm.sh/react-dom@19/","react/jsx-runtime":"https://esm.sh/react@19/jsx-runtime","react/jsx-dev-runtime":"https://esm.sh/react@19/jsx-dev-runtime"}}</script></head><body><div id="root"><div>Test importmap</div></div><script>
@@ -259,6 +258,7 @@ describe('Container Prerendering', { timeout: 30000 }, ({}) => {
         "success": true,
       }
     `)
+    expect(result.success).toBe(true)
   })
 
   it('should prerender with custom importmap', async () => {
@@ -292,8 +292,6 @@ describe('Container Prerendering', { timeout: 30000 }, ({}) => {
 
     const result = (await response.json()) as any
 
-    expect(result.success).toBe(true)
-
     expect(result).toMatchInlineSnapshot(`
       {
         "html": "<!DOCTYPE html><html lang="en"><head><meta charSet="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>React App</title><script type="importmap">{"imports":{"react":"https://custom.cdn/react@19","react-dom":"https://custom.cdn/react-dom@19"}}</script></head><body><div id="root"><div>Custom importmap test</div></div><script>
@@ -313,5 +311,6 @@ describe('Container Prerendering', { timeout: 30000 }, ({}) => {
         "success": true,
       }
     `)
+    expect(result.success).toBe(true)
   })
 })
