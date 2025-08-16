@@ -248,6 +248,7 @@ export class LiveAPIClient {
 
         const [audioParts, otherParts] = partition(
           parts,
+
           (p) => p.inlineData && p.inlineData.mimeType?.startsWith('audio/pcm'),
         )
         const base64s = audioParts.map((p) => p.inlineData?.data)
@@ -266,6 +267,19 @@ export class LiveAPIClient {
           this.log(
             'content: ' + JSON.stringify({ modelTurn: { parts: otherParts } }),
           )
+          // Log python executable code in a readable way
+          otherParts.forEach((part) => {
+            if (
+              part.executableCode &&
+              part.executableCode.language === 'PYTHON' &&
+              part.executableCode.code
+            ) {
+              // Only pretty-print if python with code string
+              const preview = part.executableCode.code
+
+              this.log('python executableCode:\n' + preview)
+            }
+          })
         }
       }
     }

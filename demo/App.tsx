@@ -45,53 +45,47 @@ const tools = {
 
 // Bundle and render function
 const bundleAndRender = async (componentCode: string) => {
-  try {
-    const response = await fetch(
-      'https://remote-bundler.fumabase.com/api/bundle',
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          files: [
-            {
-              path: 'Component.tsx',
-              content: componentCode,
-            },
-          ],
-          externalPackages: ['react', 'react-dom', 'react/jsx-runtime'],
-          siteId: 'example',
-          prerenderDebounceTime: 1000 * 5,
-        } satisfies BundleInput),
+  const response = await fetch(
+    'https://remote-bundler.fumabase.com/api/bundle',
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
       },
-    )
+      body: JSON.stringify({
+        files: [
+          {
+            path: 'Component.tsx',
+            content: componentCode,
+          },
+        ],
+        externalPackages: ['react', 'react-dom', 'react/jsx-runtime'],
+        siteId: 'example',
+        prerenderDebounceTime: 1000 * 5,
+      } satisfies BundleInput),
+    },
+  )
 
-    const result = (await response.json()) as BundleResult
+  if (!response.ok) {
+    throw new Error(await response.text())
+  }
 
-    if (result.success) {
-      try {
-        const importUrl = result.jsUrl
+  const result = (await response.json()) as BundleResult
 
-        // Dynamically import the module
-        // Add a timestamp query to bust cache
-        const urlWithTimestamp = new URL(importUrl)
-        urlWithTimestamp.searchParams.set('t', Date.now().toString())
-        const module = await import(/* @vite-ignore */ urlWithTimestamp.toString())
-        const Component = module.default
+  if (result.success) {
+    const importUrl = result.jsUrl
 
-        // Set the component to render in preview
-        if (Component) {
-          useStore.setState({ previewComponent: Component })
-        }
-      } catch (evalError) {
-        console.error('Import error:', evalError)
-      }
-    } else {
-      console.error('Bundle error:', result.error)
+    // Dynamically import the module
+    // Add a timestamp query to bust cache
+    const urlWithTimestamp = new URL(importUrl)
+    urlWithTimestamp.searchParams.set('t', Date.now().toString())
+    const module = await import(/* @vite-ignore */ urlWithTimestamp.toString())
+    const Component = module.default
+
+    // Set the component to render in preview
+    if (Component) {
+      useStore.setState({ previewComponent: Component })
     }
-  } catch (error) {
-    console.error('Bundle request error:', error)
   }
 }
 
@@ -120,10 +114,10 @@ const liveClient =
     config: {
       tools: callableToolsFromObject(tools),
       responseModalities: [Modality.AUDIO],
-            systemInstruction: {
-              parts: [
-                {
-                  text: `You are an expert React developer. When asked to create a component, use the generate_component tool to output the code.
+      systemInstruction: {
+        parts: [
+          {
+            text: `You are an expert React developer. When asked to create a component, use the generate_component tool to output the code.
 The component MUST:
 - Use functional components with hooks
 - Use Tailwind CSS classes for styling (including shadcn/ui theme colors like bg-primary, text-foreground, etc.)
@@ -133,16 +127,40 @@ The component MUST:
 - Use modern React patterns
 - Import React at the top if needed
 
+
+When calling the tool always put the code in a python multi line string using """
+
+\`\`\`
+print(
+    default_api.generate_component(
+        code="""
+import React from 'react';
+
+const Button = () => {
+  return (
+    <button className="bg-primary text-primary-foreground hover:bg-primary/90 px-4 py-2 rounded-md">
+      Click me
+    </button>
+  );
+};
+
+export default Button;
+"""
+    )
+)
+\`\`\`
+
+> IMPORTANT! Notice that quotes do not need to be escaped when using multi line strings in python! Do not add \", just use " as is.
+
+
 do not use props. create a modern styled and rich component
 
 the goal is to create beautiful components following user query. do not create too simple components
 
-DO NOT USE PYTHON to call the generate_component tool!`,
-
-
-                },
-              ],
-            },
+`,
+          },
+        ],
+      },
     },
     onStateChange: (state) => {
       // Update zustand store with LiveAPI state (excluding volumes)
