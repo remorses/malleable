@@ -37,7 +37,7 @@ export interface LiveAPIClientOptions extends LiveClientOptions {
 
 export class LiveAPIClient {
   private client: GoogleGenAI
-  private session: Session | null = null
+  public session: Session | null = null
   private audioStreamer: AudioStreamer | null = null
   private audioRecorder: AudioRecorder | null = null
   private model: string
@@ -375,6 +375,21 @@ export class LiveAPIClient {
         'error: ' + JSON.stringify({ message: 'Tool call failed', error }),
       )
     }
+  }
+
+  public sendToolResponse(response: {
+    functionResponses: Array<{
+      response: { output: any; error?: string }
+      id: string
+      name: string
+    }>
+  }) {
+    if (!this.session) {
+      console.error('Cannot send tool response: session not connected')
+      return
+    }
+    this.session.sendToolResponse(response)
+    this.log('client-toolResponse: ' + JSON.stringify(response))
   }
 
   setConfig(config: LiveConnectConfig) {
