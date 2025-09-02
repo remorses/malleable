@@ -23,31 +23,77 @@ function setupImportMap() {
   }
 }
 
+// File storage in memory
+const fileStorage: Record<string, string> = {
+  'App.tsx': ''
+}
+
 // Tools definition
 const tools = {
-  generate_component: tool({
-    description: 'Generate a React component with TypeScript and Tailwind CSS',
+  edit_file: tool({
+    description: 'Edit or create a file in memory. Pass empty string as oldString to replace entire file content. Use content parameter to create new file or replace existing one.',
     inputSchema: z.object({
-      code: z
-        .string()
-        .describe(
-          'The complete React component code with TypeScript and Tailwind CSS',
-        ),
+      path: z.string().describe('The file path (e.g., App.tsx, Button.tsx, utils.ts). App.tsx is the main entry point.'),
+      content: z.string().optional().describe('Full content for creating new file or replacing existing file entirely'),
+      oldString: z.string().optional().describe('String to find and replace. Pass empty string "" to replace entire file content with newString'),
+      newString: z.string().optional().describe('String to replace with. When oldString is empty "", this becomes the entire file content'),
     }),
-    execute: async ({ code }) => {
+    execute: async ({ path, content, oldString, newString }) => {
       // Set isGenerating to true when tool is called
-      useStore.setState({ code, isGenerating: true })
-      console.log(`llm triggered generate code tool`, code)
-      await bundleAndRender(code)
+      useStore.setState({ isGenerating: true })
+      
+      // Handle file creation or full replacement
+      if (content !== undefined) {
+        fileStorage[path] = content
+        console.log(`File created/replaced: ${path}`)
+      } 
+      // Handle string replacement
+      else if (oldString !== undefined && newString !== undefined) {
+        // Empty oldString means replace entire file content
+        if (oldString === '') {
+          fileStorage[path] = newString
+          console.log(`File content replaced: ${path}`)
+        } else {
+          if (!fileStorage[path]) {
+            throw new Error(`File ${path} does not exist`)
+          }
+          if (!fileStorage[path].includes(oldString)) {
+            throw new Error(`String not found in ${path}`)
+          }
+          fileStorage[path] = fileStorage[path].replace(oldString, newString)
+          console.log(`String replaced in ${path}`)
+        }
+      } else {
+        throw new Error('Either content or both oldString and newString must be provided')
+      }
+      
+      // Update the code display if it's the main app
+      if (path === 'App.tsx') {
+        useStore.setState({ code: fileStorage[path] })
+      }
+      
+      // Bundle all files after edit
+      await bundleAndRender()
+      
       // Set isGenerating to false after bundling
       useStore.setState({ isGenerating: false })
-      return { success: true }
+      return { success: true, files: Object.keys(fileStorage) }
     },
   }),
 }
 
 // Bundle and render function
-const bundleAndRender = async (componentCode: string) => {
+const bundleAndRender = async () => {
+  // Convert fileStorage to files array
+  const files = Object.entries(fileStorage)
+    .filter(([_, content]) => content.trim() !== '')
+    .map(([path, content]) => ({ path, content }))
+  
+  if (files.length === 0) {
+    console.log('No files to bundle')
+    return
+  }
+  
   const response = await fetch(
     'https://remote-bundler.fumabase.com/api/bundle',
     {
@@ -56,12 +102,8 @@ const bundleAndRender = async (componentCode: string) => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        files: [
-          {
-            path: 'Component.tsx',
-            content: componentCode,
-          },
-        ],
+        files,
+        entryPoint: 'App.tsx',
         externalPackages: ['react', 'react-dom', 'react/jsx-runtime'],
         siteId: 'example',
         prerenderDebounceTime: 1000 * 5,
@@ -145,23 +187,62 @@ const liveClient =
       systemInstruction: {
         parts: [
           {
-            text: `You are an expert React developer. When asked to create a component, use the generate_component tool to output the code.
-The component MUST:
+            text: `You are an expert React developer. You can create and edit files using the edit_file tool.
+
+IMPORTANT FILE STRUCTURE:
+- App.tsx is the MAIN ENTRY POINT and must ALWAYS have a default export
+- Other files (Button.tsx, Card.tsx, utils.ts, etc.) can contain helper components and utilities
+- App.tsx can import and use components from other files
+
+For creating a new file or replacing entire content:
+- Use the 'content' parameter with the full file content
+- OR use oldString="" (empty string) and newString with the full content
+
+For editing an existing file:
+- Use 'oldString' and 'newString' parameters for string replacement
+- Make sure the oldString exactly matches what's in the file
+- Pass oldString="" (empty string) to replace the entire file with newString
+
+App.tsx Requirements:
+- MUST always have a default export
+- Should be the main component that renders the application
+- Can import and compose other components from separate files
 - Use functional components with hooks
-- Use Tailwind CSS classes for styling (including shadcn/ui theme colors like bg-primary, text-foreground, etc.)
-- ALWAYS export the component as default with: export default ComponentName. do not use any props
-- Use js or typescript
-- Be self-contained
+- Use Tailwind CSS classes for styling
 - Use modern React patterns
-- Import React at the top if needed
 
+Examples:
 
-When calling the tool always put the code in a python multi line string using """
-
+1. Creating the main App.tsx:
 \`\`\`
 print(
-    default_api.generate_component(
-        code="""
+    default_api.edit_file(
+        path="App.tsx",
+        content="""
+import React from 'react';
+import Button from './Button';
+
+const App = () => {
+  return (
+    <div className="p-8">
+      <h1 className="text-3xl font-bold mb-4">My App</h1>
+      <Button />
+    </div>
+  );
+};
+
+export default App;
+"""
+    )
+)
+\`\`\`
+
+2. Creating a separate component file:
+\`\`\`
+print(
+    default_api.edit_file(
+        path="Button.tsx",
+        content="""
 import React from 'react';
 
 const Button = () => {
@@ -178,13 +259,37 @@ export default Button;
 )
 \`\`\`
 
-> IMPORTANT! Notice that quotes do not need to be escaped when using multi line strings in python! Do not add \", just use " as is.
+3. Replacing entire file content using empty oldString:
+\`\`\`
+print(
+    default_api.edit_file(
+        path="App.tsx",
+        oldString="",
+        newString="""
+import React from 'react';
 
+const App = () => {
+  return <div>New content</div>;
+};
 
-do not use props. create a modern styled and rich component
+export default App;
+"""
+    )
+)
+\`\`\`
 
-the goal is to create beautiful components following user query. do not create too simple components
+4. Editing part of a file:
+\`\`\`
+print(
+    default_api.edit_file(
+        path="App.tsx",
+        oldString="Click me",
+        newString="Submit"
+    )
+)
+\`\`\`
 
+Remember: Always ensure App.tsx has a default export as it's the entry point!
 `,
           },
         ],

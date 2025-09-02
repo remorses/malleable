@@ -31,7 +31,7 @@ export interface LiveAPIClientOptions extends LiveClientOptions {
   onMessage?: (message: LiveServerMessage) => void
   enableGoogleSearch?: boolean
   config?: Partial<LiveConnectConfig> & {
-    tools: Array<CallableTool & { name: string }>
+    tools?: Array<CallableTool & { name: string }>
   }
 }
 
@@ -214,10 +214,10 @@ export class LiveAPIClient {
   private async onMessage(message: LiveServerMessage) {
     // Clone the message to avoid reference issues
     const clonedMessage = JSON.parse(JSON.stringify(message))
-    
+
     // Call the external callback if provided
     this.onMessageCallback?.(clonedMessage)
-    
+
     if (message.setupComplete) {
       this.log('setupcomplete')
       return

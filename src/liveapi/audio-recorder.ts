@@ -28,7 +28,7 @@ function arrayBufferToBase64(buffer: ArrayBuffer) {
   for (var i = 0; i < len; i++) {
     binary += String.fromCharCode(bytes[i]);
   }
-  return window.btoa(binary);
+  return btoa(binary);
 }
 
 export class AudioRecorder extends EventEmitter.EventEmitter {
@@ -96,6 +96,7 @@ export class AudioRecorder extends EventEmitter.EventEmitter {
     // its plausible that stop would be called before start completes
     // such as if the websocket immediately hangs up
     const handleStop = () => {
+      console.log('stopping', this.stream)
       this.source?.disconnect();
       this.stream?.getTracks().forEach((track) => track.stop());
       this.stream = undefined;
