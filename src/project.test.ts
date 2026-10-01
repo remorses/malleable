@@ -185,13 +185,11 @@ describe('projects: session, draft, commit, undo, branches', () => {
       {
         "reason": "build-error",
         "status": 200,
-        "text": "✘ [ERROR] Expected ">" but found end of file
+        "text": "✘ [ERROR] [plugin local-files] Broken.tsx (1:20): Unexpectedly reached the end of input.
 
-          local:/Broken.tsx:1:19:
-            1 │ export default <div
-              │                    ^
-              ╵                    >
-
+          /Broken.tsx:1:20:
+      1 │ export default <div
+        ╵                     ^
       ",
       }
     `)
@@ -468,7 +466,7 @@ describe('git remote', () => {
     expect({ url: write.url.replace(URL_BASE, '<origin>'), scope: write.scope }).toMatchInlineSnapshot(`
       {
         "scope": "write",
-        "url": "<origin>/git/g-whujm5y0.git",
+        "url": "<origin>/git/g-1vtw5ghn.git",
       }
     `)
 

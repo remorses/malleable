@@ -1,7 +1,7 @@
 import { Spiceflow } from 'spiceflow'
 import { z } from 'zod'
 
-import { buildFiles, formatBuildError } from './build.js'
+import { buildFiles, createKvBuildCache, formatBuildError } from './build.js'
 import { projectsApi, projectsPublic, type ProjectsEnv } from './projects-api.js'
 
 export { ProjectDO } from './project-do.js'
@@ -264,6 +264,7 @@ const app = new Spiceflow()
           cssUrl,
           baseUrl,
           outdir: siteId,
+          cache: createKvBuildCache(state.env.jsCache, waitUntil),
         })
         reqLogger.timeEnd(`build`)
         if (!built.ok) {
@@ -274,7 +275,7 @@ const app = new Spiceflow()
               errorText: built.errorText,
               success: false,
             },
-            { status: built.fromEsbuild ? 400 : 500,
+            { status: built.fromBundler ? 400 : 500,
               headers: corsHeaders(reqLogger.getServerTimingHeader()), },
           )
         }
@@ -425,7 +426,7 @@ const app = new Spiceflow()
         // Create HTML URL
         const htmlUrl = `${baseUrl}/bundle/${htmlKey}`
 
-        // Create raw esbuild output metadata (without text content)
+        // Create raw bundler output metadata (without text content)
         const rawOutputs = built.rawOutputs.map((file) => ({
           path: file.path,
           size: file.size,
@@ -463,7 +464,7 @@ const app = new Spiceflow()
         } catch {}
         logger.error(`Request error:`, error)
 
-        const failure = await formatBuildError(error)
+        const failure = formatBuildError(error)
         return Response.json(
           {
             error: failure.errors[0]?.text || 'Build failed',
@@ -471,7 +472,7 @@ const app = new Spiceflow()
             success: false,
           },
           {
-            status: failure.fromEsbuild ? 400 : 500,
+            status: failure.fromBundler ? 400 : 500,
             headers: corsHeaders(reqLogger.getServerTimingHeader()),
           },
         )

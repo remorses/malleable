@@ -1,197 +1,115 @@
-import type { Plugin } from 'esbuild-wasm'
+import type { BunPlugin as Plugin } from 'bun'
 
 import { logger } from './logger.ts'
 
-export interface PluginOptions {
-  externalPackages?: string[] | true
-  cdnUrl?: string
-  resolveNpmPackages?: boolean
+// Global caches that persist across requests
+const globalCodeCache = new Map<string, Expiring<string>>()
+const globalRedirectCache = new Map<string, Expiring<string>>()
+const MEMORY_TTL_MS = 3600 * 1000
+const MEMORY_LIMIT = 500
+
+interface Expiring<T> {
+  value: T
+  expires: number
 }
 
-// Global caches that persist across requests
-const globalCodeCache = new Map<string, string>()
-const globalRedirectCache = new Map<string, string>()
-
-export function createEsmShPlugin(options: PluginOptions = {}): Plugin {
-  const {
-    resolveNpmPackages = true,
-    externalPackages: externalPackagesOption = [],
-    cdnUrl = 'https://esm.sh',
-  } = options
-
-  const externalPackages: string[] =
-    externalPackagesOption === true ? [] : externalPackagesOption
-
-  function isExternalPackage(path: string): boolean {
-    if (externalPackagesOption === true) return true
-    const packageName = getPackageName(path)
-    return externalPackages.some(
-      (pkg) => pkg === packageName || path.startsWith(pkg + '/'),
-    )
+function memoryGet<T>(map: Map<string, Expiring<T>>, key: string): T | undefined {
+  const hit = map.get(key)
+  if (!hit) return undefined
+  if (hit.expires < Date.now()) {
+    map.delete(key)
+    return undefined
   }
+  return hit.value
+}
 
+function memorySet<T>(map: Map<string, Expiring<T>>, key: string, value: T) {
+  if (map.size >= MEMORY_LIMIT) map.delete(map.keys().next().value!)
+  map.set(key, { value, expires: Date.now() + MEMORY_TTL_MS })
+}
+
+/**
+ * Bun runtime plugin that lets `bun` import https:// modules (used by src/preload-bun.ts).
+ * Bun passes https imports in the `https` namespace with the path `//host/path`, and
+ * relative imports inside them arrive in the default namespace with the URL as importer.
+ * Bare imports are left to Bun.
+ */
+export function createBunHttpImportsPlugin(): Plugin {
   return {
-    name: 'esm-sh-plugin',
+    name: 'http-imports',
     setup(build) {
-      // Handle direct https:// URL imports
-      build.onResolve({ filter: /^https?:\/\// }, (args) => {
+      build.onResolve({ filter: /.*/ }, (args) => {
+        if (!/^https?:\/\//.test(args.importer)) return undefined
+        if (!args.path.startsWith('.') && !args.path.startsWith('/')) return undefined
+        const url = new URL(args.path, args.importer)
         return {
-          path: args.path,
-          namespace: 'http-url',
+          path: url.href.slice(url.protocol.length),
+          namespace: url.protocol.slice(0, -1),
         }
       })
-
-      // Handle relative imports from within http-url namespace
-      build.onResolve({ filter: /.*/, namespace: 'http-url' }, async (args) => {
-        // For relative imports, resolve against the importer URL
-        if (args.path.startsWith('.')) {
-          const url = new URL(args.path, args.importer).toString().trim()
-          return {
-            path: url,
-            namespace: 'http-url',
-          }
-        }
-
-        // For absolute paths starting with /, resolve relative to the origin
-        if (args.path.startsWith('/')) {
-          const importerUrl = new URL(args.importer)
-          const url = new URL(args.path, importerUrl.origin).toString().trim()
-          return {
-            path: url,
-            namespace: 'http-url',
-          }
-        }
-
-        // For bare imports within http-url namespace, resolve through esm.sh
-        if (!args.path.startsWith('http')) {
-          if (isExternalPackage(args.path)) {
-            return {
-              path: args.path,
-              external: true,
-            }
-          }
-
-          const externalsQuery =
-            externalPackages.length > 0
-              ? '?' +
-                new URLSearchParams({
-                  external: externalPackages.join(','),
-                }).toString()
-              : ''
-          const url = `${cdnUrl}/${args.path}${externalsQuery}`.trim()
-          return {
-            path: url,
-            namespace: 'http-url',
-          }
-        }
-
-        // Already a full URL
-        return {
-          path: args.path,
-          namespace: 'http-url',
-        }
-      })
-
-      if (resolveNpmPackages) {
-        build.onResolve({ filter: /.*/ }, (args) => {
-          // Skip if already processed or is a relative/absolute path
-          if (
-            args.path.startsWith('.') ||
-            args.path.startsWith('/') ||
-            args.path.startsWith('\0')
-          ) {
-            return null
-          }
-
-          // Check if package should be external
-          if (isExternalPackage(args.path)) {
-            return {
-              path: args.path,
-              external: true,
-            }
-          }
-
-          // Resolve through esm.sh with external query params
-          const externalsQuery =
-            externalPackages.length > 0
-              ? '?' +
-                new URLSearchParams({
-                  external: externalPackages.join(','),
-                }).toString()
-              : ''
-          const url = `${cdnUrl}/${args.path}${externalsQuery}`.trim()
-
-          return {
-            path: url,
-            namespace: 'http-url',
-          }
-        })
-      }
-
-      // Load content from http-url namespace
-      build.onLoad({ filter: /.*/, namespace: 'http-url' }, async (args) => {
-        const url = args.path
-
-        // Check cache first
-        if (globalCodeCache.has(url)) {
-          logger.log(`Cache hit for ${url.substring(0, 50)}`)
-          return {
-            contents: globalCodeCache.get(url)!,
-            loader: 'js',
-          }
-        }
-
-        // Follow redirects
-        const resolvedUrl = await resolveRedirect(url, globalRedirectCache)
-
-        // Fetch the module
-        const fetchId = Math.random().toString(36).substring(2, 9)
-        logger.time(`${fetchId} fetch ${url.substring(0, 50)}`)
-        const response = await fetch(resolvedUrl)
-        logger.timeEnd(`${fetchId} fetch ${url.substring(0, 50)}`)
-
-        if (!response.ok) {
-          throw new Error(
-            `Failed to fetch ${resolvedUrl}: ${response.status} ${response.statusText}`,
-          )
-        }
-
-        // Determine if it's JSON based on content type
-        const contentType = response.headers.get('content-type') || ''
-        const isJson = contentType.includes('application/json')
-
-        let contents = await response.text()
-        if (!contents) throw new Error(`https url returned empty string ${url}`)
-
-        // Transform import.meta.url references
-        if (contents.includes('import.meta.url')) {
-          contents = contents.replace(
-            /\bimport\.meta\.url\b/g,
-            JSON.stringify(resolvedUrl),
-          )
-        }
-
-        // For JSON files, export as default
-        if (isJson) {
-          contents = `export default ${contents}`
-        }
-
-        // Cache JavaScript modules
-        if (!isJson) {
-          globalCodeCache.set(url, contents)
-        }
-
-        return {
-          contents,
+      for (const namespace of ['http', 'https']) {
+        build.onLoad({ filter: /.*/, namespace }, async (args) => ({
+          contents: await fetchModuleSource(`${namespace}:${args.path}`),
           loader: 'js',
-        }
-      })
+        }))
+      }
     },
   }
 }
 
+/** Fetch a module from a CDN url, following redirects, with a per-isolate cache. */
+export async function fetchModuleSource(
+  url: string,
+  cache?: { get(key: string): Promise<string | null>; put(key: string, value: string, ttl: number): void },
+): Promise<string> {
+  const cached = memoryGet(globalCodeCache, url)
+  if (cached !== undefined) {
+    logger.log(`Cache hit for ${url.substring(0, 50)}`)
+    return cached
+  }
+  // Unversioned CDN urls redirect to the latest version, so keep this short
+  const kvKey = `esm:${url}`
+  const stored = await cache?.get(kvKey)
+  if (stored != null) {
+    memorySet(globalCodeCache, url, stored)
+    return stored
+  }
+
+  const resolvedUrl = await resolveRedirect(url, globalRedirectCache)
+
+  const fetchId = Math.random().toString(36).substring(2, 9)
+  logger.time(`${fetchId} fetch ${url.substring(0, 50)}`)
+  const response = await fetch(resolvedUrl)
+  logger.timeEnd(`${fetchId} fetch ${url.substring(0, 50)}`)
+
+  if (!response.ok) {
+    throw new Error(
+      `Failed to fetch ${resolvedUrl}: ${response.status} ${response.statusText}`,
+    )
+  }
+
+  const contentType = response.headers.get('content-type') || ''
+  const isJson = contentType.includes('application/json')
+
+  let contents = await response.text()
+  if (!contents) throw new Error(`https url returned empty string ${url}`)
+
+  if (contents.includes('import.meta.url')) {
+    contents = contents.replace(
+      /\bimport\.meta\.url\b/g,
+      JSON.stringify(resolvedUrl),
+    )
+  }
+
+  if (isJson) return `export default ${contents}`
+
+  memorySet(globalCodeCache, url, contents)
+  cache?.put(kvKey, contents, 3600)
+  return contents
+}
+
 // Helper function to extract package name from import path
-function getPackageName(path: string): string {
+export function getPackageName(path: string): string {
   // Handle scoped packages (@org/package)
   if (path.startsWith('@')) {
     const parts = path.split('/')
@@ -204,11 +122,10 @@ function getPackageName(path: string): string {
 // Helper function to resolve redirects
 async function resolveRedirect(
   url: string,
-  cache: Map<string, string>,
+  cache: Map<string, Expiring<string>>,
 ): Promise<string> {
-  if (cache.has(url)) {
-    return cache.get(url)!
-  }
+  const known = memoryGet(cache, url)
+  if (known !== undefined) return known
 
   const response = await fetch(url, {
     method: 'HEAD',
@@ -219,11 +136,11 @@ async function resolveRedirect(
     const location = response.headers.get('location')
     if (location) {
       const resolvedUrl = new URL(location, url).toString()
-      cache.set(url, resolvedUrl)
+      memorySet(cache, url, resolvedUrl)
       return resolveRedirect(resolvedUrl, cache)
     }
   }
 
-  cache.set(url, url)
+  memorySet(cache, url, url)
   return url
 }

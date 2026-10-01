@@ -1,6 +1,7 @@
 import { defineConfig, Plugin } from "vite";
 import path from "path";
 import react from "@vitejs/plugin-react";
+import tailwindcss from "@tailwindcss/vite";
 import { importMapPlugin } from "importmap-vite-plugin";
 import { readFileSync } from "fs";
 import { TestsNotFoundError } from "vitest/node.js";
@@ -42,9 +43,19 @@ const wasmPlugin = (): Plugin => {
   };
 };
 
+// Vitest runs the Worker code in Node, where .css imports must be plain text like in wrangler
+const cssTextPlugin = (): Plugin => ({
+  name: "css-as-text",
+  enforce: "pre",
+  async load(id) {
+    if (!id.endsWith(".css")) return null;
+    return `export default ${JSON.stringify(readFileSync(id.split("?")[0], "utf8"))}`;
+  },
+});
+
 export default defineConfig({
   ssr: {
-    noExternal: ["esbuild-wasm"],
+    noExternal: [],
   },
   resolve: {
     alias: {
@@ -57,6 +68,7 @@ export default defineConfig({
   plugins: [
     react(),
     wasmPlugin(),
+    process.env.VITEST ? cssTextPlugin() : tailwindcss(),
     !process.env.VITEST &&
       importMapPlugin({
         imports: {

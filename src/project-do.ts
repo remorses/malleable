@@ -2,7 +2,7 @@ import { DurableObject } from 'cloudflare:workers'
 import git from 'isomorphic-git'
 import http from 'isomorphic-git/http/web'
 import dedent from 'string-dedent'
-import { buildFiles, type BuildFile } from './build.js'
+import { buildFiles, createKvBuildCache, type BuildFile } from './build.js'
 import { MemoryFS } from './memory-fs.js'
 
 // ───────────────────────── public types (RPC-safe plain data) ─────────────────────────
@@ -100,6 +100,7 @@ export function getProject(
 
 interface Env {
   ARTIFACTS: Artifacts
+  jsCache: KVNamespace
 }
 
 interface Session {
@@ -742,15 +743,11 @@ export class ProjectDO extends DurableObject<Env> {
       files,
       entryPoint: config.entry,
       externalPackages: config.externalPackages,
+      cache: createKvBuildCache(this.env.jsCache, (p) => this.ctx.waitUntil(p)),
     })
     if (!built.ok) return { ok: false, errors: built.errors, errorText: built.errorText }
-    const dist = new Map<string, string>()
-    let esbuildCss = ''
-    for (const o of built.outputs) {
-      if (o.path === 'index.css') esbuildCss = o.text
-      else dist.set(o.path, o.text)
-    }
-    dist.set('index.css', built.css + (esbuildCss ? `\n${esbuildCss}` : ''))
+    const dist = new Map<string, string>(built.outputs.map((o) => [o.path, o.text]))
+    dist.set('index.css', built.css)
     return { ok: true, dist }
   }
 

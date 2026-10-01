@@ -70,19 +70,19 @@ describe('Remote Bundler Worker', () => {
     const result = (await response.json()) as BundleResult
     const serverTiming = response.headers.get('Server-Timing')
     expect(serverTiming).toMatchInlineSnapshot(
-      `"parse-body;dur=0, build;dur=10, html-generation;dur=0, kv-storage;dur=334, total;dur=344"`,
+      `"parse-body;dur=3, build;dur=1607, html-generation;dur=0, kv-storage;dur=340, total;dur=1950"`,
     )
     expect(result).toMatchInlineSnapshot(`
       {
         "files": {
-          "test-wfgof/index.js": "https://remote-bundler.fumabase.com/bundle/test-wfgof/index.js",
+          "test-o3k0dp/index.js": "https://remote-bundler.fumabase.com/bundle/test-o3k0dp/index.js",
         },
-        "htmlUrl": "https://remote-bundler.fumabase.com/bundle/test-wfgof/index.html",
-        "jsUrl": "https://remote-bundler.fumabase.com/bundle/test-wfgof/index.js",
+        "htmlUrl": "https://remote-bundler.fumabase.com/bundle/test-o3k0dp/index.html",
+        "jsUrl": "https://remote-bundler.fumabase.com/bundle/test-o3k0dp/index.js",
         "rawOutputs": [
           {
-            "path": "/test-wfgof/index.js",
-            "size": 786,
+            "path": "/test-o3k0dp/index.js",
+            "size": 541,
             "type": "entry",
           },
         ],
@@ -122,19 +122,19 @@ describe('Remote Bundler Worker', () => {
     const result = (await response.json()) as BundleSuccessResult
     const serverTiming = response.headers.get('Server-Timing')
     expect(serverTiming).toMatchInlineSnapshot(
-      `"parse-body;dur=0, build;dur=9, html-generation;dur=0, kv-storage;dur=194, total;dur=203"`,
+      `"parse-body;dur=0, build;dur=53, html-generation;dur=0, kv-storage;dur=291, total;dur=344"`,
     )
     expect(result).toMatchInlineSnapshot(`
       {
         "files": {
-          "test-7bmbuf/index.js": "https://remote-bundler.fumabase.com/bundle/test-7bmbuf/index.js",
+          "test-lztt58/index.js": "https://remote-bundler.fumabase.com/bundle/test-lztt58/index.js",
         },
-        "htmlUrl": "https://remote-bundler.fumabase.com/bundle/test-7bmbuf/index.html",
-        "jsUrl": "https://remote-bundler.fumabase.com/bundle/test-7bmbuf/index.js",
+        "htmlUrl": "https://remote-bundler.fumabase.com/bundle/test-lztt58/index.html",
+        "jsUrl": "https://remote-bundler.fumabase.com/bundle/test-lztt58/index.js",
         "rawOutputs": [
           {
-            "path": "/test-7bmbuf/index.js",
-            "size": 834,
+            "path": "/test-lztt58/index.js",
+            "size": 582,
             "type": "entry",
           },
         ],
@@ -170,19 +170,19 @@ describe('Remote Bundler Worker', () => {
     const result = (await response.json()) as BundleResult
     const serverTiming = response.headers.get('Server-Timing')
     expect(serverTiming).toMatchInlineSnapshot(
-      `"parse-body;dur=0, build;dur=9, html-generation;dur=0, kv-storage;dur=212, total;dur=221"`,
+      `"parse-body;dur=0, build;dur=40, html-generation;dur=0, kv-storage;dur=262, total;dur=302"`,
     )
     expect(result).toMatchInlineSnapshot(`
       {
         "files": {
-          "test-e98g3/index.js": "https://remote-bundler.fumabase.com/bundle/test-e98g3/index.js",
+          "test-shaa7/index.js": "https://remote-bundler.fumabase.com/bundle/test-shaa7/index.js",
         },
-        "htmlUrl": "https://remote-bundler.fumabase.com/bundle/test-e98g3/index.html",
-        "jsUrl": "https://remote-bundler.fumabase.com/bundle/test-e98g3/index.js",
+        "htmlUrl": "https://remote-bundler.fumabase.com/bundle/test-shaa7/index.html",
+        "jsUrl": "https://remote-bundler.fumabase.com/bundle/test-shaa7/index.js",
         "rawOutputs": [
           {
-            "path": "/test-e98g3/index.js",
-            "size": 898,
+            "path": "/test-shaa7/index.js",
+            "size": 671,
             "type": "entry",
           },
         ],
@@ -217,7 +217,7 @@ describe('Remote Bundler Worker', () => {
       const result = (await response.json()) as BundleResult
       const serverTiming = response.headers.get('Server-Timing')
       expect(serverTiming).toMatchInlineSnapshot(
-        `"parse-body;dur=0, build;dur=1029, html-generation;dur=0, kv-storage;dur=189, total;dur=1218"`,
+        `"parse-body;dur=0, build;dur=1152, html-generation;dur=0, kv-storage;dur=202, total;dur=1354"`,
       )
       expect(result.success).toMatchInlineSnapshot(`true`)
     },
@@ -272,19 +272,19 @@ describe('Remote Bundler Worker', () => {
     const result = (await response.json()) as BundleResult
     const serverTiming = response.headers.get('Server-Timing')
     expect(serverTiming).toMatchInlineSnapshot(
-      `"parse-body;dur=0, build;dur=10, html-generation;dur=0, kv-storage;dur=317, total;dur=327"`,
+      `"parse-body;dur=0, build;dur=51, html-generation;dur=0, kv-storage;dur=261, total;dur=312"`,
     )
     expect(result).toMatchInlineSnapshot(`
       {
         "files": {
-          "test-xmciuf/index.js": "https://remote-bundler.fumabase.com/bundle/test-xmciuf/index.js",
+          "test-sj5kkr/index.js": "https://remote-bundler.fumabase.com/bundle/test-sj5kkr/index.js",
         },
-        "htmlUrl": "https://remote-bundler.fumabase.com/bundle/test-xmciuf/index.html",
-        "jsUrl": "https://remote-bundler.fumabase.com/bundle/test-xmciuf/index.js",
+        "htmlUrl": "https://remote-bundler.fumabase.com/bundle/test-sj5kkr/index.html",
+        "jsUrl": "https://remote-bundler.fumabase.com/bundle/test-sj5kkr/index.js",
         "rawOutputs": [
           {
-            "path": "/test-xmciuf/index.js",
-            "size": 976,
+            "path": "/test-sj5kkr/index.js",
+            "size": 764,
             "type": "entry",
           },
         ],
@@ -401,7 +401,7 @@ describe('Remote Bundler Worker', () => {
     const result = (await response.json()) as BundleResult
     const serverTiming = response.headers.get('Server-Timing')
     expect(serverTiming).toMatchInlineSnapshot(
-      `"parse-body;dur=0, build;dur=144, html-generation;dur=0, kv-storage;dur=103, total;dur=247"`,
+      `"parse-body;dur=0, build;dur=207, html-generation;dur=0, kv-storage;dur=91, total;dur=298"`,
     )
 
     if (result.success) {
@@ -426,14 +426,14 @@ describe('Remote Bundler Worker', () => {
     expect(result).toMatchInlineSnapshot(`
       {
         "files": {
-          "test-pr1zzt/index.js": "https://remote-bundler.fumabase.com/bundle/test-pr1zzt/index.js",
+          "test-6qm28/index.js": "https://remote-bundler.fumabase.com/bundle/test-6qm28/index.js",
         },
-        "htmlUrl": "https://remote-bundler.fumabase.com/bundle/test-pr1zzt/index.html",
-        "jsUrl": "https://remote-bundler.fumabase.com/bundle/test-pr1zzt/index.js",
+        "htmlUrl": "https://remote-bundler.fumabase.com/bundle/test-6qm28/index.html",
+        "jsUrl": "https://remote-bundler.fumabase.com/bundle/test-6qm28/index.js",
         "rawOutputs": [
           {
-            "path": "/test-pr1zzt/index.js",
-            "size": 16656,
+            "path": "/test-6qm28/index.js",
+            "size": 13441,
             "type": "entry",
           },
         ],
@@ -562,26 +562,26 @@ describe('Remote Bundler Worker', () => {
     expect(result).toMatchInlineSnapshot(`
       {
         "files": {
-          "test-zt8eqg/chunks/DynamicModule-5NLYDKFO.js": "https://remote-bundler.fumabase.com/bundle/test-zt8eqg/chunks/DynamicModule-5NLYDKFO.js",
-          "test-zt8eqg/chunks/LazyComponent-QWYJ2LE2.js": "https://remote-bundler.fumabase.com/bundle/test-zt8eqg/chunks/LazyComponent-QWYJ2LE2.js",
-          "test-zt8eqg/index.js": "https://remote-bundler.fumabase.com/bundle/test-zt8eqg/index.js",
+          "test-0us2pn/chunks/DynamicModule-OnSjh2dR.js": "https://remote-bundler.fumabase.com/bundle/test-0us2pn/chunks/DynamicModule-OnSjh2dR.js",
+          "test-0us2pn/chunks/LazyComponent-Dh0jNps_.js": "https://remote-bundler.fumabase.com/bundle/test-0us2pn/chunks/LazyComponent-Dh0jNps_.js",
+          "test-0us2pn/index.js": "https://remote-bundler.fumabase.com/bundle/test-0us2pn/index.js",
         },
-        "htmlUrl": "https://remote-bundler.fumabase.com/bundle/test-zt8eqg/index.html",
-        "jsUrl": "https://remote-bundler.fumabase.com/bundle/test-zt8eqg/index.js",
+        "htmlUrl": "https://remote-bundler.fumabase.com/bundle/test-0us2pn/index.html",
+        "jsUrl": "https://remote-bundler.fumabase.com/bundle/test-0us2pn/index.js",
         "rawOutputs": [
           {
-            "path": "/test-zt8eqg/index.js",
-            "size": 2301,
+            "path": "/test-0us2pn/index.js",
+            "size": 2639,
             "type": "entry",
           },
           {
-            "path": "/test-zt8eqg/chunks/LazyComponent-QWYJ2LE2.js",
-            "size": 524,
+            "path": "/test-0us2pn/chunks/LazyComponent-Dh0jNps_.js",
+            "size": 538,
             "type": "chunk",
           },
           {
-            "path": "/test-zt8eqg/chunks/DynamicModule-5NLYDKFO.js",
-            "size": 346,
+            "path": "/test-0us2pn/chunks/DynamicModule-OnSjh2dR.js",
+            "size": 446,
             "type": "chunk",
           },
         ],
@@ -592,7 +592,7 @@ describe('Remote Bundler Worker', () => {
 
     const serverTiming = response.headers.get('Server-Timing')
     expect(serverTiming).toMatchInlineSnapshot(
-      `"parse-body;dur=0, build;dur=14, html-generation;dur=0, kv-storage;dur=200, total;dur=214"`,
+      `"parse-body;dur=0, build;dur=47, html-generation;dur=0, kv-storage;dur=293, total;dur=340"`,
     )
 
     if (result.success) {
@@ -659,14 +659,14 @@ describe('Remote Bundler Worker', () => {
     expect(result).toMatchInlineSnapshot(`
       {
         "files": {
-          "test-kta5ii/index.js": "https://remote-bundler.fumabase.com/bundle/test-kta5ii/index.js",
+          "test-d4waja/index.js": "https://remote-bundler.fumabase.com/bundle/test-d4waja/index.js",
         },
-        "htmlUrl": "https://remote-bundler.fumabase.com/bundle/test-kta5ii/index.html",
-        "jsUrl": "https://remote-bundler.fumabase.com/bundle/test-kta5ii/index.js",
+        "htmlUrl": "https://remote-bundler.fumabase.com/bundle/test-d4waja/index.html",
+        "jsUrl": "https://remote-bundler.fumabase.com/bundle/test-d4waja/index.js",
         "rawOutputs": [
           {
-            "path": "/test-kta5ii/index.js",
-            "size": 15227,
+            "path": "/test-d4waja/index.js",
+            "size": 11602,
             "type": "entry",
           },
         ],
@@ -720,13 +720,14 @@ describe('Remote Bundler Worker', () => {
     const result = (await response.json()) as BundleResult
     expect(result).toMatchInlineSnapshot(`
       {
-        "error": "Unexpected "export"",
-        "errorText": "✘ [ERROR] Unexpected "export"
+        "error": "[plugin local-files] app.tsx (2:28): Unexpected token, expected ";"",
+        "errorText": "✘ [ERROR] [plugin local-files] app.tsx (2:28): Unexpected token, expected ";"
 
-          local:/app.tsx:11:12:
-            11 │             export default App
-               ╵             ~~~~~~
-
+          /app.tsx:2:28:
+      1 │ 
+      2 │             const App = () => {
+        ╵                             ^
+      3 │               // Missing closing bracket for function
       ",
         "success": false,
       }
@@ -761,13 +762,8 @@ describe('Remote Bundler Worker', () => {
 
     expect(result).toMatchInlineSnapshot(`
       {
-        "error": "Failed to fetch https://esm.sh/package-that-definitely-does-not-exist-12345: 404 Not Found",
-        "errorText": "✘ [ERROR] Failed to fetch https://esm.sh/package-that-definitely-does-not-exist-12345: 404 Not Found [plugin esm-sh-plugin]
-
-          local:/app.tsx:2:41:
-            2 │             import { someFunction } from 'package-that-definitely-does-not-exist-12345';
-              ╵                                          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
+        "error": "Could not load https://esm.sh/package-that-definitely-does-not-exist-12345 (imported by app.tsx): Failed to fetch https://esm.sh/package-that-definitely-does-not-exist-12345: 404 Not Found",
+        "errorText": "✘ [ERROR] Could not load https://esm.sh/package-that-definitely-does-not-exist-12345 (imported by app.tsx): Failed to fetch https://esm.sh/package-that-definitely-does-not-exist-12345: 404 Not Found
       ",
         "success": false,
       }

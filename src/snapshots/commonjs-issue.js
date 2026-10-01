@@ -1,21 +1,16 @@
-// virtual-entry:virtual:entry
-import React from "react";
+import React from 'react';
+import { jsx } from 'react/jsx-runtime';
 
-// local:/button.tsx
-import { jsx } from "react/jsx-runtime";
-var Button = () => /* @__PURE__ */ jsx("button", { className: "xxx p-4 bg-blue-500 text-white hover:bg-blue-600 md:p-6", children: "Click" });
-var button_default = Button;
+const Button = () => jsx('button', { className: "xxx p-4 bg-blue-500 text-white hover:bg-blue-600 md:p-6"     , children: "Click"});
 
-// virtual-entry:virtual:entry
-import { Fragment, jsx as jsx2, jsxs } from "react/jsx-runtime";
-var OriginalDefault = button_default;
-var WrappedComponent = (props) => {
-  return /* @__PURE__ */ jsxs(Fragment, { children: [
-    /* @__PURE__ */ jsx2("link", { rel: "stylesheet", href: "https://remote-bundler.fumabase.com/bundle/test-7bmbuf/index.css" }),
-    OriginalDefault ? /* @__PURE__ */ jsx2(OriginalDefault, { ...props }) : null
-  ] });
-};
-var virtual_entry_default = WrappedComponent;
-export {
-  virtual_entry_default as default
-};
+const OriginalDefault = Button;
+function WrappedComponent(props) {
+  return React.createElement(
+    React.Fragment,
+    null,
+    React.createElement('link', { rel: 'stylesheet', href: "https://remote-bundler.fumabase.com/bundle/test-lztt58/index.css" }),
+    OriginalDefault ? React.createElement(OriginalDefault, props) : null,
+  );
+}
+
+export { WrappedComponent as default };

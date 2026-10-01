@@ -1,6 +1,5 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+@import "../src/shadcn-theme.css";
 
 @layer base {
     :root {

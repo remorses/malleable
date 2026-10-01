@@ -5,6 +5,9 @@
   "compatibility_date": "2026-09-01",
   "compatibility_flags": ["nodejs_compat"],
 
+  // Tailwind stylesheets are imported as text
+  "rules": [{ "type": "Text", "globs": ["**/*.css"], "fallthrough": false }],
+
   "kv_namespaces": [
     { "binding": "jsCache", "id": "6b37928db4814bf2a05819634cb9845b" },
   ],

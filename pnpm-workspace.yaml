@@ -1,0 +1,2 @@
+patchedDependencies:
+  '@rollup/browser': patches/@rollup__browser.patch

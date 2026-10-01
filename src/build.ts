@@ -1,7 +1,11 @@
+import { rollup, type Plugin, type RollupLog } from '@rollup/browser'
+import commonjsImport from '@rollup/plugin-commonjs'
 import { generateTailwindCSS } from './generate-tailwind.js'
-import { createEsmShPlugin } from './esm-https-plugin.js'
-import { createLocalResolverPlugin } from './local-resolver-plugin.js'
-import { createVirtualEntryPlugin } from './virtual-entry-plugin.js'
+import {
+  esmShPlugin,
+  localFilesPlugin,
+  virtualEntryPlugin,
+} from './rollup-plugins.ts'
 
 export interface BuildFile {
   path: string
@@ -14,7 +18,58 @@ export interface BuildOutput {
   text: string
 }
 
+/** Content-addressed cache. A miss or an error must never fail a build. */
+export interface BuildCache {
+  get(key: string): Promise<string | null>
+  put(key: string, value: string, ttlSeconds: number): void
+}
+
+const CACHE_VERSION = 'v2'
+
+/** KV-backed cache under the `cache:` prefix, separate from published `/bundle/*` keys. */
+export function createKvBuildCache(
+  kv: KVNamespace,
+  waitUntil: (promise: Promise<unknown>) => void,
+): BuildCache {
+  const prefixed = (key: string) => `cache:${CACHE_VERSION}:${key}`
+  return {
+    get: (key) => kv.get(prefixed(key)).catch(() => null),
+    put: (key, value, ttlSeconds) =>
+      waitUntil(
+        kv
+          .put(prefixed(key), value, { expirationTtl: Math.max(60, ttlSeconds) })
+          .catch(() => {}),
+      ),
+  }
+}
+
+async function sha256Hex(text: string) {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text))
+  return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, '0')).join('')
+}
+
+// Per-isolate layer in front of KV. Tailwind output is ~10-30KB, so keep it small.
+const tailwindMemory = new Map<string, string>()
+const TAILWIND_MEMORY_LIMIT = 50
+const TAILWIND_TTL_SECONDS = 7 * 24 * 3600
+
+/** Tailwind CSS keyed by the exact source and CSS text, so a hit is always correct. */
+async function generateTailwindCached(code: string, userCss: string, cache?: BuildCache) {
+  const key = `tw:${CACHE_VERSION}:${await sha256Hex(`${code}\0${userCss}`)}`
+  const hit = tailwindMemory.get(key) ?? (await cache?.get(key))
+  if (hit != null) return hit
+  const css = await generateTailwindCSS(code, userCss)
+  if (tailwindMemory.size >= TAILWIND_MEMORY_LIMIT) {
+    tailwindMemory.delete(tailwindMemory.keys().next().value!)
+  }
+  tailwindMemory.set(key, css)
+  cache?.put(key, css, TAILWIND_TTL_SECONDS)
+  return css
+}
+
 export interface BuildOptions {
+  /** Optional shared cache for Tailwind output and CDN modules */
+  cache?: BuildCache
   files: BuildFile[]
   entryPoint: string
   externalPackages: string[]
@@ -35,66 +90,78 @@ export interface BuildSuccess {
 
 export interface BuildFailure {
   ok: false
-  /** True when esbuild reported the errors (user code problem) */
-  fromEsbuild: boolean
-  /** Formatted esbuild messages, no ANSI colors */
+  /** True when the bundler reported the errors (user code problem) */
+  fromBundler: boolean
+  /** Formatted bundler messages, no ANSI colors */
   errorText: string
   errors: Array<{ file?: string; line?: number; text: string }>
 }
 
-let initPromise: Promise<void> | undefined
+// TODO: drop patches/@rollup__browser.patch once @rollup/browser lets us pass the wasm module.
+// workerd cannot compile wasm from bytes, so the patch reads a precompiled module from this
+// global instead of fetching the file. https://github.com/rollup/rollup/issues/5722
+let wasmReady: Promise<void> | undefined
 
-async function loadEsbuild() {
-  const [esbuild, wasm] = await Promise.all([
-    import('esbuild-wasm'),
-    import('../node_modules/esbuild-wasm/esbuild.wasm').then(
-      (mod) => mod.default,
-    ),
-  ])
-  initPromise ??= esbuild
-    .initialize({
-      wasmModule: process.env.VITEST ? undefined : wasm,
-      worker: false,
+function loadRollupWasm() {
+  wasmReady ??= import('../node_modules/@rollup/browser/dist/es/bindings_wasm_bg.wasm')
+    .then((mod) => {
+      ;(globalThis as any).__ROLLUP_WASM_MODULE__ = mod.default
     })
     .catch((e) => {
-      initPromise = undefined
+      wasmReady = undefined
       throw e
     })
-  await initPromise
-  return esbuild
+  return wasmReady
 }
+
+// TODO: drop the casts once @rollup/plugin-commonjs types work with nodenext and @rollup/browser.
+// Its .d.ts is read as CJS, and its Plugin type comes from the `rollup` package, not @rollup/browser.
+const commonjs = commonjsImport as unknown as (
+  options: Parameters<typeof commonjsImport.default>[0],
+) => Plugin
 
 const CODE_FILE = /\.(tsx?|jsx?|mjs|css|html)$/
 
-export async function formatBuildError(error: any): Promise<BuildFailure> {
-  const esbuild = await loadEsbuild()
-  const raw: any[] = error?.errors ?? []
-  const errorText = raw.length
-    ? (
-        await esbuild.formatMessages(raw, {
-          kind: 'error',
-          color: false,
-          terminalWidth: 100,
-        })
-      ).join('\n')
-    : String(error?.message || 'Build failed')
-  const errors = raw.length
-    ? raw.map((e) => ({
-        file: e.location?.file,
-        line: e.location?.line,
-        text: String(e.text),
-      }))
-    : [{ text: String(error?.message || 'Build failed') }]
-  return { ok: false, fromEsbuild: raw.length > 0, errorText, errors }
+function codeFrame(source: string, line: number, column: number) {
+  const lines = source.split('\n')
+  const from = Math.max(1, line - 1)
+  const to = Math.min(lines.length, line + 1)
+  const width = String(to).length
+  const out: string[] = []
+  for (let n = from; n <= to; n++) {
+    out.push(`${String(n).padStart(width)} │ ${lines[n - 1]}`)
+    if (n === line) out.push(`${' '.repeat(width)} ╵ ${' '.repeat(column)}^`)
+  }
+  return out.join('\n')
 }
 
-/** Bundle a set of files with esbuild and generate Tailwind CSS. Never throws on build errors. */
+export function formatBuildError(
+  error: any,
+  files: BuildFile[] = [],
+): BuildFailure {
+  const message = String(error?.message || 'Build failed')
+  // Rollup errors always carry a code; anything else is an internal failure
+  const fromBundler = typeof error?.code === 'string'
+  const loc = error?.loc as { file?: string; line: number; column: number } | undefined
+  const file = loc?.file ?? error?.id
+  const source = files.find((f) => '/' + f.path.replace(/^\//, '') === file)?.content
+  const where = loc
+    ? `\n\n    ${file}:${loc.line}:${loc.column}:\n${source ? codeFrame(source, loc.line, loc.column) : (error.frame ?? '')}`
+    : ''
+  return {
+    ok: false,
+    fromBundler,
+    errorText: `✘ [ERROR] ${message}${where}\n`,
+    errors: [{ file, line: loc?.line, text: message }],
+  }
+}
+
+/** Bundle a set of files with Rollup and generate Tailwind CSS. Never throws on build errors. */
 export async function buildFiles(
   options: BuildOptions,
 ): Promise<BuildSuccess | BuildFailure> {
-  const esbuild = await loadEsbuild()
   const outdir = options.outdir ?? 'out'
-  const { files, entryPoint, externalPackages, cssUrl, baseUrl = '' } = options
+  const { files, entryPoint, externalPackages, cssUrl, cache } = options
 
   const allCode = files
     .filter((f) => CODE_FILE.test(f.path))
@@ -102,59 +169,51 @@ export async function buildFiles(
     .join('\n')
 
   try {
-    const [result, css] = await Promise.all([
-      esbuild.build({
-        entryPoints: { index: 'virtual:entry' },
-        outdir: `./${outdir}`,
-        bundle: true,
-        format: 'esm',
-        splitting: true,
-        sourcemap: false,
-        target: 'es2020',
-        platform: 'browser',
-        write: false,
-        minify: false,
-        jsx: 'automatic',
-        plugins: [
-          createVirtualEntryPlugin({
-            actualEntryPath: entryPoint,
-            cssUrl,
-            baseUrl,
-          }),
-          createLocalResolverPlugin({ files }),
-          createEsmShPlugin({ externalPackages }),
-        ],
-        absWorkingDir: '/',
-        loader: {
-          '.tsx': 'tsx',
-          '.ts': 'tsx',
-          '.jsx': 'tsx',
-          '.js': 'tsx',
-          '.css': 'css',
-        },
-        entryNames: '[dir]/[name]',
-        chunkNames: '[dir]/chunks/[name]-[hash]',
-        assetNames: '[dir]/assets/[name]-[hash]',
-      }),
-      generateTailwindCSS(allCode),
-    ])
+    await loadRollupWasm()
+    const warnings: RollupLog[] = []
+    const bundle = await rollup({
+      input: '\0virtual:entry',
+      plugins: [
+        virtualEntryPlugin({ actualEntryPath: entryPoint, cssUrl }),
+        localFilesPlugin({ files }),
+        // local files only; CDN modules are already ESM
+        commonjs({ include: /^\/[^?]*\.c?js$/ }),
+        esmShPlugin({ externalPackages, cache }),
+      ],
+      onwarn: (w) => warnings.push(w),
+    })
+    const output = await bundle
+      .generate({
+        format: 'es',
+        entryFileNames: 'index.js',
+        chunkFileNames: 'chunks/[name]-[hash].js',
+        assetFileNames: 'assets/[name]-[hash][extname]',
+      })
+      .then((r) => r.output)
+      .finally(() => bundle.close())
 
-    const prefix = new RegExp(`^/?\\.?/?${outdir}/`)
-    const outputFiles = result.outputFiles || []
+    const all = output.map((o) => ({
+      path: o.fileName,
+      text: o.type === 'chunk' ? o.code : String(o.source),
+    }))
+    // CSS imported by the project goes through Tailwind too, so @apply works
+    const importedCss = all.find((o) => o.path === 'index.css')?.text ?? ''
+    const outputs = all.filter((o) => o.path !== 'index.css')
+    const css = await generateTailwindCached(allCode, importedCss, cache).catch((e) => {
+      // project CSS that Tailwind rejects (bad @apply) is a user error
+      throw importedCss ? Object.assign(e, { code: 'TAILWIND_ERROR' }) : e
+    })
     return {
       ok: true,
       css,
-      warnings: result.warnings,
-      outputs: outputFiles.map((f) => ({
-        path: f.path.replace(prefix, ''),
-        text: f.text,
-      })),
-      rawOutputs: outputFiles.map((f) => ({
-        path: f.path,
-        size: f.contents.byteLength,
+      warnings: warnings.map((w) => ({ code: w.code, text: w.message })),
+      outputs,
+      rawOutputs: outputs.map((o) => ({
+        path: `/${outdir}/${o.path}`,
+        size: new TextEncoder().encode(o.text).byteLength,
       })),
     }
   } catch (error) {
-    return formatBuildError(error)
+    return formatBuildError(error, files)
   }
 }

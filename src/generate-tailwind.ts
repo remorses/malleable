@@ -1,531 +1,66 @@
-import postcss from 'postcss'
-import autoprefixer from 'autoprefixer'
-import tailwindcss, { Config } from 'tailwindcss'
+import { compile, Polyfills } from 'tailwindcss'
 import typography from '@tailwindcss/typography'
+import themeCss from 'tailwindcss/theme.css'
+import utilitiesCss from 'tailwindcss/utilities.css'
+import preflightCss from 'tailwindcss/preflight.css'
+import shadcnThemeCss from './shadcn-theme.css'
 
-// Export the theme configuration for use in other files
-export const shadcnTheme = {
-  extend: {
-    colors: {
-      border: 'hsl(var(--border, 214.3 31.8% 91.4%))',
-      input: 'hsl(var(--input, 214.3 31.8% 91.4%))',
-      ring: 'hsl(var(--ring, 222.2 84% 4.9%))',
-      background: 'hsl(var(--background, 0 0% 100%))',
-      foreground: 'hsl(var(--foreground, 222.2 84% 4.9%))',
-      primary: {
-        DEFAULT: 'hsl(var(--primary, 222.2 47.4% 11.2%))',
-        foreground: 'hsl(var(--primary-foreground, 210 40% 98%))',
-      },
-      secondary: {
-        DEFAULT: 'hsl(var(--secondary, 210 40% 96.1%))',
-        foreground: 'hsl(var(--secondary-foreground, 222.2 47.4% 11.2%))',
-      },
-      destructive: {
-        DEFAULT: 'hsl(var(--destructive, 0 84.2% 60.2%))',
-        foreground: 'hsl(var(--destructive-foreground, 210 40% 98%))',
-      },
-      muted: {
-        DEFAULT: 'hsl(var(--muted, 210 40% 96.1%))',
-        foreground: 'hsl(var(--muted-foreground, 215.4 16.3% 46.9%))',
-      },
-      accent: {
-        DEFAULT: 'hsl(var(--accent, 210 40% 96.1%))',
-        foreground: 'hsl(var(--accent-foreground, 222.2 47.4% 11.2%))',
-      },
-      popover: {
-        DEFAULT: 'hsl(var(--popover, 0 0% 100%))',
-        foreground: 'hsl(var(--popover-foreground, 222.2 84% 4.9%))',
-      },
-      card: {
-        DEFAULT: 'hsl(var(--card, 0 0% 100%))',
-        foreground: 'hsl(var(--card-foreground, 222.2 84% 4.9%))',
-      },
-    },
-    borderRadius: {
-      lg: 'var(--radius, 0.5rem)',
-      md: 'calc(var(--radius, 0.5rem) - 2px)',
-      sm: 'calc(var(--radius, 0.5rem) - 4px)',
-    },
-    keyframes: {
-      'accordion-down': {
-        from: { height: '0' },
-        to: { height: 'var(--radix-accordion-content-height)' },
-      },
-      'accordion-up': {
-        from: { height: 'var(--radix-accordion-content-height)' },
-        to: { height: '0' },
-      },
-    },
-    animation: {
-      'accordion-down': 'accordion-down 0.2s ease-out',
-      'accordion-up': 'accordion-up 0.2s ease-out',
-    },
-  },
+// No `layer()` on purpose: layered rules lose to any unlayered CSS on the host page.
+const BASE_CSS = `
+@import "tailwindcss/preflight.css";
+@import "tailwindcss/theme.css";
+@import "tailwindcss/utilities.css";
+${shadcnThemeCss}
+`
+
+// Workers have no fs, so stylesheets are bundled as text. Only these ids are importable from user CSS. `tailwindcss` is already in BASE_CSS, so it maps to nothing.
+const STYLESHEETS: Record<string, string> = {
+  tailwindcss: '',
+  'tailwindcss/preflight.css': preflightCss,
+  'tailwindcss/theme.css': themeCss,
+  'tailwindcss/utilities.css': utilitiesCss,
 }
 
-// Create a PostCSS processor with Tailwind CSS
-function createTailwindProcessor(
-  content: string | Array<{ raw: string; extension: string }> = [],
-) {
-  const contentConfig =
-    typeof content === 'string' ? [{ raw: content, extension: 'tsx' }] : content
-
-  return postcss([
-    tailwindcss({
-      content: contentConfig,
-      darkMode: 'class',
-      future: {
-        hoverOnlyWhenSupported: true,
-      },
-      corePlugins: {
-        preflight: false,
-      },
-      theme: shadcnTheme,
-      plugins: [typography],
-    }),
-    autoprefixer({ remove: false }),
-  ])
+/**
+ * Extracts class candidates from source text. Over-generates on purpose:
+ * `build()` ignores everything that is not a utility.
+ * TODO: replace with the oxide scanner if it ever runs in workerd. https://github.com/tailwindlabs/tailwindcss/tree/main/crates/oxide
+ */
+export function scanCandidates(source: string): string[] {
+  const out = new Set<string>()
+  for (const token of source.split(/[\s"'`{}]+/)) {
+    if (!token) continue
+    out.add(token)
+    // glued tokens like cn(`a`,`b`); keep [...] arbitrary values intact
+    for (const part of token.split(/[,;()=]+(?![^\[]*\])/)) if (part) out.add(part)
+  }
+  return [...out]
 }
 
-// Process CSS with PostCSS and optional plugins
-export async function processCSSWithPostCSS(
-  css: string,
-  plugins: any[] = [],
+/** Compile Tailwind v4 CSS for the classes found in `code`, followed by `userCss` (may use @apply). */
+export async function generateTailwindCSS(
+  code: string,
+  userCss = '',
 ): Promise<string> {
   try {
-    const result = await postcss([
-      ...plugins,
-      autoprefixer({ remove: false }),
-    ]).process(css, { from: undefined, map: false })
-
-    return result.css
-  } catch (error: any) {
-    console.error('Failed to process CSS with PostCSS:', error)
-    throw new Error(`Failed to process CSS: ${error.message}`)
-  }
-}
-
-// Tailwind CSS Preflight styles (v3.4.3) - with theme() functions resolved
-const TAILWIND_PREFLIGHT = `
-/*
-1. Prevent padding and border from affecting element width. (https://github.com/mozdevs/cssremedy/issues/4)
-2. Allow adding a border to an element by just adding a border-width. (https://github.com/tailwindcss/tailwindcss/pull/116)
-*/
-*,
-::before,
-::after {
-  box-sizing: border-box; /* 1 */
-  border-width: 0; /* 2 */
-  border-style: solid; /* 2 */
-  border-color: currentColor; /* 2 */
-}
-
-::before,
-::after {
-  --tw-content: '';
-}
-
-/*
-1. Use a consistent sensible line-height in all browsers.
-2. Prevent adjustments of font size after orientation changes in iOS.
-3. Use a more readable tab size.
-4. Use the user's configured \`sans\` font-family by default.
-5. Use the user's configured \`sans\` font-feature-settings by default.
-6. Use the user's configured \`sans\` font-variation-settings by default.
-7. Disable tap highlights on iOS
-*/
-
-html,
-:host {
-  line-height: 1.5; /* 1 */
-  -webkit-text-size-adjust: 100%; /* 2 */
-  -moz-tab-size: 4; /* 3 */
-  tab-size: 4; /* 3 */
-  font-family: ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji"; /* 4 */
-  font-feature-settings: normal; /* 5 */
-  font-variation-settings: normal; /* 6 */
-  -webkit-tap-highlight-color: transparent; /* 7 */
-}
-
-/*
-1. Remove the margin in all browsers.
-2. Inherit line-height from \`html\` so users can set them as a class directly on the \`html\` element.
-*/
-
-body {
-  margin: 0; /* 1 */
-  line-height: inherit; /* 2 */
-}
-
-/*
-1. Add the correct height in Firefox.
-2. Correct the inheritance of border color in Firefox. (https://bugzilla.mozilla.org/show_bug.cgi?id=190655)
-3. Ensure horizontal rules are visible by default.
-*/
-
-hr {
-  height: 0; /* 1 */
-  color: inherit; /* 2 */
-  border-top-width: 1px; /* 3 */
-}
-
-/*
-Add the correct text decoration in Chrome, Edge, and Safari.
-*/
-
-abbr:where([title]) {
-  text-decoration: underline dotted;
-}
-
-/*
-Remove the default font size and weight for headings.
-*/
-
-h1,
-h2,
-h3,
-h4,
-h5,
-h6 {
-  font-size: inherit;
-  font-weight: inherit;
-}
-
-/*
-Reset links to optimize for opt-in styling instead of opt-out.
-*/
-
-a {
-  color: inherit;
-  text-decoration: inherit;
-}
-
-/*
-Add the correct font weight in Edge and Safari.
-*/
-
-b,
-strong {
-  font-weight: bolder;
-}
-
-/*
-1. Use the user's configured \`mono\` font-family by default.
-2. Use the user's configured \`mono\` font-feature-settings by default.
-3. Use the user's configured \`mono\` font-variation-settings by default.
-4. Correct the odd \`em\` font sizing in all browsers.
-*/
-
-code,
-kbd,
-samp,
-pre {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; /* 1 */
-  font-feature-settings: normal; /* 2 */
-  font-variation-settings: normal; /* 3 */
-  font-size: 1em; /* 4 */
-}
-
-/*
-Add the correct font size in all browsers.
-*/
-
-small {
-  font-size: 80%;
-}
-
-/*
-Prevent \`sub\` and \`sup\` elements from affecting the line height in all browsers.
-*/
-
-sub,
-sup {
-  font-size: 75%;
-  line-height: 0;
-  position: relative;
-  vertical-align: baseline;
-}
-
-sub {
-  bottom: -0.25em;
-}
-
-sup {
-  top: -0.5em;
-}
-
-/*
-1. Remove text indentation from table contents in Chrome and Safari. (https://bugs.chromium.org/p/chromium/issues/detail?id=999088, https://bugs.webkit.org/show_bug.cgi?id=201297)
-2. Correct table border color inheritance in all Chrome and Safari. (https://bugs.chromium.org/p/chromium/issues/detail?id=935729, https://bugs.webkit.org/show_bug.cgi?id=195016)
-3. Remove gaps between table borders by default.
-*/
-
-table {
-  text-indent: 0; /* 1 */
-  border-color: inherit; /* 2 */
-  border-collapse: collapse; /* 3 */
-}
-
-/*
-1. Change the font styles in all browsers.
-2. Remove the margin in Firefox and Safari.
-3. Remove default padding in all browsers.
-*/
-
-button,
-input,
-optgroup,
-select,
-textarea {
-  font-family: inherit; /* 1 */
-  font-feature-settings: inherit; /* 1 */
-  font-variation-settings: inherit; /* 1 */
-  font-size: 100%; /* 1 */
-  font-weight: inherit; /* 1 */
-  line-height: inherit; /* 1 */
-  letter-spacing: inherit; /* 1 */
-  color: inherit; /* 1 */
-  margin: 0; /* 2 */
-  padding: 0; /* 3 */
-}
-
-/*
-Remove the inheritance of text transform in Edge and Firefox.
-*/
-
-button,
-select {
-  text-transform: none;
-}
-
-/*
-1. Correct the inability to style clickable types in iOS and Safari.
-2. Remove default button styles.
-*/
-
-button,
-input:where([type='button']),
-input:where([type='reset']),
-input:where([type='submit']) {
-  -webkit-appearance: button; /* 1 */
-  background-color: transparent; /* 2 */
-  background-image: none; /* 2 */
-}
-
-/*
-Use the modern Firefox focus style for all focusable elements.
-*/
-
-:-moz-focusring {
-  outline: auto;
-}
-
-/*
-Remove the additional \`:invalid\` styles in Firefox. (https://github.com/mozilla/gecko-dev/blob/2f9eacd9d3d995c937b4251a5557d95d494c9be1/layout/style/res/forms.css#L728-L737)
-*/
-
-:-moz-ui-invalid {
-  box-shadow: none;
-}
-
-/*
-Add the correct vertical alignment in Chrome and Firefox.
-*/
-
-progress {
-  vertical-align: baseline;
-}
-
-/*
-Correct the cursor style of increment and decrement buttons in Safari.
-*/
-
-::-webkit-inner-spin-button,
-::-webkit-outer-spin-button {
-  height: auto;
-}
-
-/*
-1. Correct the odd appearance in Chrome and Safari.
-2. Correct the outline style in Safari.
-*/
-
-[type='search'] {
-  -webkit-appearance: textfield; /* 1 */
-  outline-offset: -2px; /* 2 */
-}
-
-/*
-Remove the inner padding in Chrome and Safari on macOS.
-*/
-
-::-webkit-search-decoration {
-  -webkit-appearance: none;
-}
-
-/*
-1. Correct the inability to style clickable types in iOS and Safari.
-2. Change font properties to \`inherit\` in Safari.
-*/
-
-::-webkit-file-upload-button {
-  -webkit-appearance: button; /* 1 */
-  font: inherit; /* 2 */
-}
-
-/*
-Add the correct display in Chrome and Safari.
-*/
-
-summary {
-  display: list-item;
-}
-
-/*
-Removes the default spacing and border for appropriate elements.
-*/
-
-blockquote,
-dl,
-dd,
-h1,
-h2,
-h3,
-h4,
-h5,
-h6,
-hr,
-figure,
-p,
-pre {
-  margin: 0;
-}
-
-fieldset {
-  margin: 0;
-  padding: 0;
-}
-
-legend {
-  padding: 0;
-}
-
-ol,
-ul,
-menu {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-
-/*
-Reset default styling for dialogs.
-*/
-dialog {
-  padding: 0;
-}
-
-/*
-Prevent resizing textareas horizontally by default.
-*/
-
-textarea {
-  resize: vertical;
-}
-
-/*
-1. Reset the default placeholder opacity in Firefox. (https://github.com/tailwindlabs/tailwindcss/issues/3300)
-2. Set the default placeholder color to the user's configured gray 400 color.
-*/
-
-input::placeholder,
-textarea::placeholder {
-  opacity: 1; /* 1 */
-  color: #9ca3af; /* 2 */
-}
-
-/*
-Set the default cursor for buttons.
-*/
-
-button,
-[role="button"] {
-  cursor: pointer;
-}
-
-/*
-Make sure disabled buttons don't get the pointer cursor.
-*/
-:disabled {
-  cursor: default;
-}
-
-/*
-1. Make replaced elements \`display: block\` by default. (https://github.com/mozdevs/cssremedy/issues/14)
-2. Add \`vertical-align: middle\` to align replaced elements more sensibly by default. (https://github.com/jensimmons/cssremedy/issues/14#issuecomment-634934210)
-   This can trigger a poorly considered lint error in some tools but is included by design.
-*/
-
-img,
-svg,
-video,
-canvas,
-audio,
-iframe,
-embed,
-object {
-  display: block; /* 1 */
-  vertical-align: middle; /* 2 */
-}
-
-/*
-Constrain images and videos to the parent width and preserve their intrinsic aspect ratio. (https://github.com/mozdevs/cssremedy/issues/14)
-*/
-
-img,
-video {
-  max-width: 100%;
-  height: auto;
-}
-
-/* Make elements with the HTML hidden attribute stay hidden by default */
-[hidden] {
-  display: none;
-}
-`.trim()
-
-export async function generateTailwindCSS(content: string): Promise<string> {
-  try {
-    // Build Tailwind CSS using PostCSS
-    const processor = createTailwindProcessor(content)
-    const result = await processor.process(
-      '@tailwind base; @tailwind components; @tailwind utilities;',
-      { from: undefined, map: false },
-    )
-
-    // Since we disabled preflight in the processor, prepend the preflight styles manually
-    return TAILWIND_PREFLIGHT + '\n\n' + result.css
+    const compiler = await compile(`${BASE_CSS}\n${userCss}`, {
+      base: '/',
+      polyfills: Polyfills.All,
+      loadStylesheet: async (id, base) => {
+        const content = STYLESHEETS[id]
+        if (content === undefined) throw new Error(`Cannot import "${id}"`)
+        return { path: id, base, content }
+      },
+      loadModule: async (id, base) => {
+        if (id !== '@tailwindcss/typography') {
+          throw new Error(`Plugin or config "${id}" is not supported`)
+        }
+        return { path: id, base, module: typography }
+      },
+    })
+    return compiler.build(scanCandidates(code))
   } catch (error: any) {
     console.error('Failed to generate Tailwind CSS:', error)
     throw new Error(`Failed to generate Tailwind CSS: ${error.message}`)
-  }
-}
-
-// Process CSS file content with Tailwind CSS
-export async function processCSSFileWithTailwind(
-  cssContent: string,
-): Promise<string> {
-  try {
-    // Process the CSS file with Tailwind
-    const processor = createTailwindProcessor('')
-    const result = await processor.process(cssContent, {
-      from: undefined,
-      map: false,
-    })
-
-    return result.css
-  } catch (error: any) {
-    console.error('Failed to process CSS file with Tailwind:', error)
-    throw new Error(`Failed to process CSS file: ${error.message}`)
   }
 }
