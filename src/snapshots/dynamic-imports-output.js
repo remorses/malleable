@@ -55,7 +55,7 @@ function WrappedComponent(props) {
   return React.createElement(
     React.Fragment,
     null,
-    React.createElement('link', { rel: 'stylesheet', href: "https://remote-bundler.fumabase.com/bundle/test-g0yuz8/index.css" }),
+    React.createElement('link', { rel: 'stylesheet', href: "https://remote-bundler.fumabase.com/bundle/test-3e8a7g/index.css" }),
     OriginalDefault ? React.createElement(OriginalDefault, props) : null,
   );
 }
