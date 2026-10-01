@@ -124,8 +124,6 @@ for (let i = 0; i < runs; i++) {
         : files,
       entryPoint: 'App.tsx',
       externalPackages: EXTERNAL,
-      // push the container prerender far away so it does not skew results
-      prerenderDebounceTime: 60_000,
     }),
   })
   const body: any = await res.json()

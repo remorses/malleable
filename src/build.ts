@@ -75,7 +75,6 @@ export interface BuildOptions {
   externalPackages: string[]
   /** Absolute CSS URL for the entry. When omitted the CSS is resolved relative to the entry module. */
   cssUrl?: string
-  baseUrl?: string
   /** Output dir name inside the virtual fs, only used to strip prefixes */
   outdir?: string
 }
@@ -100,17 +99,14 @@ export interface BuildFailure {
 // TODO: drop patches/@rollup__browser.patch once @rollup/browser lets us pass the wasm module.
 // workerd cannot compile wasm from bytes, so the patch reads a precompiled module from this
 // global instead of fetching the file. https://github.com/rollup/rollup/issues/5722
+// Lazy: vitest imports this module in Node, where a static .wasm import cannot load.
 let wasmReady: Promise<void> | undefined
-
 function loadRollupWasm() {
-  wasmReady ??= import('../node_modules/@rollup/browser/dist/es/bindings_wasm_bg.wasm')
-    .then((mod) => {
+  wasmReady ??= import('../node_modules/@rollup/browser/dist/es/bindings_wasm_bg.wasm').then(
+    (mod) => {
       ;(globalThis as any).__ROLLUP_WASM_MODULE__ = mod.default
-    })
-    .catch((e) => {
-      wasmReady = undefined
-      throw e
-    })
+    },
+  )
   return wasmReady
 }
 

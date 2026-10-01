@@ -5,30 +5,15 @@
   "compatibility_date": "2026-09-01",
   "compatibility_flags": ["nodejs_compat"],
 
-  // Tailwind stylesheets are imported as text
-  "rules": [{ "type": "Text", "globs": ["**/*.css"], "fallthrough": false }],
-
   "kv_namespaces": [
     { "binding": "jsCache", "id": "6b37928db4814bf2a05819634cb9845b" },
   ],
   "artifacts": [{ "binding": "ARTIFACTS", "namespace": "lovepack" }],
-  "containers": [
-    {
-      "class_name": "BunContainer",
-      "image": "./Dockerfile",
-      "max_instances": 5,
-      "rollout_step_percentage": 100,
-    },
-  ],
   "observability": {
     "enabled": true,
   },
   "durable_objects": {
     "bindings": [
-      {
-        "class_name": "BunContainer",
-        "name": "BUN_CONTAINER",
-      },
       {
         "class_name": "ProjectDO",
         "name": "PROJECT",
@@ -49,6 +34,10 @@
       "tag": "v3",
       "new_sqlite_classes": ["ProjectDO"],
     },
+    {
+      "tag": "v4",
+      "deleted_classes": ["BunContainer"],
+    },
   ],
   "routes": [
     {
@@ -58,6 +47,8 @@
     },
   ],
   "rules": [
+    // Tailwind stylesheets are imported as text
+    { "type": "Text", "globs": ["**/*.css"], "fallthrough": false },
     {
       "type": "CompiledWasm",
       "globs": ["**/*.wasm"],

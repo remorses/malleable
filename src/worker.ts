@@ -3,112 +3,15 @@ import { z } from 'zod'
 
 import { buildFiles, createKvBuildCache, formatBuildError } from './build.js'
 import { projectsApi, projectsPublic, type ProjectsEnv } from './projects-api.js'
-
-export { ProjectDO } from './project-do.js'
 import { logger, createRequestLogger } from './logger.js'
-import { Container, getContainer, getRandom } from '@cloudflare/containers'
-import { createSpiceflowClient } from 'spiceflow/client'
-import type { ContainerApp } from './bun-server.js'
 import { IMPORTMAP } from './importmap.js'
 import { waitUntil } from 'cloudflare:workers'
-import {
-  PrerenderRequest,
-  prerenderRequestSchema,
-  PrerenderResult,
-} from './prerender.tsx'
-import { DurableObject } from './mocks/cloudflare-workers.ts'
 
-// Bun container using the @cloudflare/containers utility
-export class BunContainer extends Container<Env> {
-  // Configure default port for the container
-  defaultPort = 8080
-
-  // Sleep after 1 second of inactivity for quick cleanup
-  sleepAfter = '1m'
-
-  // Original prerender method
-  async prerender(input: PrerenderRequest) {
-    const res = await this.containerFetch('http://localhost/prerender', {
-      body: JSON.stringify(input),
-      method: 'POST',
-    })
-    if (!res.ok) throw new Error(`failed prerender in Bun: ${await res.text()}`)
-    const json = (await res.json()) as PrerenderResult
-    return json
-  }
-
-  // Debounced prerender method
-  async debouncedPrerender(input: PrerenderRequest, delayMs: number = 500) {
-    const siteId = input.siteId || 'default'
-
-    // Store the payload for this specific site
-    await this.ctx.storage.put(`prerenderPayload:${siteId}`, input)
-
-    // Set alarm with debounce - overwrites any previous alarm for this site
-    const when = Date.now() + delayMs
-    await this.ctx.storage.put(`prerenderDeadline:${siteId}`, when)
-    await this.ctx.storage.setAlarm(when)
-
-    // Return immediately for background processing
-    return {
-      html: '',
-      renderTime: 0,
-      debounced: true,
-    } as PrerenderResult
-  }
-
-  // Handle the alarm to do the actual prerendering
-  async alarm() {
-    // Get all pending prerender tasks
-    const allKeys = await this.ctx.storage.list({ prefix: 'prerenderPayload:' })
-
-    for (const [key, payload] of allKeys) {
-      const siteId = key.replace('prerenderPayload:', '')
-      const deadline = await this.ctx.storage.get<number>(
-        `prerenderDeadline:${siteId}`,
-      )
-
-      // Check if this task is ready to run
-      if (deadline && deadline <= Date.now()) {
-        try {
-          // Use prerender to do the actual work
-          const result = await this.prerender(payload as PrerenderRequest)
-
-          // Store the prerendered HTML in KV
-          if (result.html && this.env.jsCache) {
-            const htmlKey = `${siteId}/index.html`
-
-            await this.env.jsCache.put(htmlKey, result.html, {
-              metadata: {
-                prerendered: 'true',
-              },
-            })
-            console.log(
-              `${siteId}: Stored prerendered HTML for ${htmlKey} in KV from alarm`,
-            )
-          }
-        } catch (error) {
-          console.error(`${siteId}: Alarm prerender error:`, error)
-        } finally {
-          // Clean up storage for this site
-          await this.ctx.storage.delete(`prerenderPayload:${siteId}`)
-          await this.ctx.storage.delete(`prerenderDeadline:${siteId}`)
-        }
-      }
-    }
-  }
-
-  override onError(error: unknown): void {
-    console.error('Container error:', error)
-  }
-}
+export { ProjectDO } from './project-do.js'
 
 interface Env extends ProjectsEnv {
   jsCache: KVNamespace
-  BUN_CONTAINER: DurableObjectNamespace<BunContainer>
 }
-
-// Helper to create a Spiceflow client from a container stub
 
 function corsHeaders(serverTiming?: string): Record<string, string> {
   return {
@@ -135,7 +38,6 @@ const bundleSchema = z.object({
       /^[a-zA-Z0-9_-]+$/,
       'Only alphanumeric, underscore, and dash characters are allowed',
     ),
-  prerenderDebounceTime: z.number().min(0).max(60000).default(10000),
 })
 
 export type BundleInput = z.infer<typeof bundleSchema>
@@ -149,46 +51,6 @@ const app = new Spiceflow()
   .state('env', {} as Env)
   .use(projectsApi)
   .use(projectsPublic)
-  .route({
-    method: 'POST',
-    path: '/api/prerender',
-    request: prerenderRequestSchema,
-    async handler({ request, state }) {
-      try {
-        const body = await request.json()
-
-        // Use load-balanced container pool with 3 instances
-        const containerStub = (await getRandom(
-          state.env.BUN_CONTAINER,
-          1,
-        )) as DurableObjectStub<BunContainer>
-
-        // Use direct method call for prerender
-        const data = await containerStub.prerender({
-          files: body.files,
-          entryPoint: body.entryPoint,
-          cssUrls: body.cssUrls,
-          bootstrapModules: body.bootstrapModules,
-          importmap: body.importmap || IMPORTMAP,
-          siteId: body.siteId,
-        })
-
-        return Response.json({
-          success: true,
-          html: data.html,
-          renderTime: data.renderTime,
-        })
-      } catch (error) {
-        return Response.json(
-          {
-            success: false,
-            error: error.message || 'Failed to prerender',
-          },
-          { status: 500 },
-        )
-      }
-    },
-  })
   .route({
     method: 'OPTIONS',
     path: '/api/bundle',
@@ -224,7 +86,6 @@ const app = new Spiceflow()
           entryPoint,
           externalPackages = [],
           siteId,
-          prerenderDebounceTime = 10000,
         } = body
 
         // Determine actual entry point
@@ -262,7 +123,6 @@ const app = new Spiceflow()
           entryPoint: actualEntryPoint,
           externalPackages,
           cssUrl,
-          baseUrl,
           outdir: siteId,
           cache: createKvBuildCache(state.env.jsCache, waitUntil),
         })
@@ -319,6 +179,8 @@ const app = new Spiceflow()
           text: css,
           isJs: false,
         })
+
+        fileUrls[`${siteId}/index.css`] = cssUrl
 
         // The main entry file will be at siteId/index.js
         const mainJsUrl = fileUrls[`${siteId}/index.js`] || undefined
@@ -392,36 +254,6 @@ const app = new Spiceflow()
         reqLogger.timeEnd(`kv-storage`)
 
         reqLogger.timeEnd(`total`)
-
-        waitUntil(
-          (async () => {
-            try {
-              // Use load-balanced container pool for background prerendering
-              const containerStub = (await getRandom(
-                state.env.BUN_CONTAINER,
-                3,
-              )) as DurableObjectStub<BunContainer>
-
-              // Use direct method call for debounced prerender
-              // Multiple rapid requests will be debounced
-              await containerStub.debouncedPrerender(
-                {
-                  files,
-                  entryPoint: actualEntryPoint,
-                  cssUrls,
-                  bootstrapModules: mainJsUrl ? [mainJsUrl] : [],
-                  importmap: IMPORTMAP,
-                  siteId: siteId,
-                },
-                prerenderDebounceTime,
-              )
-
-              // The actual prerendering will happen in the alarm handler
-            } catch (error) {
-              console.error(`${siteId}: Background prerender error:`, error)
-            }
-          })(),
-        )
 
         // Create HTML URL
         const htmlUrl = `${baseUrl}/bundle/${htmlKey}`

@@ -1,5 +1,3 @@
-import type { BunPlugin as Plugin } from 'bun'
-
 import { logger } from './logger.ts'
 
 // Global caches that persist across requests
@@ -26,35 +24,6 @@ function memoryGet<T>(map: Map<string, Expiring<T>>, key: string): T | undefined
 function memorySet<T>(map: Map<string, Expiring<T>>, key: string, value: T) {
   if (map.size >= MEMORY_LIMIT) map.delete(map.keys().next().value!)
   map.set(key, { value, expires: Date.now() + MEMORY_TTL_MS })
-}
-
-/**
- * Bun runtime plugin that lets `bun` import https:// modules (used by src/preload-bun.ts).
- * Bun passes https imports in the `https` namespace with the path `//host/path`, and
- * relative imports inside them arrive in the default namespace with the URL as importer.
- * Bare imports are left to Bun.
- */
-export function createBunHttpImportsPlugin(): Plugin {
-  return {
-    name: 'http-imports',
-    setup(build) {
-      build.onResolve({ filter: /.*/ }, (args) => {
-        if (!/^https?:\/\//.test(args.importer)) return undefined
-        if (!args.path.startsWith('.') && !args.path.startsWith('/')) return undefined
-        const url = new URL(args.path, args.importer)
-        return {
-          path: url.href.slice(url.protocol.length),
-          namespace: url.protocol.slice(0, -1),
-        }
-      })
-      for (const namespace of ['http', 'https']) {
-        build.onLoad({ filter: /.*/, namespace }, async (args) => ({
-          contents: await fetchModuleSource(`${namespace}:${args.path}`),
-          loader: 'js',
-        }))
-      }
-    },
-  }
 }
 
 /** Fetch a module from a CDN url, following redirects, with a per-isolate cache. */

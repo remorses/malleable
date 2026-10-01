@@ -1,9 +1,0 @@
-{
-  "name": "lovepack-container",
-  "dependencies": {
-    "spiceflow": "^1.17.9",
-    "react": "^19.1.1",
-    "react-dom": "^19.1.1",
-    "zod": "^4.0.17"
-  }
-}

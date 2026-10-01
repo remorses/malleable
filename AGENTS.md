@@ -51,7 +51,6 @@ POST /api/bundle
 - `entryPoint`: entry file (default: first file)
 - `externalPackages`: packages to treat as external (default: [])
 - `siteId`: output id, `[a-zA-Z0-9_-]+` (required)
-- `prerenderDebounceTime`: ms before the container prerender runs (default: 10000)
 
 Output is stored in KV and served from `GET /bundle/<siteId>/*`.
 

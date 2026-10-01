@@ -5,7 +5,7 @@ import dedent from 'string-dedent'
 import {
   fetchModuleSource,
   getPackageName,
-} from './esm-https-plugin.ts'
+} from './cdn-modules.ts'
 import type { BuildCache } from './build.ts'
 
 const VIRTUAL_ENTRY = '\0virtual:entry'
