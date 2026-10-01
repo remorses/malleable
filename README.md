@@ -1,19 +1,35 @@
 # Lovepack 💝
 
-A blazing-fast Cloudflare Worker that bundles TypeScript/JavaScript code on-the-fly with automatic Tailwind CSS generation and shadcn/ui theming support.
+A Cloudflare Worker that bundles TypeScript/JSX with Tailwind on the fly. Two modes:
 
-## Projects (versioned, live UI)
+| Mode | Use it for |
+|---|---|
+| **Projects** | Versioned UI in Cloudflare Artifacts. Agents edit, viewers see live drafts, users undo or push with plain `git`. |
+| **`/api/bundle`** | Stateless bundling. Send files, get URLs. |
 
-Agents edit files in a **session**, viewers see **live drafts**, each agent message becomes one **git commit** in Cloudflare Artifacts. Undo, restore and branches are built in. See [docs/projects.md](docs/projects.md).
+## Projects
+
+Agents edit files in a **session**, viewers see **live drafts**, each agent message becomes one **git commit**. Undo, restore and branches are built in.
 
 ```ts
 const project = getProject(env.PROJECT, 'u123')           // Durable Object stub, RPC
 const { sessionId } = await project.openSession({ author: { kind: 'agent', id: 'ses_1' } })
 await project.write(sessionId, 'App.tsx', code)
-await project.commit(sessionId, { message: 'Add chart' })
+await project.build(sessionId)                            // draft: viewers update live
+await project.commit(sessionId, { message: 'Add chart' }) // one commit, sources + dist
+await project.undo()                                      // new commit with the previous sources
 ```
 
-## API Endpoint
+Users can also edit with git:
+
+```bash
+git clone "$AUTHENTICATED_URL" app   # token from POST /api/projects/:id/git-access
+git commit -am 'Tweak' && git push origin main
+```
+
+Setup, REST routes, the client SDK and the git remote are in [docs/projects.md](docs/projects.md). Try it with `examples/agent.ts` and the `/view/:id` page.
+
+## Legacy API: `/api/bundle`
 
 ### POST `/api/bundle`
 
@@ -31,7 +47,8 @@ Bundle and transform TypeScript/JavaScript files with automatic dependency resol
     }
   ],
   "entryPoint": "index.tsx",  // Optional, defaults to first file
-  "externalPackages": ["react", "react-dom"]  // Optional, packages to mark as external
+  "externalPackages": ["react", "react-dom"],  // Optional, packages to mark as external
+  "siteId": "my-site"  // Required, [a-zA-Z0-9_-]+, output folder
 }
 ```
 
@@ -39,28 +56,28 @@ Bundle and transform TypeScript/JavaScript files with automatic dependency resol
 ```json
 {
   "success": true,
-  "jsUrl": "https://remote-bundler.fumabase.com/bundle/[hash].js",
-  "htmlUrl": "https://remote-bundler.fumabase.com/bundle/[hash].html",
+  "jsUrl": "https://remote-bundler.fumabase.com/bundle/my-site/index.js",
+  "htmlUrl": "https://remote-bundler.fumabase.com/bundle/my-site/index.html",
   "files": {
-    "[hash].js": "https://remote-bundler.fumabase.com/bundle/[hash].js",
-    "chunks/[name]-[hash].js": "https://remote-bundler.fumabase.com/bundle/chunks/[name]-[hash].js"
+    "my-site/index.js": "https://remote-bundler.fumabase.com/bundle/my-site/index.js",
+    "my-site/chunks/[name]-[hash].js": "https://remote-bundler.fumabase.com/bundle/my-site/chunks/[name]-[hash].js"
   },
   "rawOutputs": [],
-  "warnings": []  // ESBuild warnings if any
+  "warnings": []  // Bundler warnings if any
 }
 ```
 
 ## Features
 
 - **TypeScript/JSX Support**: Full support for TypeScript and JSX syntax with React automatic runtime
-- **Automatic Bundling**: Uses ESBuild WASM for lightning-fast bundling
+- **Automatic Bundling**: Uses Rollup (WASM) + sucrase for lightning-fast bundling
 - **CDN Resolution**: Automatically fetches npm packages from esm.sh
 - **Tailwind CSS**: Generates Tailwind CSS based on classes used in your code
 - **shadcn/ui Theme**: Includes default shadcn/ui theme configuration and CSS variables
 - **Typography Plugin**: Tailwind Typography plugin included for prose styles
 - **Multiple Files**: Support for projects with multiple files and relative imports
 - **Code Splitting**: Support for dynamic imports and React.lazy with automatic chunking
-- **Smart Caching**: KV-based caching for bundled outputs
+- **KV storage**: `/api/bundle` outputs are stored in KV
 - **Server Timing**: Detailed performance metrics via Server-Timing headers
 
 ## Example Usage
@@ -74,7 +91,8 @@ curl -X POST https://remote-bundler.fumabase.com/api/bundle \
       "path": "app.tsx",
       "content": "import React from \"react\";\nexport default function App() {\n  return <div className=\"p-4 bg-primary text-primary-foreground rounded-lg\">Hello</div>;\n}"
     }],
-    "externalPackages": ["react"]
+    "externalPackages": ["react"],
+    "siteId": "demo"
   }'
 ```
 
@@ -102,7 +120,8 @@ const response = await fetch('https://remote-bundler.fumabase.com/api/bundle', {
         export default Button;
       `
     }],
-    externalPackages: ['react']
+    externalPackages: ['react'],
+    siteId: 'demo'
   })
 });
 
@@ -169,7 +188,8 @@ const response = await fetch('https://remote-bundler.fumabase.com/api/bundle', {
       }
     ],
     entryPoint: 'app.tsx',
-    externalPackages: ['react']
+    externalPackages: ['react'],
+    siteId: 'demo'
   })
 });
 ```
@@ -191,13 +211,6 @@ The generated CSS includes default shadcn/ui CSS variables for both light and da
 - `--border`, `--input`, `--ring`
 - `--radius` (border radius)
 
-## Performance
-
-- Initial requests: ~200-500ms (with dependency resolution)
-- Cached requests: ~50-100ms (serving from KV cache)
-- Tailwind CSS generation: ~50-100ms
-- Code splitting: Automatic chunking for dynamic imports
-
 ## Web Interface
 
 Visit [https://remote-bundler.fumabase.com](https://remote-bundler.fumabase.com) to use the interactive web UI for uploading and bundling files.
@@ -211,9 +224,11 @@ pnpm install
 # Run locally
 pnpm dev
 
-# Run tests
-pnpm test
+# Secrets for projects: LOVEPACK_API_KEY in .dev.vars (local) and `wrangler secret put` (deployed)
 
+# Run tests (they hit the deployed worker, deploy first)
+pnpm test
+pnpm test:local   # legacy /api/bundle tests against the local bundler
 
 # Deploy to Cloudflare Workers
 pnpm deployment
@@ -228,6 +243,7 @@ The project uses Vitest for testing with snapshots for output validation. Tests 
 - Dynamic imports and code splitting
 - Error handling and formatting
 - NPM package resolution
+- Projects end to end (`src/project.test.ts`): sessions, drafts, commit, undo, branches, git clone and push. Needs `LOVEPACK_API_KEY`.
 
 ## License
 

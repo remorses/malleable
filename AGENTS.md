@@ -2,7 +2,7 @@ use pnpm to install dependencies
 
 after changes run `pnpm tsc`. after every big change run `pnpm deployment` to deploy the script and `pnpm test` to update snapshots (-u --run are already passed)
 
-`pnpm test` will run the tests against the local bundler instead of the remote worker
+`pnpm test` runs against the deployed worker. `pnpm test:local` (`USE_LOCAL=1`) runs the legacy `/api/bundle` tests against the local bundler.
 
 
 to read github files and repos docs use gitchamber. use `curl https://gitchamber.com` to see docs
@@ -37,23 +37,24 @@ This is a Cloudflare Workers project that provides a bundling API for TypeScript
 
 ### Key Features
 
-- TypeScript/TSX/JSX transformation using esbuild-wasm
-- Tailwind CSS v3 generation with PostCSS
+- TypeScript/TSX/JSX bundling using Rollup (`@rollup/browser`, patched wasm loader) + sucrase
+- Tailwind CSS v4 generation via `compile()` (no PostCSS), see `docs/tailwind-v4-upgrade.md`
 - npm package resolution via esm.sh CDN
 - Interactive web UI with file upload support
 - Deployed at: https://remote-bundler.fumabase.com
 
-### API Endpoint
+### API Endpoint (legacy, stateless)
 
 POST /api/bundle
 
-- `code`: Source code to transform (required)
-- `loader`: File type - 'tsx', 'ts', 'jsx', 'js' (default: 'tsx')
-- `extractCSS`: Generate Tailwind CSS (default: true)
-- `resolveImports`: Resolve npm imports via esm.sh (default: false)
-- `externalPackages`: Array of packages to treat as external (default: [])
+- `files`: `{ path, content }[]` (required)
+- `entryPoint`: entry file (default: first file)
+- `externalPackages`: packages to treat as external (default: [])
+- `siteId`: output id, `[a-zA-Z0-9_-]+` (required)
+- `prerenderDebounceTime`: ms before the container prerender runs (default: 10000)
 
+Output is stored in KV and served from `GET /bundle/<siteId>/*`.
 
 ## Projects (Artifacts)
 
-See `docs/projects.md`. `ProjectDO` (`src/project-do.ts`) is the single writer; REST in `src/projects-api.ts`; client in `src/client.ts`. `src/project.test.ts` runs against the deployed worker and needs `LOVEPACK_API_KEY` (read from `.dev.vars`).
+See `docs/projects.md`. Build logic shared with `/api/bundle` lives in `src/build.ts`. `ProjectDO` (`src/project-do.ts`) is the single writer; REST in `src/projects-api.ts`; client in `src/client.ts`. `src/project.test.ts` runs against the deployed worker and needs `LOVEPACK_API_KEY` (read from `.dev.vars`).

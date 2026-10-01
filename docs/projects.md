@@ -9,9 +9,29 @@ A **project** is a git repo in Cloudflare Artifacts plus a Durable Object (`Proj
 
 ```
  agent (Worker) ──RPC──▶ ProjectDO ──git push──▶ Artifacts repo  (src files + dist/ in one commit)
- agent (HTTP)  ──REST──▶    │  esbuild + tailwind run here
+ agent (HTTP)  ──REST──▶    │  rollup + tailwind run here
                             └──WebSocket──▶ viewers: draft / update messages
  browser ◀── import() ── GET /p/:id/r/:sha/index.js   (immutable)  or  /d/:session/:n/index.js (draft)
+```
+
+## Setup
+
+```jsonc
+// wrangler.jsonc (needs wrangler >= 4.145; Artifacts is in beta)
+{
+  "compatibility_date": "2026-09-01",
+  "artifacts": [{ "binding": "ARTIFACTS", "namespace": "lovepack" }],
+  "durable_objects": { "bindings": [{ "class_name": "ProjectDO", "name": "PROJECT" }] },
+  "migrations": [{ "tag": "v3", "new_sqlite_classes": ["ProjectDO"] }]
+}
+```
+
+```bash
+wrangler secret put LOVEPACK_API_KEY     # REST auth and git token signing key
+```
+
+```ts
+export { ProjectDO } from './project-do.js'   // the class must be exported from the Worker entry
 ```
 
 ## Flow
@@ -35,6 +55,8 @@ await project.commit(sessionId, { message: 'Add chart' }) // build + git add . +
 - **Head moved since open** returns `{ ok: false, reason: 'conflict' }`. Retry with `{ rebase: true }` to replay the ops over the new head.
 - **History**: `log`, `undo` (new commit with the previous sources), `restore(sha)`. History is never rewritten.
 - **Branches**: `createBranch`, `branches`, `merge` (fast-forward only), `deleteBranch`.
+- **Atomic edits**: `apply(sessionId, ops[])` applies several ops or none.
+- **Drafts live in DO memory only.** The last 3 builds per session are kept. A DO restart loses them; call `build` again.
 
 ## Repo layout
 
@@ -48,19 +70,23 @@ The entry module default-exports the component. Its CSS is loaded relative to th
 
 ## REST
 
-`/api/projects/*` needs `Authorization: Bearer $LOVEPACK_API_KEY` (`wrangler secret put LOVEPACK_API_KEY`). `/p/*` is public by project id.
+`/api/projects/*` needs `Authorization: Bearer $LOVEPACK_API_KEY`. `/p/*` and `/view/*` are **public by project id**, including the WebSocket. Use unguessable ids.
 
 | Route | Method | Purpose |
 |---|---|---|
 | `/api/projects/:id` | POST, GET | init, info |
 | `/api/projects/:id/sessions` | POST, GET | open, list |
 | `/api/projects/:id/sessions/:sid/ops` | POST | `{ ops: [{ op: 'write' \| 'replace' \| 'delete', ... }] }`, atomic |
+| `/api/projects/:id/sessions/:sid/{files,file?path=,diff}` | GET | list, read, diff against base |
 | `/api/projects/:id/sessions/:sid/{build,commit}` | POST | draft build, commit |
 | `/api/projects/:id/sessions/:sid` | DELETE | discard |
 | `/api/projects/:id/{log,files,undo,restore,branches,merge}` | | history and branches |
 | `/p/:id/r/:ref/*` | GET | built file at a branch or sha |
 | `/p/:id/d/:sid/:build/*` | GET | draft build file |
 | `/p/:id/live` | WS | `hello`, `draft`, `draft-error`, `draft-end`, `update` |
+| `/view/:id` | GET | minimal live viewer page |
+| `/api/projects/:id/git-access` | POST | mint a git token, see Git remote |
+| `/git/:id.git/*` | GET, POST | git smart HTTP proxy |
 
 ## Git remote
 
@@ -80,6 +106,10 @@ git commit -am 'Tweak' && git push origin main
 - **Tokens** are stateless HMACs (`lp_<scope>_<expiry>_<mac>`) signed with `LOVEPACK_API_KEY`, bound to one project.
 - **Push while an agent session is open** is allowed. The session's next `commit` returns `conflict`; retry with `rebase: true`.
 - A push with a build error still lands, viewers get `draft-error`, and the head keeps its old `dist/`.
+
+## Legacy `/api/bundle`
+
+The stateless `POST /api/bundle` route still works (KV storage, `/bundle/<siteId>/*`). It shares `src/build.ts` with projects. Projects add history, drafts and git.
 
 ## Example
 
