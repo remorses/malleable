@@ -40,23 +40,23 @@ export { ProjectDO } from './project-do.js'   // the class must be exported from
 ```ts
 import { getProject } from './project-do'
 
-const project = getProject(env.PROJECT, 'u123')
+const project = getProject({ namespace: env.PROJECT, projectId: 'u123' })
 await project.init({ projectId: 'u123' })               // idempotent; { template } forks a repo
 
 const { sessionId } = await project.openSession({ author: { kind: 'agent', id: 'ses_1' } })
-await project.write(sessionId, 'App.tsx', code)         // in memory, logged in DO SQLite
-await project.replace(sessionId, 'App.tsx', old, next)  // throws unless `old` occurs exactly once
-await project.build(sessionId)                          // draft: viewers update, nothing is committed
-await project.commit(sessionId, { message: 'Add chart' }) // build + git add . + commit + push
-// or project.discard(sessionId)
+await project.write({ sessionId, path: 'App.tsx', content: code })  // in memory, logged in DO SQLite
+await project.replace({ sessionId, path: 'App.tsx', oldString, newString }) // throws unless `oldString` occurs once
+await project.build({ sessionId })                      // draft: viewers update, nothing is committed
+await project.commit({ sessionId, message: 'Add chart' }) // build + git add . + commit + push
+// or project.discard({ sessionId })
 ```
 
 - **One open session per branch.** A session idle for 10 minutes is replaced.
 - **Failed builds do not commit.** `commit` returns `{ ok: false, reason: 'build-error', errorText }`; the session stays open.
 - **Head moved since open** returns `{ ok: false, reason: 'conflict' }`. Retry with `{ rebase: true }` to replay the ops over the new head.
-- **History**: `log`, `undo` (new commit with the previous sources), `restore(sha)`. History is never rewritten.
+- **History**: `log`, `undo` (new commit with the previous sources), `restore({ sha })`. History is never rewritten.
 - **Branches**: `createBranch`, `branches`, `merge` (fast-forward only), `deleteBranch`.
-- **Atomic edits**: `apply(sessionId, ops[])` applies several ops or none.
+- **Atomic edits**: `apply({ sessionId, ops })` applies several ops or none.
 - **Drafts live in DO memory only.** The last 3 builds per session are kept. A DO restart loses them; call `build` again.
 
 ## Repo layout
@@ -84,7 +84,7 @@ The entry module default-exports the component. Its CSS is loaded relative to th
 | `/api/projects/:id/{log,files,undo,restore,branches,merge}` | | history and branches |
 | `/p/:id/r/:ref/*` | GET | built file at a branch or sha |
 | `/p/:id/d/:sid/:build/*` | GET | draft build file |
-| `/p/:id/live` | WS | `hello`, `draft`, `draft-error`, `draft-end`, `update` |
+| `/p/:id/live` | WS | `hello`, `update` (`kind: 'draft' \| 'commit'`), `build-error`, `draft-end` |
 | `/view/:id` | GET | minimal live viewer page |
 | `/api/projects/:id/git-access` | POST | mint a git token, see Git remote |
 | `/git/:id.git/*` | GET, POST | git smart HTTP proxy |
@@ -125,12 +125,28 @@ LOVEPACK_API_KEY=... pnpm tsx examples/agent.ts demo1     # then open $ORIGIN/vi
 `src/client.ts` wraps the REST routes and the socket. `demo/App.tsx` is the reference use.
 
 ```ts
-const project = new Lovepack({ endpoint, apiKey }).project('u123')
-project.watch(async (msg) => {
-  if (msg.type === 'draft') setComponent(await project.loadDraftComponent(msg.session, msg.build))
-  if (msg.type === 'update') setComponent(await project.loadComponent(msg.sha))
+const project = new Lovepack({ endpoint, apiKey }).project({ id: 'u123' })
+project.watch({
+  onMessage: async (msg) => {
+    // draft or commit, every update has its own module url
+    if (msg.type === 'update') setComponent(await project.load({ url: msg.url }))
+  },
 })
 ```
+
+All methods take a single object argument, in the RPC, the client and the REST bodies.
+
+### Live messages
+
+| Message | When | Fields |
+|---|---|---|
+| `hello` | on connect | `heads`, `drafts[]` (each has `url`, `session`, `branch`, `build`) |
+| `update` `kind: 'draft'` | `build` | `url`, `session`, `branch`, `build`. Not in git, lost on DO restart |
+| `update` `kind: 'commit'` | commit, undo, restore, merge, git push | `url`, `branch`, `sha`, `message`, `author`. Immutable url |
+| `build-error` | build failed | `session` (`git-push` for pushes), `errors` |
+| `draft-end` | session committed or discarded | `session`, `outcome` |
+
+`url` is relative to the Worker origin, so clients never build `/r/` or `/d/` paths themselves.
 
 ## Learnings
 

@@ -37,17 +37,17 @@ export interface ClientOptions {
 /**
  * HTTP client for the lovepack REST API. Mirrors the ProjectDO RPC methods:
  *
- *   const project = new Lovepack({ endpoint, apiKey }).project('u123')
+ *   const project = new Lovepack({ endpoint, apiKey }).project({ id: 'u123' })
  *   await project.init()
  *   const session = await project.openSession({ author })
- *   await session.write('App.tsx', code)
- *   await session.build()                 // draft, viewers see it live
- *   await session.commit('Add chart')     // one commit per agent message
+ *   await session.write({ path: 'App.tsx', content: code })
+ *   await session.build()                          // draft, viewers see it live
+ *   await session.commit({ message: 'Add chart' }) // one commit per agent message
  */
 export class Lovepack {
   constructor(private options: ClientOptions) {}
 
-  project(id: string) {
+  project({ id }: { id: string }) {
     return new Project(this.options, id)
   }
 }
@@ -110,7 +110,7 @@ export class Project {
   }
 
   /** Source files at a branch or commit */
-  files(ref = 'main') {
+  files({ ref = 'main' }: { ref?: string } = {}) {
     return call<string[]>(this.options, 'GET', this.path(`/files?ref=${encodeURIComponent(ref)}`))
   }
 
@@ -119,51 +119,44 @@ export class Project {
     return call<CommitResult>(this.options, 'POST', this.path('/undo'), opts)
   }
 
-  restore(sha: string, opts: { branch?: string; author?: Author; message?: string } = {}) {
-    return call<CommitResult>(this.options, 'POST', this.path('/restore'), { sha, ...opts })
+  restore(opts: { sha: string; branch?: string; author?: Author; message?: string }) {
+    return call<CommitResult>(this.options, 'POST', this.path('/restore'), opts)
   }
 
   branches() {
     return call<string[]>(this.options, 'GET', this.path('/branches'))
   }
 
-  async createBranch(name: string, from?: string) {
-    await call(this.options, 'POST', this.path('/branches'), { name, from })
+  async createBranch(opts: { name: string; from?: string }) {
+    await call(this.options, 'POST', this.path('/branches'), opts)
   }
 
   /** Fast-forward only */
-  merge(branch: string, into?: string) {
-    return call<{ sha: string }>(this.options, 'POST', this.path('/merge'), { branch, into })
+  merge(opts: { branch: string; into?: string }) {
+    return call<{ sha: string }>(this.options, 'POST', this.path('/merge'), opts)
   }
 
-  async deleteBranch(name: string) {
+  async deleteBranch({ name }: { name: string }) {
     await call(this.options, 'DELETE', this.path(`/branches/${encodeURIComponent(name)}`))
   }
 
   /** Public URL of a built file. `ref` is a branch (mutable) or a commit sha (immutable). */
-  fileUrl(ref: string, file = 'index.js') {
+  fileUrl({ ref, file = 'index.js' }: { ref: string; file?: string }) {
     return `${this.options.endpoint}/p/${encodeURIComponent(this.id)}/r/${encodeURIComponent(ref)}/${file}`
   }
 
-  draftUrl(session: string, build: number, file = 'index.js') {
-    return `${this.options.endpoint}/p/${encodeURIComponent(this.id)}/d/${session}/${build}/${file}`
-  }
-
-  /** Import the default export (the entry component) of a committed build */
-  async loadComponent(ref: string) {
-    // a query string keeps branch refs from being served stale by the module cache
-    const url = ref.length === 40 ? this.fileUrl(ref) : `${this.fileUrl(ref)}?t=${Date.now()}`
-    const mod = await import(/* @vite-ignore */ url)
-    return mod.default
-  }
-
-  async loadDraftComponent(session: string, build: number) {
-    const mod = await import(/* @vite-ignore */ this.draftUrl(session, build))
+  /**
+   * Import the default export (the entry component) of a build.
+   * Use the `url` of an `update` message: every draft and commit has its own url,
+   * so the browser module cache never returns an older build. Branch urls are mutable.
+   */
+  async load({ url }: { url: string }) {
+    const mod = await import(/* @vite-ignore */ new URL(url, this.options.endpoint).href)
     return mod.default
   }
 
   /** Live updates of this project. Reconnects with backoff until `close()`. */
-  watch(onMessage: (msg: LiveMessage) => void) {
+  watch({ onMessage }: { onMessage: (msg: LiveMessage) => void }) {
     const wsUrl = `${this.options.endpoint.replace(/^http/, 'ws')}/p/${encodeURIComponent(this.id)}/live`
     let closed = false
     let ws: WebSocket | undefined
@@ -201,24 +194,24 @@ export class Session {
     return `/api/projects/${encodeURIComponent(this.project.id)}/sessions/${this.id}${suffix}`
   }
 
-  async apply(ops: SessionOp[]) {
+  async apply({ ops }: { ops: SessionOp[] }) {
     await call(this.options, 'POST', this.path('/ops'), { ops })
   }
 
-  write(path: string, content: string) {
-    return this.apply([{ op: 'write', path, content }])
+  write({ path, content }: { path: string; content: string }) {
+    return this.apply({ ops: [{ op: 'write', path, content }] })
   }
 
   /** Fails unless `oldString` occurs exactly once */
-  replace(path: string, oldString: string, newString: string) {
-    return this.apply([{ op: 'replace', path, oldString, newString }])
+  replace({ path, oldString, newString }: { path: string; oldString: string; newString: string }) {
+    return this.apply({ ops: [{ op: 'replace', path, oldString, newString }] })
   }
 
-  remove(path: string) {
-    return this.apply([{ op: 'delete', path }])
+  remove({ path }: { path: string }) {
+    return this.apply({ ops: [{ op: 'delete', path }] })
   }
 
-  async read(path: string) {
+  async read({ path }: { path: string }) {
     const r = await call<{ content: string | null }>(
       this.options,
       'GET',
@@ -235,14 +228,14 @@ export class Session {
     return call<Array<['added' | 'modified' | 'deleted', string]>>(this.options, 'GET', this.path('/diff'))
   }
 
-  /** Draft build. Never committed; viewers get a `draft` message. */
+  /** Draft build. Never committed; viewers get an `update` message of kind `draft`. */
   build() {
     return call<BuildResult>(this.options, 'POST', this.path('/build'))
   }
 
   /** Build, commit and push. Resolves with `{ ok: false }` when the build fails or the branch moved. */
-  commit(message: string, opts: { rebase?: boolean } = {}) {
-    return call<CommitResult>(this.options, 'POST', this.path('/commit'), { message, ...opts })
+  commit(opts: { message: string; rebase?: boolean }) {
+    return call<CommitResult>(this.options, 'POST', this.path('/commit'), opts)
   }
 
   async discard() {

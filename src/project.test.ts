@@ -165,6 +165,10 @@ describe('projects: session, draft, commit, undo, branches', () => {
     expect((await draftJs.text()).includes('Revenue')).toMatchInlineSnapshot(`true`)
     const draftCss = await (await fetch(`${URL_BASE}/p/${id}/d/${sid}/1/index.css`)).text()
     expect(draftCss.includes('bg-blue-500')).toMatchInlineSnapshot(`true`)
+    // the update message carries the module url, so viewers never build paths themselves
+    await until((m) => m.type === 'update' && m.kind === 'draft')
+    const draftUpdate = messages.find((m) => m.type === 'update' && m.kind === 'draft')
+    expect((await fetch(`${URL_BASE}${draftUpdate.url}`)).status).toMatchInlineSnapshot(`200`)
     expect((await api('GET', `${p}/log`)).json.length).toMatchInlineSnapshot(`1`)
 
     // a broken build blocks the commit and keeps the session open
@@ -366,6 +370,18 @@ describe('projects: session, draft, commit, undo, branches', () => {
     // viewers saw drafts and commits in order
     await until((m) => m.type === 'update' && m.message === 'Merge draft')
     ws.close()
+    const commitUrls = messages.filter((m) => m.type === 'update' && m.kind === 'commit').map((m) => m.url)
+    expect(
+      await Promise.all(commitUrls.map(async (url) => (await fetch(`${URL_BASE}${url}`)).status)),
+    ).toMatchInlineSnapshot(`
+      [
+        200,
+        200,
+        200,
+        200,
+        200,
+      ]
+    `)
     expect(stable(messages.map(({ author, ...m }: any) => m))).toMatchInlineSnapshot(`
       [
         {
@@ -378,14 +394,18 @@ describe('projects: session, draft, commit, undo, branches', () => {
         {
           "branch": "main",
           "build": 1,
+          "kind": "draft",
           "session": "<session>",
-          "type": "draft",
+          "type": "update",
+          "url": "/p/<project>/d/<session>/1/index.js",
         },
         {
           "branch": "main",
+          "kind": "commit",
           "message": "Add revenue card",
           "sha": "<sha1>",
           "type": "update",
+          "url": "/p/<project>/r/<sha1>/index.js",
         },
         {
           "outcome": "committed",
@@ -394,9 +414,11 @@ describe('projects: session, draft, commit, undo, branches', () => {
         },
         {
           "branch": "main",
+          "kind": "commit",
           "message": "Rename card",
           "sha": "<sha3>",
           "type": "update",
+          "url": "/p/<project>/r/<sha3>/index.js",
         },
         {
           "outcome": "committed",
@@ -405,15 +427,19 @@ describe('projects: session, draft, commit, undo, branches', () => {
         },
         {
           "branch": "main",
+          "kind": "commit",
           "message": "Undo <short>: Rename card",
           "sha": "<sha2>",
           "type": "update",
+          "url": "/p/<project>/r/<sha2>/index.js",
         },
         {
           "branch": "draft",
+          "kind": "commit",
           "message": "Extra on draft",
           "sha": "<sha4>",
           "type": "update",
+          "url": "/p/<project>/r/<sha4>/index.js",
         },
         {
           "outcome": "committed",
@@ -422,9 +448,11 @@ describe('projects: session, draft, commit, undo, branches', () => {
         },
         {
           "branch": "main",
+          "kind": "commit",
           "message": "Merge draft",
           "sha": "<sha4>",
           "type": "update",
+          "url": "/p/<project>/r/<sha4>/index.js",
         },
       ]
     `)
@@ -463,10 +491,10 @@ describe('git remote', () => {
 
     const write = (await api('POST', `${p}/git-access`, { scope: 'write' })).json
     const read = (await api('POST', `${p}/git-access`, { scope: 'read' })).json
-    expect({ url: write.url.replace(URL_BASE, '<origin>'), scope: write.scope }).toMatchInlineSnapshot(`
+    expect({ url: write.url.replace(URL_BASE, '<origin>').replace(id, '<id>'), scope: write.scope }).toMatchInlineSnapshot(`
       {
         "scope": "write",
-        "url": "<origin>/git/g-ft0iuz0q.git",
+        "url": "<origin>/git/<id>.git",
       }
     `)
 

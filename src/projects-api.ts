@@ -132,7 +132,8 @@ const gitPaths = {
   'git-receive-pack': { method: 'POST' },
 } as const
 
-const stubFor = (env: ProjectsEnv, id: string) => getProject(env.PROJECT, id)
+const stubFor = (env: ProjectsEnv, projectId: string) =>
+  getProject({ namespace: env.PROJECT, projectId })
 
 /**
  * Management API: REST wrapper over the ProjectDO RPC methods.
@@ -215,46 +216,46 @@ export const projectsApi = new Spiceflow()
     request: z.object({ ops: z.array(opSchema).min(1) }),
     async handler({ request, params, state }) {
       const { ops } = await request.json()
-      await stubFor(state.env, params.id).apply(params.sid, ops)
+      await stubFor(state.env, params.id).apply({ sessionId: params.sid, ops })
       return { ok: true }
     },
   })
   .route({
     method: 'GET',
     path: '/api/projects/:id/sessions/:sid/files',
-    handler: ({ params, state }) => stubFor(state.env, params.id).list(params.sid),
+    handler: ({ params, state }) => stubFor(state.env, params.id).list({ sessionId: params.sid }),
   })
   .route({
     method: 'GET',
     path: '/api/projects/:id/sessions/:sid/file',
     async handler({ params, request, state }) {
       const path = new URL(request.url).searchParams.get('path') ?? ''
-      return { path, content: await stubFor(state.env, params.id).read(params.sid, path) }
+      return { path, content: await stubFor(state.env, params.id).read({ sessionId: params.sid, path }) }
     },
   })
   .route({
     method: 'GET',
     path: '/api/projects/:id/sessions/:sid/diff',
-    handler: ({ params, state }) => stubFor(state.env, params.id).diff(params.sid),
+    handler: ({ params, state }) => stubFor(state.env, params.id).diff({ sessionId: params.sid }),
   })
   .route({
     method: 'POST',
     path: '/api/projects/:id/sessions/:sid/build',
-    handler: ({ params, state }) => stubFor(state.env, params.id).build(params.sid),
+    handler: ({ params, state }) => stubFor(state.env, params.id).build({ sessionId: params.sid }),
   })
   .route({
     method: 'POST',
     path: '/api/projects/:id/sessions/:sid/commit',
     request: z.object({ message: z.string().min(1), rebase: z.boolean().optional() }),
     async handler({ request, params, state }) {
-      return stubFor(state.env, params.id).commit(params.sid, await request.json())
+      return stubFor(state.env, params.id).commit({ sessionId: params.sid, ...(await request.json()) })
     },
   })
   .route({
     method: 'DELETE',
     path: '/api/projects/:id/sessions/:sid',
     async handler({ params, state }) {
-      await stubFor(state.env, params.id).discard(params.sid)
+      await stubFor(state.env, params.id).discard({ sessionId: params.sid })
       return { ok: true }
     },
   })
@@ -273,7 +274,9 @@ export const projectsApi = new Spiceflow()
     method: 'GET',
     path: '/api/projects/:id/files',
     handler({ params, request, state }) {
-      return stubFor(state.env, params.id).files(new URL(request.url).searchParams.get('ref') ?? 'main')
+      return stubFor(state.env, params.id).files({
+        ref: new URL(request.url).searchParams.get('ref') ?? 'main',
+      })
     },
   })
   .route({
@@ -294,8 +297,7 @@ export const projectsApi = new Spiceflow()
       author: authorSchema.optional(),
     }),
     async handler({ request, params, state }) {
-      const { sha, ...opts } = await request.json()
-      return stubFor(state.env, params.id).restore(sha, opts)
+      return stubFor(state.env, params.id).restore(await request.json())
     },
   })
   .route({
@@ -308,8 +310,7 @@ export const projectsApi = new Spiceflow()
     path: '/api/projects/:id/branches',
     request: z.object({ name: z.string(), from: z.string().optional() }),
     async handler({ request, params, state }) {
-      const { name, from } = await request.json()
-      await stubFor(state.env, params.id).createBranch(name, from)
+      await stubFor(state.env, params.id).createBranch(await request.json())
       return { ok: true }
     },
   })
@@ -318,15 +319,14 @@ export const projectsApi = new Spiceflow()
     path: '/api/projects/:id/merge',
     request: z.object({ branch: z.string(), into: z.string().optional() }),
     async handler({ request, params, state }) {
-      const { branch, into } = await request.json()
-      return stubFor(state.env, params.id).merge(branch, into)
+      return stubFor(state.env, params.id).merge(await request.json())
     },
   })
   .route({
     method: 'DELETE',
     path: '/api/projects/:id/branches/:name',
     async handler({ params, state }) {
-      await stubFor(state.env, params.id).deleteBranch(params.name)
+      await stubFor(state.env, params.id).deleteBranch({ name: params.name })
       return { ok: true }
     },
   })
@@ -356,7 +356,11 @@ export const projectsPublic = new Spiceflow()
     path: '/p/:id/d/:sid/:build/*',
     async handler({ params, state }) {
       const rest = params['*']
-      const text = await stubFor(state.env, params.id).draftFile(params.sid, Number(params.build), rest)
+      const text = await stubFor(state.env, params.id).draftFile({
+        sessionId: params.sid,
+        build: Number(params.build),
+        path: rest,
+      })
       if (text === null) return new Response('Not found', { status: 404 })
       return fileResponse(text, rest, false)
     },
@@ -370,7 +374,7 @@ export const projectsPublic = new Spiceflow()
       return new Response(viewPage(params.id), { headers: { 'content-type': 'text/html; charset=utf-8' } })
     },
   })
-  // Live updates: hello, draft, draft-error, draft-end, update
+  // Live updates: hello, update (draft or commit), build-error, draft-end
   .route({
     method: 'GET',
     path: '/p/:id/live',

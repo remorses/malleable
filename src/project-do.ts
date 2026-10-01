@@ -39,21 +39,27 @@ export interface ProjectInfo {
   heads: Record<string, string>
 }
 
-/** Messages sent to every WebSocket viewer of a project */
+/**
+ * Messages sent to every WebSocket viewer of a project.
+ * Every `update` carries the `url` of the new module, relative to the Worker origin.
+ */
 export type LiveMessage =
   | { type: 'hello'; heads: Record<string, string>; drafts: DraftInfo[] }
-  | ({ type: 'draft' } & DraftInfo)
-  | { type: 'draft-error'; session: string; errors: BuildError[] }
-  | { type: 'draft-end'; session: string; outcome: 'committed' | 'discarded' }
+  | ({ type: 'update'; kind: 'draft' } & DraftInfo)
   | {
       type: 'update'
+      kind: 'commit'
+      url: string
       branch: string
       sha: string
       message: string
       author: Author
     }
+  | { type: 'build-error'; session: string; errors: BuildError[] }
+  | { type: 'draft-end'; session: string; outcome: 'committed' | 'discarded' }
 
 export interface DraftInfo {
+  url: string
   session: string
   branch: string
   build: number
@@ -88,10 +94,13 @@ export function repoNameFor(projectId: string): string {
   return `p-${projectId}`
 }
 
-export function getProject(
-  namespace: DurableObjectNamespace<ProjectDO>,
-  projectId: string,
-) {
+export function getProject({
+  namespace,
+  projectId,
+}: {
+  namespace: DurableObjectNamespace<ProjectDO>
+  projectId: string
+}) {
   repoNameFor(projectId)
   return namespace.get(namespace.idFromName(projectId))
 }
@@ -335,45 +344,49 @@ export class ProjectDO extends DurableObject<Env> {
     })
   }
 
-  async write(sessionId: string, path: string, content: string) {
+  async write(opts: { sessionId: string; path: string; content: string }) {
+    const { sessionId, path, content } = opts
     await this.mutate(sessionId, { op: 'write', path, content })
   }
 
-  async replace(
-    sessionId: string,
-    path: string,
-    oldString: string,
-    newString: string,
-  ) {
+  async replace(opts: {
+    sessionId: string
+    path: string
+    oldString: string
+    newString: string
+  }) {
+    const { sessionId, path, oldString, newString } = opts
     await this.mutate(sessionId, { op: 'replace', path, oldString, newString })
   }
 
-  async remove(sessionId: string, path: string) {
-    await this.mutate(sessionId, { op: 'delete', path })
+  async remove(opts: { sessionId: string; path: string }) {
+    await this.mutate(opts.sessionId, { op: 'delete', path: opts.path })
   }
 
   /** Apply several ops atomically: nothing is applied if one fails. */
-  async apply(sessionId: string, ops: SessionOp[]) {
-    const s = await this.loadSession(sessionId)
+  async apply(opts: { sessionId: string; ops: SessionOp[] }) {
+    const s = await this.loadSession(opts.sessionId)
     const next = new Map(s.tree)
-    for (const op of ops) applyOp(next, op)
-    for (const op of ops) this.logOp(sessionId, op)
+    for (const op of opts.ops) applyOp(next, op)
+    for (const op of opts.ops) this.logOp(opts.sessionId, op)
     s.tree = next
   }
 
-  async read(sessionId: string, path: string): Promise<string | null> {
-    const s = await this.loadSession(sessionId)
-    return s.tree.get(path) ?? null
+  async read(opts: { sessionId: string; path: string }): Promise<string | null> {
+    const s = await this.loadSession(opts.sessionId)
+    return s.tree.get(opts.path) ?? null
   }
 
-  async list(sessionId: string): Promise<string[]> {
-    const s = await this.loadSession(sessionId)
+  async list(opts: { sessionId: string }): Promise<string[]> {
+    const s = await this.loadSession(opts.sessionId)
     return [...s.tree.keys()].sort()
   }
 
   /** Paths changed against the session base: [status, path] */
-  async diff(sessionId: string): Promise<Array<['added' | 'modified' | 'deleted', string]>> {
-    const s = await this.loadSession(sessionId)
+  async diff(opts: {
+    sessionId: string
+  }): Promise<Array<['added' | 'modified' | 'deleted', string]>> {
+    const s = await this.loadSession(opts.sessionId)
     const base = await this.serial(async () => {
       await this.sync(s.branch)
       return this.readSources()
@@ -387,40 +400,48 @@ export class ProjectDO extends DurableObject<Env> {
     return out
   }
 
-  /** Draft build. Never touches git. Viewers get a `draft` message. */
-  async build(sessionId: string): Promise<BuildResult> {
-    const s = await this.loadSession(sessionId)
+  /** Draft build. Never touches git. Viewers get an `update` message of kind `draft`. */
+  async build(opts: { sessionId: string }): Promise<BuildResult> {
+    const s = await this.loadSession(opts.sessionId)
     const built = await this.runBuild(s.tree)
     if (!built.ok) {
-      this.broadcast({ type: 'draft-error', session: s.id, errors: built.errors })
+      this.broadcast({ type: 'build-error', session: s.id, errors: built.errors })
       return built
     }
     const prev = this.drafts.get(s.id)
     const build = (prev?.build ?? 0) + 1
     const files = [...(prev?.files ?? []), built.dist].slice(-MAX_DRAFTS_KEPT)
     this.drafts.set(s.id, { branch: s.branch, build, files })
-    this.broadcast({ type: 'draft', session: s.id, branch: s.branch, build })
+    this.broadcast({
+      type: 'update',
+      kind: 'draft',
+      url: await this.draftUrl(s.id, build),
+      session: s.id,
+      branch: s.branch,
+      build,
+    })
     return { ok: true, build, files: [...built.dist.keys()] }
   }
 
   /** Output file of a draft build, served by the Worker at /d/:session/:build/* */
-  async draftFile(
-    sessionId: string,
-    build: number,
-    path: string,
-  ): Promise<string | null> {
-    const d = this.drafts.get(sessionId)
+  async draftFile(opts: {
+    sessionId: string
+    build: number
+    path: string
+  }): Promise<string | null> {
+    const d = this.drafts.get(opts.sessionId)
     if (!d) return null
-    const index = d.files.length - 1 - (d.build - build)
-    return d.files[index]?.get(path) ?? null
+    const index = d.files.length - 1 - (d.build - opts.build)
+    return d.files[index]?.get(opts.path) ?? null
   }
 
   /** Build, commit and push. Fails (and keeps the session open) when the build fails. */
-  async commit(
-    sessionId: string,
-    opts: { message: string; rebase?: boolean },
-  ): Promise<CommitResult> {
-    const s = await this.loadSession(sessionId)
+  async commit(opts: {
+    sessionId: string
+    message: string
+    rebase?: boolean
+  }): Promise<CommitResult> {
+    const s = await this.loadSession(opts.sessionId)
     return this.serial(async () => {
       const head = await this.sync(s.branch)
       const headTree = await this.readSources()
@@ -445,8 +466,8 @@ export class ProjectDO extends DurableObject<Env> {
     })
   }
 
-  async discard(sessionId: string) {
-    await this.serial(async () => this.endSession(sessionId, 'discarded'))
+  async discard(opts: { sessionId: string }) {
+    await this.serial(async () => this.endSession(opts.sessionId, 'discarded'))
   }
 
   async sessionsOpen(): Promise<Array<{ id: string; branch: string; author: Author }>> {
@@ -476,7 +497,8 @@ export class ProjectDO extends DurableObject<Env> {
     const [head] = await this.log({ branch, limit: 1 })
     const parent = head?.parents[0]
     if (!parent) throw new Error('NOTHING_TO_UNDO')
-    return this.restore(parent, {
+    return this.restore({
+      sha: parent,
       branch,
       author: opts.author,
       message: `Undo ${head.sha.slice(0, 7)}: ${head.message.split('\n')[0]}`,
@@ -484,10 +506,13 @@ export class ProjectDO extends DurableObject<Env> {
   }
 
   /** New commit whose sources equal those of `sha`. History is never rewritten. */
-  async restore(
-    sha: string,
-    opts: { branch?: string; author?: Author; message?: string } = {},
-  ): Promise<CommitResult> {
+  async restore(opts: {
+    sha: string
+    branch?: string
+    author?: Author
+    message?: string
+  }): Promise<CommitResult> {
+    const { sha } = opts
     const branch = opts.branch ?? 'main'
     const sources = await this.readSourcesAt(sha)
     return this.serial(async () => {
@@ -503,8 +528,8 @@ export class ProjectDO extends DurableObject<Env> {
     })
   }
 
-  async files(ref: string): Promise<string[]> {
-    return [...(await this.readSourcesAt(ref)).keys()].sort()
+  async files(opts: { ref: string }): Promise<string[]> {
+    return [...(await this.readSourcesAt(opts.ref)).keys()].sort()
   }
 
   // ── branches ──
@@ -520,7 +545,8 @@ export class ProjectDO extends DurableObject<Env> {
     return refs.map((r) => r.ref.replace('refs/heads/', '')).sort()
   }
 
-  async createBranch(name: string, from = 'main') {
+  async createBranch(opts: { name: string; from?: string }) {
+    const { name, from = 'main' } = opts
     await this.serial(async () => {
       const sha = await this.sync(from)
       await git.branch({ fs: this.fs, dir: WORKDIR, ref: name, object: sha })
@@ -530,7 +556,8 @@ export class ProjectDO extends DurableObject<Env> {
   }
 
   /** Fast-forward `branch` into `into`. */
-  async merge(branch: string, into = 'main'): Promise<{ sha: string }> {
+  async merge(opts: { branch: string; into?: string }): Promise<{ sha: string }> {
+    const { branch, into = 'main' } = opts
     return this.serial(async () => {
       this.assertNoOpenSession(into)
       const sha = await this.sync(branch)
@@ -543,8 +570,7 @@ export class ProjectDO extends DurableObject<Env> {
         }
         await this.push(branch, into)
         await this.setHead(into, sha)
-        this.broadcast({
-          type: 'update',
+        await this.announceCommit({
           branch: into,
           sha,
           message: `Merge ${branch}`,
@@ -555,7 +581,8 @@ export class ProjectDO extends DurableObject<Env> {
     })
   }
 
-  async deleteBranch(name: string) {
+  async deleteBranch(opts: { name: string }) {
+    const { name } = opts
     if (name === 'main') throw new Error('CANNOT_DELETE_DEFAULT_BRANCH')
     await this.serial(async () => {
       const { url } = await this.remote()
@@ -602,14 +629,13 @@ export class ProjectDO extends DurableObject<Env> {
       const sources = await this.readSources()
       const built = await this.runBuild(sources)
       if (!built.ok) {
-        this.broadcast({ type: 'draft-error', session: 'git-push', errors: built.errors })
+        this.broadcast({ type: 'build-error', session: 'git-push', errors: built.errors })
         return { ok: false, reason: 'build-error', errors: built.errors, errorText: built.errorText }
       }
       const expected = new Map([...built.dist].map(([p, c]) => [`${DIST_DIR}/${p}`, c]))
       if (sameTree(expected, await this.readDist())) {
         // The push already carries a matching dist: just tell viewers
-        this.broadcast({
-          type: 'update',
+        await this.announceCommit({
           branch,
           sha: head,
           message: 'Pushed with git',
@@ -635,11 +661,14 @@ export class ProjectDO extends DurableObject<Env> {
     const hello: LiveMessage = {
       type: 'hello',
       heads: await this.heads(),
-      drafts: [...this.drafts].map(([session, d]) => ({
-        session,
-        branch: d.branch,
-        build: d.build,
-      })),
+      drafts: await Promise.all(
+        [...this.drafts].map(async ([session, d]) => ({
+          url: await this.draftUrl(session, d.build),
+          session,
+          branch: d.branch,
+          build: d.build,
+        })),
+      ),
     }
     pair[1].send(JSON.stringify(hello))
     return new Response(null, { status: 101, webSocket: pair[0] })
@@ -651,6 +680,30 @@ export class ProjectDO extends DurableObject<Env> {
     try {
       ws.close(1000)
     } catch {}
+  }
+
+  /** Module url relative to the Worker origin, served by `projectsPublic` */
+  private async moduleUrl(route: string) {
+    const { projectId } = await this.meta()
+    return `/p/${projectId}/${route}/index.js`
+  }
+
+  private draftUrl(session: string, build: number) {
+    return this.moduleUrl(`d/${encodeURIComponent(session)}/${build}`)
+  }
+
+  private async announceCommit(commit: {
+    branch: string
+    sha: string
+    message: string
+    author: Author
+  }) {
+    this.broadcast({
+      type: 'update',
+      kind: 'commit',
+      url: await this.moduleUrl(`r/${commit.sha}`),
+      ...commit,
+    })
   }
 
   private broadcast(msg: LiveMessage) {
@@ -936,7 +989,7 @@ export class ProjectDO extends DurableObject<Env> {
     })
     await this.push(branch)
     await this.setHead(branch, sha)
-    this.broadcast({ type: 'update', branch, sha, message, author })
+    await this.announceCommit({ branch, sha, message, author })
     return { ok: true, sha }
   }
 

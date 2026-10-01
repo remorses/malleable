@@ -28,20 +28,19 @@ export function viewPage(projectId: string) {
           const status = document.getElementById('status')
           const base = location.origin + '/p/' + id
           const show = async (url, label) => {
-            const mod = await import(url)
+            const mod = await import(location.origin + url)
             root.render(React.createElement(mod.default))
             status.textContent = label
           }
           if (pinned) {
-            show(base + '/r/' + pinned + '/index.js', 'pinned ' + pinned.slice(0, 7))
+            show('/p/' + id + '/r/' + pinned + '/index.js', 'pinned ' + pinned.slice(0, 7))
           } else {
             const ws = new WebSocket(base.replace('http', 'ws') + '/live')
             ws.onmessage = (e) => {
               const m = JSON.parse(e.data)
-              if (m.type === 'hello' && m.heads.main) show(base + '/r/' + m.heads.main + '/index.js', 'commit ' + m.heads.main.slice(0, 7))
-              if (m.type === 'draft') show(base + '/d/' + m.session + '/' + m.build + '/index.js', 'draft ' + m.build)
-              if (m.type === 'update') show(base + '/r/' + m.sha + '/index.js', 'commit ' + m.sha.slice(0, 7) + ': ' + m.message)
-              if (m.type === 'draft-error') status.textContent = 'build error'
+              if (m.type === 'hello' && m.heads.main) show('/p/' + id + '/r/' + m.heads.main + '/index.js', 'commit ' + m.heads.main.slice(0, 7))
+              if (m.type === 'update') show(m.url, m.kind === 'draft' ? 'draft ' + m.build : 'commit ' + m.sha.slice(0, 7) + ': ' + m.message)
+              if (m.type === 'build-error') status.textContent = 'build error'
             }
           }
         </script>

@@ -38,7 +38,7 @@ const lovepackKey =
     localStorage.setItem('lovepack-key', key)
     return key
   })()
-const project = new Lovepack({ endpoint: ENDPOINT, apiKey: lovepackKey }).project(projectId)
+const project = new Lovepack({ endpoint: ENDPOINT, apiKey: lovepackKey }).project({ id: projectId })
 
 const projectReady = project.init()
 
@@ -59,7 +59,7 @@ async function commitTurn() {
   if (!session) return
   const s = await session
   session = undefined
-  const res = await s.commit(`AI edit ${new Date().toLocaleTimeString()}`)
+  const res = await s.commit({ message: `AI edit ${new Date().toLocaleTimeString()}` })
   if (!res.ok && res.reason === 'build-error') {
     console.error('commit blocked by build error', res.errorText)
     await s.discard()
@@ -69,16 +69,19 @@ async function commitTurn() {
 
 // Viewers render whatever the project socket says: drafts while the agent works, commits after.
 // The same socket would update any other open tab.
-project.watch(async (msg) => {
-  if (msg.type === 'hello') {
-    if (msg.heads.main) useStore.setState({ previewComponent: await project.loadComponent(msg.heads.main) })
-  } else if (msg.type === 'draft') {
-    useStore.setState({ previewComponent: await project.loadDraftComponent(msg.session, msg.build) })
-  } else if (msg.type === 'draft-error') {
-    console.error(msg.errors.map((e) => e.text).join('\n'))
-  } else if (msg.type === 'update') {
-    useStore.setState({ previewComponent: await project.loadComponent(msg.sha) })
-  }
+project.watch({
+  onMessage: async (msg) => {
+    if (msg.type === 'hello') {
+      if (msg.heads.main) {
+        const url = project.fileUrl({ ref: msg.heads.main })
+        useStore.setState({ previewComponent: await project.load({ url }) })
+      }
+    } else if (msg.type === 'update') {
+      useStore.setState({ previewComponent: await project.load({ url: msg.url }) })
+    } else if (msg.type === 'build-error') {
+      console.error(msg.errors.map((e) => e.text).join('\n'))
+    }
+  },
 })
 projectReady.then(refreshHistory)
 
@@ -97,16 +100,16 @@ const tools = {
       const s = await getSession()
 
       if (content !== undefined || (oldString === '' && newString !== undefined)) {
-        await s.write(path, (content ?? newString)!)
+        await s.write({ path, content: (content ?? newString)! })
       } else if (oldString !== undefined && newString !== undefined) {
-        await s.replace(path, oldString, newString)
+        await s.replace({ path, oldString, newString })
       } else {
         throw new Error('Either content or both oldString and newString must be provided')
       }
 
-      if (path === 'App.tsx') useStore.setState({ code: (await s.read(path)) ?? '' })
+      if (path === 'App.tsx') useStore.setState({ code: (await s.read({ path })) ?? '' })
 
-      // Draft build: viewers (this page included) get a `draft` message from the socket
+      // Draft build: viewers (this page included) get an `update` message from the socket
       const build = await s.build()
       useStore.setState({ isGenerating: false })
       if (!build.ok) return { success: false, error: build.errorText }
@@ -489,7 +492,7 @@ export default function App() {
                     <button
                       className='text-xs text-muted-foreground hover:text-foreground'
                       onClick={async () => {
-                        await project.restore(c.sha)
+                        await project.restore({ sha: c.sha })
                         await refreshHistory()
                       }}
                     >
