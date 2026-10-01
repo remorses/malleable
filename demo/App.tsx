@@ -5,8 +5,7 @@ import { LiveMessageAssembler } from '../src/liveapi/genai-to-ui-message'
 import { tool } from 'ai'
 import { z } from 'zod'
 import { useStore } from './store'
-import type { BundleResult } from '../src/types.js'
-import type { BundleInput } from '../src/worker.js'
+import { Lovepack, type Session } from '../src/client'
 import type { UIMessage } from 'ai'
 import type { LiveServerMessage } from '@google/genai'
 import importMap from 'virtual:importmap'
@@ -23,115 +22,97 @@ function setupImportMap() {
   }
 }
 
-// File storage in memory
-const fileStorage: Record<string, string> = {
-  'App.tsx': ''
+// Project on the lovepack worker. Files live in an Artifacts git repo, one commit per agent message.
+const ENDPOINT = 'https://remote-bundler.fumabase.com'
+const projectId =
+  localStorage.getItem('lovepack-project') ||
+  (() => {
+    const id = `demo-${Math.random().toString(36).slice(2, 10)}`
+    localStorage.setItem('lovepack-project', id)
+    return id
+  })()
+const lovepackKey =
+  localStorage.getItem('lovepack-key') ||
+  (() => {
+    const key = window.prompt('Please enter your lovepack API key:') || ''
+    localStorage.setItem('lovepack-key', key)
+    return key
+  })()
+const project = new Lovepack({ endpoint: ENDPOINT, apiKey: lovepackKey }).project(projectId)
+
+const projectReady = project.init()
+
+// One open session per agent message: opened on the first edit, committed when the turn completes
+let session: Promise<Session> | undefined
+function getSession() {
+  session ??= projectReady.then(() =>
+    project.openSession({ author: { kind: 'agent', id: 'gemini-live' } }),
+  )
+  return session
 }
+
+async function refreshHistory() {
+  useStore.setState({ history: await project.log({ limit: 20 }) })
+}
+
+async function commitTurn() {
+  if (!session) return
+  const s = await session
+  session = undefined
+  const res = await s.commit(`AI edit ${new Date().toLocaleTimeString()}`)
+  if (!res.ok && res.reason === 'build-error') {
+    console.error('commit blocked by build error', res.errorText)
+    await s.discard()
+  }
+  await refreshHistory()
+}
+
+// Viewers render whatever the project socket says: drafts while the agent works, commits after.
+// The same socket would update any other open tab.
+project.watch(async (msg) => {
+  if (msg.type === 'hello') {
+    if (msg.heads.main) useStore.setState({ previewComponent: await project.loadComponent(msg.heads.main) })
+  } else if (msg.type === 'draft') {
+    useStore.setState({ previewComponent: await project.loadDraftComponent(msg.session, msg.build) })
+  } else if (msg.type === 'draft-error') {
+    console.error(msg.errors.map((e) => e.text).join('\n'))
+  } else if (msg.type === 'update') {
+    useStore.setState({ previewComponent: await project.loadComponent(msg.sha) })
+  }
+})
+projectReady.then(refreshHistory)
 
 // Tools definition
 const tools = {
   edit_file: tool({
-    description: 'Edit or create a file in memory. Pass empty string as oldString to replace entire file content. Use content parameter to create new file or replace existing one.',
+    description: 'Edit or create a file. Pass empty string as oldString to replace entire file content. Use content parameter to create new file or replace existing one.',
     inputSchema: z.object({
       path: z.string().describe('The file path (e.g., App.tsx, Button.tsx, utils.ts). App.tsx is the main entry point.'),
-      content: z.string().optional().describe('Full content for creating new file or replacing existing file entirely'),
+      content: z.string().optional().describe('Full content for creating new file or replacing existing one entirely'),
       oldString: z.string().optional().describe('String to find and replace. Pass empty string "" to replace entire file content with newString'),
       newString: z.string().optional().describe('String to replace with. When oldString is empty "", this becomes the entire file content'),
     }),
     execute: async ({ path, content, oldString, newString }) => {
-      // Set isGenerating to true when tool is called
       useStore.setState({ isGenerating: true })
-      
-      // Handle file creation or full replacement
-      if (content !== undefined) {
-        fileStorage[path] = content
-        console.log(`File created/replaced: ${path}`)
-      } 
-      // Handle string replacement
-      else if (oldString !== undefined && newString !== undefined) {
-        // Empty oldString means replace entire file content
-        if (oldString === '') {
-          fileStorage[path] = newString
-          console.log(`File content replaced: ${path}`)
-        } else {
-          if (!fileStorage[path]) {
-            throw new Error(`File ${path} does not exist`)
-          }
-          if (!fileStorage[path].includes(oldString)) {
-            throw new Error(`String not found in ${path}`)
-          }
-          fileStorage[path] = fileStorage[path].replace(oldString, newString)
-          console.log(`String replaced in ${path}`)
-        }
+      const s = await getSession()
+
+      if (content !== undefined || (oldString === '' && newString !== undefined)) {
+        await s.write(path, (content ?? newString)!)
+      } else if (oldString !== undefined && newString !== undefined) {
+        await s.replace(path, oldString, newString)
       } else {
         throw new Error('Either content or both oldString and newString must be provided')
       }
-      
-      // Update the code display if it's the main app
-      if (path === 'App.tsx') {
-        useStore.setState({ code: fileStorage[path] })
-      }
-      
-      // Bundle all files after edit
-      await bundleAndRender()
-      
-      // Set isGenerating to false after bundling
+
+      if (path === 'App.tsx') useStore.setState({ code: (await s.read(path)) ?? '' })
+
+      // Draft build: viewers (this page included) get a `draft` message from the socket
+      const build = await s.build()
       useStore.setState({ isGenerating: false })
-      return { success: true, files: Object.keys(fileStorage) }
+      if (!build.ok) return { success: false, error: build.errorText }
+      return { success: true, files: await s.list() }
     },
   }),
-}
-
-// Bundle and render function
-const bundleAndRender = async () => {
-  // Convert fileStorage to files array
-  const files = Object.entries(fileStorage)
-    .filter(([_, content]) => content.trim() !== '')
-    .map(([path, content]) => ({ path, content }))
-  
-  if (files.length === 0) {
-    console.log('No files to bundle')
-    return
-  }
-  
-  const response = await fetch(
-    'https://remote-bundler.fumabase.com/api/bundle',
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        files,
-        entryPoint: 'App.tsx',
-        externalPackages: ['react', 'react-dom', 'react/jsx-runtime'],
-        siteId: 'example',
-        prerenderDebounceTime: 1000 * 5,
-      } satisfies BundleInput),
-    },
-  )
-
-  if (!response.ok) {
-    throw new Error(await response.text())
-  }
-
-  const result = (await response.json()) as BundleResult
-
-  if (result.success) {
-    const importUrl = result.jsUrl
-
-    // Dynamically import the module
-    // Add a timestamp query to bust cache
-    const urlWithTimestamp = new URL(importUrl)
-    urlWithTimestamp.searchParams.set('t', Date.now().toString())
-    const module = await import(/* @vite-ignore */ urlWithTimestamp.toString())
-    const Component = module.default
-
-    // Set the component to render in preview
-    if (Component) {
-      useStore.setState({ previewComponent: Component })
-    }
-  }
 }
 
 // Ask for API key and create LiveAPI client at global scope
@@ -172,6 +153,8 @@ const liveClient =
       globalThis.allMessages = globalThis.allMessages || []
       globalThis.allMessages.push(message)
       
+      if (message.serverContent?.turnComplete) void commitTurn()
+
       // Process the message and get all current UI messages
       const allMessages = messageAssembler.processMessage(message)
 
@@ -313,6 +296,7 @@ export default function App() {
     code,
     isGenerating,
     previewComponent: PreviewComponent,
+    history,
     uiMessages,
   } = useStore()
 
@@ -482,6 +466,38 @@ export default function App() {
               <div className='border border-border rounded-md p-4 min-h-[500px] bg-card flex flex-col items-center justify-center'>
                 {PreviewComponent && <PreviewComponent />}
               </div>
+            </div>
+
+            {/* History: every agent message is one commit */}
+            <div>
+              <div className='flex justify-between items-center mb-2'>
+                <h3 className='text-lg font-semibold text-foreground'>History</h3>
+                <button
+                  onClick={async () => {
+                    await project.undo()
+                    await refreshHistory()
+                  }}
+                  className='px-3 py-1 bg-secondary text-secondary-foreground rounded text-sm'
+                >
+                  Undo last change
+                </button>
+              </div>
+              <ul className='text-sm space-y-1'>
+                {history.map((c) => (
+                  <li key={c.sha} className='flex justify-between gap-2'>
+                    <span className='truncate'>{c.message}</span>
+                    <button
+                      className='text-xs text-muted-foreground hover:text-foreground'
+                      onClick={async () => {
+                        await project.restore(c.sha)
+                        await refreshHistory()
+                      }}
+                    >
+                      Restore
+                    </button>
+                  </li>
+                ))}
+              </ul>
             </div>
           </div>
         </div>
