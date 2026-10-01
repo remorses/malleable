@@ -2,6 +2,17 @@ import { describe, expect, it } from 'vitest'
 import { generateTailwindCSS, scanCandidates } from './generate-tailwind.ts'
 
 describe('scanCandidates', () => {
+  it('finds classes in string arrays', () => {
+    const found = scanCandidates(`const palette = ['bg-sky-500', 'bg-violet-500', "bg-rose-500"]`)
+    expect(found.filter((c) => c.startsWith('bg-'))).toMatchInlineSnapshot(`
+      [
+        "bg-sky-500",
+        "bg-violet-500",
+        "bg-rose-500",
+      ]
+    `)
+  })
+
   it('keeps quoted arbitrary values and variants in one token', () => {
     const found = scanCandidates(
       `<div className="before:content-['hello'] p-4 [&_p:not([hidden])]:mt-2" /> cn("a",'b')`,

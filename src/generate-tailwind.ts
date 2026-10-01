@@ -47,7 +47,8 @@ export function scanCandidates(source: string): string[] {
     depth = 0
     quote = ''
   }
-  for (const ch of source) {
+  for (let i = 0; i < source.length; i++) {
+    const ch = source[i]
     if (ch === '\n') {
       flush()
     } else if (quote) {
@@ -65,7 +66,8 @@ export function scanCandidates(source: string): string[] {
     } else if (/[\s"'`{}]/.test(ch)) {
       flush()
     } else {
-      if (ch === '[') depth = 1
+      // `['a', 'b']` is a JS array, not an arbitrary value like [&>svg]:size-4
+      if (ch === '[' && !(token === '' && /["'`]/.test(source[i + 1] ?? ''))) depth = 1
       token += ch
     }
   }
