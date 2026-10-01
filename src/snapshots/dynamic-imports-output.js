@@ -44,7 +44,7 @@ import { Fragment, jsx as jsx2, jsxs as jsxs2 } from "react/jsx-runtime";
 var OriginalDefault = app_default;
 var WrappedComponent = (props) => {
   return /* @__PURE__ */ jsxs2(Fragment, { children: [
-    /* @__PURE__ */ jsx2("link", { rel: "stylesheet", href: "https://remote-bundler.fumabase.com/bundle/test-b0cy0l/index.css" }),
+    /* @__PURE__ */ jsx2("link", { rel: "stylesheet", href: "https://remote-bundler.fumabase.com/bundle/test-zt8eqg/index.css" }),
     OriginalDefault ? /* @__PURE__ */ jsx2(OriginalDefault, { ...props }) : null
   ] });
 };

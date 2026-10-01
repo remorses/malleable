@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { PrerenderRequest } from './prerender.tsx'
 
 const API_URL = !process.env.USE_LOCAL
-  ? 'https://lovepack.dev'
+  ? 'https://remote-bundler.fumabase.com'
   : 'http://localhost:8787'
 
 async function fetchApi(
@@ -42,6 +42,7 @@ describe('Container Prerendering', { timeout: 30000 }, ({}) => {
           },
         ],
         cssUrls: ['https://example.com/styles.css'],
+        siteId: 'container-test-1',
         bootstrapModules: ['https://example.com/bundle.js'],
       }),
     })
@@ -52,7 +53,7 @@ describe('Container Prerendering', { timeout: 30000 }, ({}) => {
     if (result.success) {
       expect(result).toMatchInlineSnapshot(`
         {
-          "html": "<!DOCTYPE html><html lang="en"><head><meta charSet="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><link rel="modulepreload" fetchPriority="low" href="https://example.com/bundle.js"/><title>React App</title><link rel="stylesheet" href="https://example.com/styles.css"/><script type="importmap">{"imports":{"react":"https://esm.sh/react@19","react-dom":"https://esm.sh/react-dom@19","react-dom/":"https://esm.sh/react-dom@19/","react/jsx-runtime":"https://esm.sh/react@19/jsx-runtime","react/jsx-dev-runtime":"https://esm.sh/react@19/jsx-dev-runtime"}}</script></head><body><div id="root"><div class="container"><h1>Hello from Prerendering!</h1><p>This is a test component.</p></div></div><script type="module" src="https://example.com/bundle.js"></script><script>
+          "html": "<!DOCTYPE html><html lang="en"><head><meta charSet="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><link rel="modulepreload" fetchPriority="low" href="https://example.com/bundle.js"/><title>React App</title><link rel="stylesheet" href="https://example.com/styles.css"/><script type="importmap">{"imports":{"react":"https://esm.sh/react@19","react-dom":"https://esm.sh/react-dom@19","react-dom/":"https://esm.sh/react-dom@19/","react/jsx-runtime":"https://esm.sh/react@19/jsx-runtime","react/jsx-dev-runtime":"https://esm.sh/react@19/jsx-dev-runtime"}}</script></head><body><div id="root"><div class="container"><h1>Hello from Prerendering!</h1><p>This is a test component.</p></div></div><script type="module" src="https://example.com/bundle.js"></script><script id="_R_">
         import React from 'react';
         import { hydrateRoot } from 'react-dom/client';
         import App from 'https://example.com/bundle.js';
@@ -62,7 +63,7 @@ describe('Container Prerendering', { timeout: 30000 }, ({}) => {
           hydrateRoot(root, React.createElement(App));
         }
         </script><script type="module" src="https://example.com/bundle.js" async=""></script></body></html>",
-          "renderTime": 285.0357919999999,
+          "renderTime": 2.624260000000504,
           "success": true,
         }
       `)
@@ -123,8 +124,21 @@ describe('Container Prerendering', { timeout: 30000 }, ({}) => {
 
     expect(result).toMatchInlineSnapshot(`
       {
-        "error": "siteId: Invalid input: expected string, received undefined",
-        "success": false,
+        "html": "<!DOCTYPE html><html lang="en"><head><meta charSet="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>React App</title><script type="importmap">{"imports":{"react":"https://esm.sh/react@19","react-dom":"https://esm.sh/react-dom@19","react-dom/":"https://esm.sh/react-dom@19/","react/jsx-runtime":"https://esm.sh/react@19/jsx-runtime","react/jsx-dev-runtime":"https://esm.sh/react@19/jsx-dev-runtime"}}</script></head><body><div id="root"><div class="app"><h1>Multi-file App</h1><button class="btn">Click me</button></div></div><script id="_R_">
+      import React from 'react';
+      import { hydrateRoot } from 'react-dom/client';
+
+      // Dynamically import the app
+      import('./App.tsx').then(module => {
+        const App = module.default;
+        const root = document.getElementById('root');
+        if (root) {
+          hydrateRoot(root, React.createElement(App));
+        }
+      });
+      </script></body></html>",
+        "renderTime": 1.9506880000008096,
+        "success": true,
       }
     `)
     expect(result.success).toBe(true)
@@ -157,6 +171,7 @@ describe('Container Prerendering', { timeout: 30000 }, ({}) => {
           },
         ],
         cssUrls: ['https://cdn.example.com/tailwind.css'],
+        siteId: 'container-test-2',
         bootstrapModules: [],
       }),
     })
@@ -165,8 +180,9 @@ describe('Container Prerendering', { timeout: 30000 }, ({}) => {
 
     expect(result).toMatchInlineSnapshot(`
       {
-        "error": "siteId: Invalid input: expected string, received undefined",
-        "success": false,
+        "html": "",
+        "renderTime": 2.573013000001083,
+        "success": true,
       }
     `)
     expect(result.success).toBe(true)
@@ -190,6 +206,7 @@ describe('Container Prerendering', { timeout: 30000 }, ({}) => {
           },
         ],
         cssUrls: [],
+        siteId: 'container-test-3',
         bootstrapModules: [],
       }),
     })
@@ -198,8 +215,9 @@ describe('Container Prerendering', { timeout: 30000 }, ({}) => {
 
     expect(result).toMatchInlineSnapshot(`
       {
-        "error": "siteId: Invalid input: expected string, received undefined",
-        "success": false,
+        "html": "",
+        "renderTime": 0.9881629999981669,
+        "success": true,
       }
     `)
   })
@@ -221,6 +239,7 @@ describe('Container Prerendering', { timeout: 30000 }, ({}) => {
           },
         ],
         cssUrls: [],
+        siteId: 'container-test-4',
         bootstrapModules: [],
       }),
     })
@@ -229,8 +248,21 @@ describe('Container Prerendering', { timeout: 30000 }, ({}) => {
 
     expect(result).toMatchInlineSnapshot(`
       {
-        "error": "siteId: Invalid input: expected string, received undefined",
-        "success": false,
+        "html": "<!DOCTYPE html><html lang="en"><head><meta charSet="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>React App</title><script type="importmap">{"imports":{"react":"https://esm.sh/react@19","react-dom":"https://esm.sh/react-dom@19","react-dom/":"https://esm.sh/react-dom@19/","react/jsx-runtime":"https://esm.sh/react@19/jsx-runtime","react/jsx-dev-runtime":"https://esm.sh/react@19/jsx-dev-runtime"}}</script></head><body><div id="root"><div>Test importmap</div></div><script id="_R_">
+      import React from 'react';
+      import { hydrateRoot } from 'react-dom/client';
+
+      // Dynamically import the app
+      import('./App.tsx').then(module => {
+        const App = module.default;
+        const root = document.getElementById('root');
+        if (root) {
+          hydrateRoot(root, React.createElement(App));
+        }
+      });
+      </script></body></html>",
+        "renderTime": 1.6535620000031486,
+        "success": true,
       }
     `)
     expect(result.success).toBe(true)
@@ -260,6 +292,7 @@ describe('Container Prerendering', { timeout: 30000 }, ({}) => {
           },
         ],
         cssUrls: [],
+        siteId: 'container-test-5',
         bootstrapModules: [],
         importmap: customImportmap,
       }),
@@ -269,8 +302,21 @@ describe('Container Prerendering', { timeout: 30000 }, ({}) => {
 
     expect(result).toMatchInlineSnapshot(`
       {
-        "error": "siteId: Invalid input: expected string, received undefined",
-        "success": false,
+        "html": "<!DOCTYPE html><html lang="en"><head><meta charSet="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>React App</title><script type="importmap">{"imports":{"react":"https://custom.cdn/react@19","react-dom":"https://custom.cdn/react-dom@19"}}</script></head><body><div id="root"><div>Custom importmap test</div></div><script id="_R_">
+      import React from 'react';
+      import { hydrateRoot } from 'react-dom/client';
+
+      // Dynamically import the app
+      import('./App.tsx').then(module => {
+        const App = module.default;
+        const root = document.getElementById('root');
+        if (root) {
+          hydrateRoot(root, React.createElement(App));
+        }
+      });
+      </script></body></html>",
+        "renderTime": 2.825611000000208,
+        "success": true,
       }
     `)
     expect(result.success).toBe(true)
