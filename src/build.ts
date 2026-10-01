@@ -26,7 +26,7 @@ export interface BuildCache {
   put(key: string, value: string, ttlSeconds: number): void
 }
 
-const CACHE_VERSION = 'v3'
+const CACHE_VERSION = 'v4'
 
 /** KV-backed cache under the `cache:` prefix, separate from published `/bundle/*` keys. */
 export function createKvBuildCache(

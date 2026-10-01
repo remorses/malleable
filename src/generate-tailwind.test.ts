@@ -2,13 +2,27 @@ import { describe, expect, it } from 'vitest'
 import { generateTailwindCSS, scanCandidates } from './generate-tailwind.ts'
 
 describe('scanCandidates', () => {
-  it('finds classes in string arrays', () => {
-    const found = scanCandidates(`const palette = ['bg-sky-500', 'bg-violet-500', "bg-rose-500"]`)
-    expect(found.filter((c) => c.startsWith('bg-'))).toMatchInlineSnapshot(`
+  it('finds classes next to code that looks like arbitrary values', () => {
+    const found = scanCandidates(
+      [
+        `const palette = ['bg-sky-500', 'bg-violet-500', "bg-rose-500"]`,
+        `cn(['bg-red-500', 'p-4'])`,
+        `[{'text-lg': true}]`,
+        `const re = /['"]/; const c = "m-2 p-1"`,
+        `before:content-['it\\'s'] gap-3`,
+      ].join('\n'),
+    )
+    expect(found.filter((c) => /^(bg-|p-|text-|m-|gap-)/.test(c))).toMatchInlineSnapshot(`
       [
         "bg-sky-500",
         "bg-violet-500",
         "bg-rose-500",
+        "bg-red-500",
+        "p-4",
+        "text-lg",
+        "m-2",
+        "p-1",
+        "gap-3",
       ]
     `)
   })
@@ -19,14 +33,23 @@ describe('scanCandidates', () => {
     )
     expect(found.filter((c) => /^(before|p-4|\[&|a$|b$)/.test(c))).toMatchInlineSnapshot(`
       [
-        "before:content-['hello']",
+        "before:content-[",
         "p-4",
         "[&_p:not([hidden])]:mt-2",
         "[&_p:not",
         "a",
         "b",
+        "before:content-['hello']",
       ]
     `)
+  })
+})
+
+describe('scan performance', () => {
+  it('is linear on long minified lines', () => {
+    const start = performance.now()
+    scanCandidates('x' + ',x'.repeat(200_000))
+    expect(performance.now() - start < 1000).toMatchInlineSnapshot(`true`)
   })
 })
 

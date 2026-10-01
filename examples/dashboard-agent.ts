@@ -13,17 +13,26 @@ console.log(`open ${endpoint}/view/${projectId}`)
 
 type Session = Awaited<ReturnType<typeof project.openSession>>
 
+/** Draft build; stop the demo on failure instead of committing a broken tree. */
+async function build(session: Session, label: string) {
+  const result = await session.build()
+  console.log('draft', label, result)
+  if (!result.ok) throw new Error(result.errorText)
+}
+
 /** Write a batch of files, then run one draft build so viewers see the step. */
 async function batch(session: Session, files: Record<string, string>) {
   await session.apply({ ops: Object.entries(files).map(([path, content]) => ({ op: 'write' as const, path, content })) })
-  console.log('draft', Object.keys(files).join(', '), await session.build())
+  await build(session, Object.keys(files).join(', '))
   await sleep(2500)
 }
 
 async function message(text: string, run: (session: Session) => Promise<void>) {
   const session = await project.openSession({ author: { kind: 'agent', id: 'dashboard-agent' } })
   await run(session)
-  console.log('commit', await session.commit({ message: text }))
+  const result = await session.commit({ message: text })
+  console.log('commit', result)
+  if (!result.ok) throw new Error(`commit failed: ${result.reason}`)
   await sleep(2000)
 }
 
@@ -547,16 +556,16 @@ await message('Add dashboard with orders, chart and team widgets', async (s) => 
 })
 
 await message('Add live badge to header', async (s) => {
+  // two exact one-line edits instead of one whitespace-dependent multi-line match
   await s.apply({
     ops: [
       {
         op: 'replace',
         path: 'App.tsx',
-        oldString: '<h1 className="text-xl font-bold tracking-tight">Dashboard</h1>\n          \n',
-        newString:
-          '<h1 className="text-xl font-bold tracking-tight">Acme Dashboard</h1>\n          <Badge variant="success">Live</Badge>\n',
+        oldString: '<h1 className="text-xl font-bold tracking-tight">Dashboard</h1>',
+        newString: '<h1 className="text-xl font-bold tracking-tight">Acme Dashboard</h1><Badge variant="success">Live</Badge>',
       },
     ],
   })
-  console.log('draft', 'App.tsx', await s.build())
+  await build(s, 'App.tsx')
 })

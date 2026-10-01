@@ -24,31 +24,37 @@ const STYLESHEETS: Record<string, string> = {
   'tailwindcss/utilities.css': utilitiesCss,
 }
 
-const GLUE = /[,;()=]+(?![^\[]*\])/
+const DELIMITERS = /[\s"'`{}]+/
+// glued tokens like cn(`a`,`b`); no lookahead, so it stays linear
+const GLUE = /[,;()=]+/
 
 /**
  * Extracts class candidates from source text. Over-generates on purpose:
- * `build()` ignores everything that is not a utility. Quotes and spaces inside
- * `[...]` stay part of the token, so `before:content-['hi']` survives.
+ * `build()` ignores everything that is not a utility.
+ * Pass 1 splits on plain delimiters, so classes survive any surrounding code (arrays, regexes, comments).
+ * Pass 2 keeps quotes and spaces inside `[...]` in one token, so `before:content-['hi']` survives.
  * TODO: replace with the oxide scanner if it ever runs in workerd. https://github.com/tailwindlabs/tailwindcss/tree/main/crates/oxide
  */
 export function scanCandidates(source: string): string[] {
   const out = new Set<string>()
+  const add = (token: string) => {
+    if (!token) return
+    out.add(token)
+    for (const part of token.split(GLUE)) if (part) out.add(part)
+  }
+
+  for (const token of source.split(DELIMITERS)) add(token)
+
   let token = ''
   let depth = 0
   let quote = ''
   const flush = () => {
-    if (token) {
-      out.add(token)
-      // glued tokens like cn(`a`,`b`)
-      for (const part of token.split(GLUE)) if (part) out.add(part)
-    }
+    if (token.includes('[')) add(token)
     token = ''
     depth = 0
     quote = ''
   }
-  for (let i = 0; i < source.length; i++) {
-    const ch = source[i]
+  for (const ch of source) {
     if (ch === '\n') {
       flush()
     } else if (quote) {
@@ -63,11 +69,10 @@ export function scanCandidates(source: string): string[] {
         continue
       }
       token += ch
-    } else if (/[\s"'`{}]/.test(ch)) {
+    } else if (DELIMITERS.test(ch)) {
       flush()
     } else {
-      // `['a', 'b']` is a JS array, not an arbitrary value like [&>svg]:size-4
-      if (ch === '[' && !(token === '' && /["'`]/.test(source[i + 1] ?? ''))) depth = 1
+      if (ch === '[') depth = 1
       token += ch
     }
   }
