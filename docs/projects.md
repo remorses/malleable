@@ -1,0 +1,111 @@
+---
+title: Projects API
+description: Versioned UI projects on Cloudflare Artifacts. Agents edit files in a session, viewers see live drafts, every agent message is one git commit.
+---
+
+# Projects
+
+A **project** is a git repo in Cloudflare Artifacts plus a Durable Object (`ProjectDO`) that is its only writer.
+
+```
+ agent (Worker) ──RPC──▶ ProjectDO ──git push──▶ Artifacts repo  (src files + dist/ in one commit)
+ agent (HTTP)  ──REST──▶    │  esbuild + tailwind run here
+                            └──WebSocket──▶ viewers: draft / update messages
+ browser ◀── import() ── GET /p/:id/r/:sha/index.js   (immutable)  or  /d/:session/:n/index.js (draft)
+```
+
+## Flow
+
+```ts
+import { getProject } from './project-do'
+
+const project = getProject(env.PROJECT, 'u123')
+await project.init({ projectId: 'u123' })               // idempotent; { template } forks a repo
+
+const { sessionId } = await project.openSession({ author: { kind: 'agent', id: 'ses_1' } })
+await project.write(sessionId, 'App.tsx', code)         // in memory, logged in DO SQLite
+await project.replace(sessionId, 'App.tsx', old, next)  // throws unless `old` occurs exactly once
+await project.build(sessionId)                          // draft: viewers update, nothing is committed
+await project.commit(sessionId, { message: 'Add chart' }) // build + git add . + commit + push
+// or project.discard(sessionId)
+```
+
+- **One open session per branch.** A session idle for 10 minutes is replaced.
+- **Failed builds do not commit.** `commit` returns `{ ok: false, reason: 'build-error', errorText }`; the session stays open.
+- **Head moved since open** returns `{ ok: false, reason: 'conflict' }`. Retry with `{ rebase: true }` to replay the ops over the new head.
+- **History**: `log`, `undo` (new commit with the previous sources), `restore(sha)`. History is never rewritten.
+- **Branches**: `createBranch`, `branches`, `merge` (fast-forward only), `deleteBranch`.
+
+## Repo layout
+
+| Path | Content |
+|---|---|
+| `lovepack.json` | `{ "entry": "App.tsx", "externalPackages": ["react", ...] }` |
+| source files | whatever the agent writes; `dist/` and `.git/` paths are rejected |
+| `dist/index.js`, `dist/chunks/*`, `dist/index.css` | build output, written by the DO on commit |
+
+The entry module default-exports the component. Its CSS is loaded relative to the module URL, so a commit sha URL is self-contained.
+
+## REST
+
+`/api/projects/*` needs `Authorization: Bearer $LOVEPACK_API_KEY` (`wrangler secret put LOVEPACK_API_KEY`). `/p/*` is public by project id.
+
+| Route | Method | Purpose |
+|---|---|---|
+| `/api/projects/:id` | POST, GET | init, info |
+| `/api/projects/:id/sessions` | POST, GET | open, list |
+| `/api/projects/:id/sessions/:sid/ops` | POST | `{ ops: [{ op: 'write' \| 'replace' \| 'delete', ... }] }`, atomic |
+| `/api/projects/:id/sessions/:sid/{build,commit}` | POST | draft build, commit |
+| `/api/projects/:id/sessions/:sid` | DELETE | discard |
+| `/api/projects/:id/{log,files,undo,restore,branches,merge}` | | history and branches |
+| `/p/:id/r/:ref/*` | GET | built file at a branch or sha |
+| `/p/:id/d/:sid/:build/*` | GET | draft build file |
+| `/p/:id/live` | WS | `hello`, `draft`, `draft-error`, `draft-end`, `update` |
+
+## Git remote
+
+Users can edit with plain git. The Worker proxies Artifacts' git remote and checks its own tokens, so Artifacts credentials never leave the Worker.
+
+```bash
+# mint a token (API key needed); scope read|write, ttl 60..86400 seconds
+curl -X POST $ORIGIN/api/projects/u123/git-access -H "Authorization: Bearer $LOVEPACK_API_KEY" \
+  -H 'content-type: application/json' -d '{"scope":"write"}'   # => { url, authenticatedUrl, password, expiresAt }
+
+git clone "$AUTHENTICATED_URL" app && cd app
+# edit App.tsx
+git commit -am 'Tweak' && git push origin main
+```
+
+- **After a push**, `ProjectDO.afterGitPush()` builds the pushed sources. If `dist/` does not match, it adds a commit `Build dist for pushed sources`, and viewers get an `update`. Run `git pull` to get it.
+- **Tokens** are stateless HMACs (`lp_<scope>_<expiry>_<mac>`) signed with `LOVEPACK_API_KEY`, bound to one project.
+- **Push while an agent session is open** is allowed. The session's next `commit` returns `conflict`; retry with `rebase: true`.
+- A push with a build error still lands, viewers get `draft-error`, and the head keeps its old `dist/`.
+
+## Example
+
+`/view/:id` is a minimal live viewer. `examples/agent.ts` plays an agent (two messages, one commit each):
+
+```bash
+LOVEPACK_API_KEY=... pnpm tsx examples/agent.ts demo1     # then open $ORIGIN/view/demo1
+```
+
+## Client
+
+`src/client.ts` wraps the REST routes and the socket. `demo/App.tsx` is the reference use.
+
+```ts
+const project = new Lovepack({ endpoint, apiKey }).project('u123')
+project.watch(async (msg) => {
+  if (msg.type === 'draft') setComponent(await project.loadDraftComponent(msg.session, msg.build))
+  if (msg.type === 'update') setComponent(await project.loadComponent(msg.sha))
+})
+```
+
+## Learnings
+
+- Artifacts has no file-write API. Writes are `git push` with `isomorphic-git` on an in-memory fs (`src/memory-fs.ts`).
+- `isomorphic-git` needs `readlink` and `symlink` on the fs, and `err.code` on fs errors.
+- `git.commit({ ref })` needs the full ref (`refs/heads/main`). A short name writes a stray ref and the push fails with a bare 500.
+- `git.fetch` needs the `origin` remote configured (`addRemote`) and returns the fetched sha in `fetchHead`.
+- The DO keeps the clone in memory only. After hibernation the first call re-fetches (depth 1) and replays the session op log.
+- Debug failed pushes through `gitHttp` in `project-do.ts`: it keeps the 5xx response body.

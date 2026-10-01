@@ -1,10 +1,10 @@
 import { Spiceflow } from 'spiceflow'
 import { z } from 'zod'
 
-import { generateTailwindCSS, shadcnTheme } from './generate-tailwind.js'
-import { createEsmShPlugin } from './esm-https-plugin.js'
-import { createLocalResolverPlugin } from './local-resolver-plugin.js'
-import { createVirtualEntryPlugin } from './virtual-entry-plugin.js'
+import { buildFiles, formatBuildError } from './build.js'
+import { projectsApi, projectsPublic, type ProjectsEnv } from './projects-api.js'
+
+export { ProjectDO } from './project-do.js'
 import { logger, createRequestLogger } from './logger.js'
 import { Container, getContainer, getRandom } from '@cloudflare/containers'
 import { createSpiceflowClient } from 'spiceflow/client'
@@ -103,14 +103,21 @@ export class BunContainer extends Container<Env> {
   }
 }
 
-interface Env {
+interface Env extends ProjectsEnv {
   jsCache: KVNamespace
   BUN_CONTAINER: DurableObjectNamespace<BunContainer>
 }
 
 // Helper to create a Spiceflow client from a container stub
 
-let init = false
+function corsHeaders(serverTiming?: string): Record<string, string> {
+  return {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'OPTIONS, GET, POST, PUT, PATCH, DELETE',
+    'Access-Control-Allow-Headers': '*',
+    ...(serverTiming ? { 'Server-Timing': serverTiming } : {}),
+  }
+}
 
 // Schema for bundle API
 const fileSchema = z.object({
@@ -140,6 +147,8 @@ const html = (strings: TemplateStringsArray, ...values: any[]) =>
 // Create app with state
 const app = new Spiceflow()
   .state('env', {} as Env)
+  .use(projectsApi)
+  .use(projectsPublic)
   .route({
     method: 'POST',
     path: '/api/prerender',
@@ -206,25 +215,6 @@ const app = new Spiceflow()
 
       reqLogger.time(`total`)
 
-      reqLogger.time(`import-esbuild`)
-      const [esbuild, wasm] = await Promise.all([
-        import('esbuild-wasm'),
-        import('../node_modules/esbuild-wasm/esbuild.wasm').then(
-          (mod) => mod.default,
-        ),
-      ])
-      reqLogger.timeEnd(`import-esbuild`)
-
-      if (!init) {
-        reqLogger.time(`esbuild-init`)
-        await esbuild.initialize({
-          wasmModule: process.env.VITEST ? undefined : wasm,
-          worker: false,
-        })
-        init = true
-        reqLogger.timeEnd(`esbuild-init`)
-      }
-
       try {
         reqLogger.time(`parse-body`)
         const body = await request.json()
@@ -266,66 +256,34 @@ const app = new Spiceflow()
         const baseUrl = new URL(request.url).origin
         const cssUrl = `${baseUrl}/bundle/${siteId}/index.css`
 
-        // Collect all code for CSS extraction
-        const allCode = files.map((f) => f.content).join('\n')
-
-        // Run esbuild and Tailwind CSS extraction concurrently
-        reqLogger.time(`parallel-build`)
-        const [result, css] = await Promise.all([
-          // Build with esbuild using virtual entry
-          (async () => {
-            reqLogger.time(`esbuild-build`)
-            const res = await esbuild.build({
-              entryPoints: { [`index`]: 'virtual:entry' },
-              outdir: `./${siteId}`,
-              bundle: true,
-              format: 'esm',
-              splitting: true,
-              sourcemap: false,
-              target: 'es2020',
-              platform: 'browser',
-              write: false,
-              minify: false,
-              jsx: 'automatic',
-              plugins: [
-                createVirtualEntryPlugin({
-                  actualEntryPath: actualEntryPoint,
-                  cssUrl,
-                  baseUrl,
-                }),
-                createLocalResolverPlugin({
-                  files,
-                }),
-                createEsmShPlugin({ externalPackages }),
-              ],
-              absWorkingDir: '/',
-              loader: {
-                '.tsx': 'tsx',
-                '.ts': 'tsx',
-                '.jsx': 'tsx',
-                '.js': 'tsx',
-                '.css': 'css',
-              },
-              // Configure output filenames
-              entryNames: '[dir]/[name]', // Will produce siteId/index.js
-              chunkNames: '[dir]/chunks/[name]-[hash]', // Will produce siteId/chunks/*.js
-              assetNames: '[dir]/assets/[name]-[hash]', // Will produce siteId/assets/*
-            })
-            reqLogger.timeEnd(`esbuild-build`)
-            return res
-          })(),
-          // Generate Tailwind CSS
-          (async () => {
-            reqLogger.time(`tailwind-css`)
-            const styles = await generateTailwindCSS(allCode)
-            reqLogger.timeEnd(`tailwind-css`)
-            return styles
-          })(),
-        ])
-        reqLogger.timeEnd(`parallel-build`)
-
-        const outputFiles = result.outputFiles || []
-        const warnings = result.warnings
+        reqLogger.time(`build`)
+        const built = await buildFiles({
+          files,
+          entryPoint: actualEntryPoint,
+          externalPackages,
+          cssUrl,
+          baseUrl,
+          outdir: siteId,
+        })
+        reqLogger.timeEnd(`build`)
+        if (!built.ok) {
+          reqLogger.timeEnd(`total`)
+          return Response.json(
+            {
+              error: built.errors[0]?.text || 'Build failed',
+              errorText: built.errorText,
+              success: false,
+            },
+            { status: built.fromEsbuild ? 400 : 500,
+              headers: corsHeaders(reqLogger.getServerTimingHeader()), },
+          )
+        }
+        const css = built.css
+        const warnings = built.warnings
+        const outputFiles = built.outputs.map((o) => ({
+          path: `${siteId}/${o.path}`,
+          text: o.text,
+        }))
 
         // Store all output files in KV
         const fileUrls: Record<string, string> = {}
@@ -468,9 +426,9 @@ const app = new Spiceflow()
         const htmlUrl = `${baseUrl}/bundle/${htmlKey}`
 
         // Create raw esbuild output metadata (without text content)
-        const rawOutputs = outputFiles.map((file) => ({
+        const rawOutputs = built.rawOutputs.map((file) => ({
           path: file.path,
-          size: file.contents.byteLength,
+          size: file.size,
           type: file.path.endsWith('.map')
             ? 'sourcemap'
             : file.path.includes('chunks/')
@@ -501,53 +459,20 @@ const app = new Spiceflow()
       } catch (error) {
         // Make sure to end any timers that might still be running
         try {
-          reqLogger.timeEnd(`parallel-build`)
-        } catch {}
-        try {
           reqLogger.timeEnd(`total`)
         } catch {}
         logger.error(`Request error:`, error)
 
-        // Format the error nicely using esbuild's built-in formatMessages if it's a build error
-        let errorText = 'Build failed'
-        if (error && error.errors && error.errors.length > 0) {
-          const formatted = await esbuild.formatMessages(error.errors, {
-            kind: 'error',
-            color: false, // No ANSI colors for web output
-            terminalWidth: 100,
-          })
-          errorText = formatted.join('\n')
-        } else if (error && error.message) {
-          errorText = error.message
-        }
-
-        // Also format warnings if any
-        let warningText = ''
-        if (error && error.warnings && error.warnings.length > 0) {
-          const formatted = await esbuild.formatMessages(error.warnings, {
-            kind: 'warning',
-            color: false, // No ANSI colors for web output
-            terminalWidth: 100,
-          })
-          warningText = formatted.join('\n')
-        }
-
+        const failure = await formatBuildError(error)
         return Response.json(
           {
-            error: error?.message || 'Build failed',
-            errorText,
-            warningText: warningText || undefined,
+            error: failure.errors[0]?.text || 'Build failed',
+            errorText: failure.errorText,
             success: false,
           },
           {
-            status: error?.errors ? 400 : 500,
-            headers: {
-              'Access-Control-Allow-Origin': '*',
-              'Access-Control-Allow-Methods':
-                'OPTIONS, GET, POST, PUT, PATCH, DELETE',
-              'Access-Control-Allow-Headers': '*',
-              'Server-Timing': reqLogger.getServerTimingHeader(),
-            },
+            status: failure.fromEsbuild ? 400 : 500,
+            headers: corsHeaders(reqLogger.getServerTimingHeader()),
           },
         )
       }

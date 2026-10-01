@@ -28,8 +28,7 @@ const wasmPlugin = (): Plugin => {
       // Only load if our custom id prefix matches
       if (id.endsWith(".wasm")) {
         const absPath = id.slice("wasm:".length);
-        const wasmBuffer = readFileSync(absPath);
-        const wasmBase64 = wasmBuffer.toString("base64");
+        const wasmBase64 = readFileSync(absPath, "base64");
 
         // Return code that creates a WebAssembly.Module from the base64 data
         return `

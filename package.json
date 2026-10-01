@@ -18,6 +18,7 @@
     "autoprefixer": "^10.4.21",
     "esbuild-wasm": "^0.25.8",
     "eventemitter3": "^5.0.1",
+    "isomorphic-git": "^1.42.4",
     "path-browserify": "^1.0.1",
     "postcss": "^8.5.6",
     "spiceflow": "^1.17.9",
@@ -27,8 +28,9 @@
     "zod": "^4.0.17"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20250810.0",
+    "@cloudflare/workers-types": "^5.20260930.2",
     "@google/genai": "^1.14.0",
+    "@rollup/browser": "^4.63.5",
     "@types/bun": "^1.2.20",
     "@types/node": "^24.2.1",
     "@types/react": "^19.1.9",
@@ -38,8 +40,9 @@
     "node-web-audio-api": "^1.0.4",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
+    "sucrase": "^3.35.1",
     "vite": "^7.1.1",
-    "wrangler": "^4.29.1",
+    "wrangler": "^4.145.0",
     "zustand": "^5.0.7"
   }
 }

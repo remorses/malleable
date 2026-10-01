@@ -3,14 +3,18 @@ import dedent from 'string-dedent'
 
 interface VirtualEntryOptions {
   actualEntryPath: string
-  cssUrl: string
-  baseUrl: string
+  /** Absolute CSS URL. When omitted, the CSS is resolved next to the entry module. */
+  cssUrl?: string
+  baseUrl?: string
 }
 
 const js = dedent
 
 export function createVirtualEntryPlugin(options: VirtualEntryOptions): Plugin {
   const { actualEntryPath, cssUrl, baseUrl } = options
+  const cssHref = cssUrl
+    ? JSON.stringify(cssUrl)
+    : `new URL('./index.css', import.meta.url).href`
   const virtualModuleId = 'virtual:entry'
 
   return {
@@ -40,7 +44,7 @@ export function createVirtualEntryPlugin(options: VirtualEntryOptions): Plugin {
           const WrappedComponent = (props) => {
             return (
               <>
-                <link rel="stylesheet" href="${cssUrl}" />
+                <link rel="stylesheet" href={${cssHref}} />
                 {OriginalDefault ? <OriginalDefault {...props} /> : null}
               </>
             );

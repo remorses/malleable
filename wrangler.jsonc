@@ -2,12 +2,13 @@
   "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "lovepack",
   "main": "src/worker.ts",
-  "compatibility_date": "2025-08-10",
+  "compatibility_date": "2026-09-01",
   "compatibility_flags": ["nodejs_compat"],
 
   "kv_namespaces": [
     { "binding": "jsCache", "id": "6b37928db4814bf2a05819634cb9845b" },
   ],
+  "artifacts": [{ "binding": "ARTIFACTS", "namespace": "lovepack" }],
   "containers": [
     {
       "class_name": "BunContainer",
@@ -25,6 +26,10 @@
         "class_name": "BunContainer",
         "name": "BUN_CONTAINER",
       },
+      {
+        "class_name": "ProjectDO",
+        "name": "PROJECT",
+      },
     ],
   },
   "migrations": [
@@ -37,16 +42,16 @@
       "deleted_classes": ["Sandbox"],
       "new_sqlite_classes": ["BunContainer"],
     },
+    {
+      "tag": "v3",
+      "new_sqlite_classes": ["ProjectDO"],
+    },
   ],
   "routes": [
     {
       "zone_name": "fumabase.com",
       "custom_domain": true,
       "pattern": "remote-bundler.fumabase.com",
-    },
-    {
-      "custom_domain": true,
-      "pattern": "lovepack.dev",
     },
   ],
   "rules": [

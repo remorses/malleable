@@ -41,7 +41,7 @@ This is a Cloudflare Workers project that provides a bundling API for TypeScript
 - Tailwind CSS v3 generation with PostCSS
 - npm package resolution via esm.sh CDN
 - Interactive web UI with file upload support
-- Deployed at: https://lovepack.dev
+- Deployed at: https://remote-bundler.fumabase.com
 
 ### API Endpoint
 
@@ -52,3 +52,8 @@ POST /api/bundle
 - `extractCSS`: Generate Tailwind CSS (default: true)
 - `resolveImports`: Resolve npm imports via esm.sh (default: false)
 - `externalPackages`: Array of packages to treat as external (default: [])
+
+
+## Projects (Artifacts)
+
+See `docs/projects.md`. `ProjectDO` (`src/project-do.ts`) is the single writer; REST in `src/projects-api.ts`; client in `src/client.ts`. `src/project.test.ts` runs against the deployed worker and needs `LOVEPACK_API_KEY` (read from `.dev.vars`).

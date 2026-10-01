@@ -2,13 +2,24 @@
 
 A blazing-fast Cloudflare Worker that bundles TypeScript/JavaScript code on-the-fly with automatic Tailwind CSS generation and shadcn/ui theming support.
 
+## Projects (versioned, live UI)
+
+Agents edit files in a **session**, viewers see **live drafts**, each agent message becomes one **git commit** in Cloudflare Artifacts. Undo, restore and branches are built in. See [docs/projects.md](docs/projects.md).
+
+```ts
+const project = getProject(env.PROJECT, 'u123')           // Durable Object stub, RPC
+const { sessionId } = await project.openSession({ author: { kind: 'agent', id: 'ses_1' } })
+await project.write(sessionId, 'App.tsx', code)
+await project.commit(sessionId, { message: 'Add chart' })
+```
+
 ## API Endpoint
 
 ### POST `/api/bundle`
 
 Bundle and transform TypeScript/JavaScript files with automatic dependency resolution from esm.sh CDN.
 
-**URL:** `https://lovepack.dev/api/bundle`
+**URL:** `https://remote-bundler.fumabase.com/api/bundle`
 
 **Request Body:**
 ```json
@@ -28,11 +39,11 @@ Bundle and transform TypeScript/JavaScript files with automatic dependency resol
 ```json
 {
   "success": true,
-  "jsUrl": "https://lovepack.dev/bundle/[hash].js",
-  "htmlUrl": "https://lovepack.dev/bundle/[hash].html",
+  "jsUrl": "https://remote-bundler.fumabase.com/bundle/[hash].js",
+  "htmlUrl": "https://remote-bundler.fumabase.com/bundle/[hash].html",
   "files": {
-    "[hash].js": "https://lovepack.dev/bundle/[hash].js",
-    "chunks/[name]-[hash].js": "https://lovepack.dev/bundle/chunks/[name]-[hash].js"
+    "[hash].js": "https://remote-bundler.fumabase.com/bundle/[hash].js",
+    "chunks/[name]-[hash].js": "https://remote-bundler.fumabase.com/bundle/chunks/[name]-[hash].js"
   },
   "rawOutputs": [],
   "warnings": []  // ESBuild warnings if any
@@ -56,7 +67,7 @@ Bundle and transform TypeScript/JavaScript files with automatic dependency resol
 
 ### Using cURL
 ```bash
-curl -X POST https://lovepack.dev/api/bundle \
+curl -X POST https://remote-bundler.fumabase.com/api/bundle \
   -H "Content-Type: application/json" \
   -d '{
     "files": [{
@@ -69,7 +80,7 @@ curl -X POST https://lovepack.dev/api/bundle \
 
 ### Using JavaScript
 ```javascript
-const response = await fetch('https://lovepack.dev/api/bundle', {
+const response = await fetch('https://remote-bundler.fumabase.com/api/bundle', {
   method: 'POST',
   headers: {
     'Content-Type': 'application/json',
@@ -102,7 +113,7 @@ console.log(result.htmlUrl); // URL to preview HTML page
 
 ### Multiple Files with Imports
 ```javascript
-const response = await fetch('https://lovepack.dev/api/bundle', {
+const response = await fetch('https://remote-bundler.fumabase.com/api/bundle', {
   method: 'POST',
   headers: {
     'Content-Type': 'application/json',
@@ -189,7 +200,7 @@ The generated CSS includes default shadcn/ui CSS variables for both light and da
 
 ## Web Interface
 
-Visit [https://lovepack.dev](https://lovepack.dev) to use the interactive web UI for uploading and bundling files.
+Visit [https://remote-bundler.fumabase.com](https://remote-bundler.fumabase.com) to use the interactive web UI for uploading and bundling files.
 
 ## Development
 
