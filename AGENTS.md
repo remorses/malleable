@@ -56,4 +56,4 @@ Output is stored in KV and served from `GET /bundle/<siteId>/*`.
 
 ## Projects (Artifacts)
 
-See `docs/projects.md`. Build logic shared with `/api/bundle` lives in `src/build.ts`. `ProjectDO` (`src/project-do.ts`) is the single writer; REST in `src/projects-api.ts`; client in `src/client.ts`. `src/project.test.ts` runs against the deployed worker and needs `LOVEPACK_API_KEY` (read from `.dev.vars`).
+See `docs/projects.md`. Build logic shared with `/api/bundle` lives in `src/build.ts`. `ProjectDO` (`src/project-do.ts`) is the single writer; its storage and caches live only in `ProjectStore` (`src/project-store.ts`); REST in `src/projects-api.ts`; client in `src/client.ts`. `src/project.test.ts` runs against the deployed worker and needs `LOVEPACK_API_KEY` (read from `.dev.vars`).

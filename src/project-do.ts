@@ -4,16 +4,22 @@ import http from 'isomorphic-git/http/web'
 import dedent from 'string-dedent'
 import { buildFiles, createKvBuildCache, type BuildFile } from './build.js'
 import { MemoryFS } from './memory-fs.js'
+import {
+  applyOp,
+  DIST_DIR,
+  ProjectStore,
+  type Author,
+  type LoadedSession,
+  type SessionOp,
+  type SessionOutcome,
+  type Tree,
+} from './project-store.js'
+
+export { DIST_DIR, type Author, type SessionOp } from './project-store.js'
 
 // ───────────────────────── public types (RPC-safe plain data) ─────────────────────────
 
-export type Author = { kind: 'agent' | 'user' | 'system'; id: string }
 export type BuildError = { file?: string; line?: number; text: string }
-
-export type SessionOp =
-  | { op: 'write'; path: string; content: string }
-  | { op: 'replace'; path: string; oldString: string; newString: string }
-  | { op: 'delete'; path: string }
 
 export type CommitResult =
   | { ok: true; sha: string; noop?: boolean }
@@ -82,7 +88,6 @@ export const DEFAULT_CONFIG: ProjectConfig = {
 }
 
 export const CONFIG_PATH = 'lovepack.json'
-export const DIST_DIR = 'dist'
 
 const projectIdRegex = /^[a-zA-Z0-9_-]{1,40}$/
 
@@ -101,17 +106,8 @@ interface Env {
   jsCache: KVNamespace
 }
 
-interface Session {
-  id: string
-  branch: string
-  base: string
-  author: Author
-  tree: Map<string, string>
-}
-
 const WORKDIR = '/w'
 const STALE_SESSION_MS = 10 * 60 * 1000
-const MAX_DRAFTS_KEPT = 3
 
 const STARTER_APP = dedent`
   export default function App() {
@@ -119,39 +115,7 @@ const STARTER_APP = dedent`
   }
 `
 
-function normalizePath(path: string): string {
-  const parts = path.split('/')
-  const bad =
-    !path ||
-    path.startsWith('/') ||
-    parts.some((p) => p === '' || p === '.' || p === '..') ||
-    parts[0] === '.git' ||
-    parts[0] === DIST_DIR
-  if (bad) throw new Error(`INVALID_PATH: ${path}`)
-  return path
-}
-
-function applyOp(tree: Map<string, string>, op: SessionOp) {
-  const path = normalizePath(op.path)
-  if (op.op === 'write') {
-    tree.set(path, op.content)
-  } else if (op.op === 'delete') {
-    tree.delete(path)
-  } else {
-    const current = tree.get(path)
-    if (current === undefined) throw new Error(`FILE_NOT_FOUND: ${path}`)
-    const first = current.indexOf(op.oldString)
-    if (first === -1 || op.oldString === '') {
-      throw new Error(`REPLACE_NOT_FOUND: ${path}`)
-    }
-    if (current.indexOf(op.oldString, first + 1) !== -1) {
-      throw new Error(`REPLACE_AMBIGUOUS: ${path}`)
-    }
-    tree.set(path, current.replace(op.oldString, () => op.newString))
-  }
-}
-
-function parseConfig(tree: Map<string, string>): ProjectConfig {
+function parseConfig(tree: Tree): ProjectConfig {
   const raw = tree.get(CONFIG_PATH)
   if (!raw) return DEFAULT_CONFIG
   const parsed = JSON.parse(raw) as Partial<ProjectConfig>
@@ -170,7 +134,7 @@ function authorFromGit(a: { name: string; email: string }): Author {
   }
 }
 
-function sameTree(a: Map<string, string>, b: Map<string, string>) {
+function sameTree(a: Tree, b: Tree) {
   if (a.size !== b.size) return false
   for (const [k, v] of a) if (b.get(k) !== v) return false
   return true
@@ -211,29 +175,16 @@ async function step<T>(label: string, fn: () => Promise<T>): Promise<T> {
  *   openSession -> write/replace/delete -> build (draft) -> commit (build + git push)
  */
 export class ProjectDO extends DurableObject<Env> {
+  /** All persistent state. Never use `ctx.storage` directly. */
+  private store: ProjectStore
+  /** Git clone, memory only. `sync()` re-fetches it after hibernation. */
   private fs = new MemoryFS()
-  private sessions = new Map<string, Session>()
-  private drafts = new Map<
-    string,
-    { branch: string; build: number; files: Map<string, string>[] }
-  >()
   private token: { secret: string; expiresAt: number } | undefined
   private queue: Promise<unknown> = Promise.resolve()
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env)
-    // the DO is reset if this throws
-    void ctx.blockConcurrencyWhile(async () => {
-      ctx.storage.sql.exec(`
-        CREATE TABLE IF NOT EXISTS sessions (
-          id TEXT PRIMARY KEY, branch TEXT NOT NULL, base TEXT NOT NULL,
-          author TEXT NOT NULL, status TEXT NOT NULL, updated_at INTEGER NOT NULL
-        );
-        CREATE TABLE IF NOT EXISTS ops (
-          seq INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT NOT NULL, op TEXT NOT NULL
-        );
-      `)
-    })
+    this.store = new ProjectStore(ctx.storage)
   }
 
   // ── lifecycle ──
@@ -242,9 +193,8 @@ export class ProjectDO extends DurableObject<Env> {
   async init(opts: { projectId: string; template?: string }): Promise<ProjectInfo> {
     return this.serial(async () => {
       const repo = repoNameFor(opts.projectId)
-      const existing = await this.ctx.storage.get<{ projectId: string }>('meta')
-      if (existing) return this.info()
-      await this.ctx.storage.put('meta', { projectId: opts.projectId, repo })
+      if (this.store.meta.get()) return this.info()
+      this.store.meta.set({ projectId: opts.projectId, repo })
       try {
         try {
           if (opts.template) {
@@ -262,7 +212,7 @@ export class ProjectDO extends DurableObject<Env> {
         if (empty && !opts.template) await this.seed()
         else await this.sync('main')
       } catch (e) {
-        await this.ctx.storage.delete('meta')
+        this.store.meta.delete()
         throw e
       }
       return this.info()
@@ -270,12 +220,12 @@ export class ProjectDO extends DurableObject<Env> {
   }
 
   async info(): Promise<ProjectInfo> {
-    const meta = await this.meta()
+    const meta = this.meta()
     return {
       projectId: meta.projectId,
       repo: meta.repo,
       defaultBranch: 'main',
-      heads: await this.heads(),
+      heads: { ...this.store.heads() },
     }
   }
 
@@ -288,57 +238,32 @@ export class ProjectDO extends DurableObject<Env> {
   }): Promise<{ sessionId: string; base: string; branch: string }> {
     const branch = opts.branch ?? 'main'
     return this.serial(async () => {
-      const rows = this.ctx.storage.sql
-        .exec(
-          `SELECT id, updated_at FROM sessions WHERE branch = ? AND status = 'open'`,
-          branch,
-        )
-        .toArray() as { id: string; updated_at: number }[]
-      for (const row of rows) {
-        if (row.id === opts.id) {
-          const s = this.sessions.get(row.id) ?? (await this.rebuildSession(row.id))
+      for (const open of this.store.sessions.open(branch)) {
+        if (open.id === opts.id) {
+          const s = await this.rebuildSession(open.id)
           return { sessionId: s.id, base: s.base, branch }
         }
-        if (Date.now() - row.updated_at < STALE_SESSION_MS) {
-          throw new Error(`SESSION_ACTIVE: ${row.id} on branch ${branch}`)
+        if (Date.now() - open.updatedAt < STALE_SESSION_MS) {
+          throw new Error(`SESSION_ACTIVE: ${open.id} on branch ${branch}`)
         }
-        this.endSession(row.id, 'discarded')
+        this.endSession(open.id, 'discarded')
       }
       const head = await this.sync(branch)
-      const id = opts.id ?? `s_${crypto.randomUUID().slice(0, 12)}`
-      this.ctx.storage.sql.exec(
-        `INSERT INTO sessions (id, branch, base, author, status, updated_at) VALUES (?, ?, ?, ?, 'open', ?)`,
-        id,
-        branch,
-        head,
-        JSON.stringify(opts.author),
-        Date.now(),
-      )
-      this.sessions.set(id, {
-        id,
+      const s = this.store.sessions.create({
+        id: opts.id ?? `s_${crypto.randomUUID().slice(0, 12)}`,
         branch,
         base: head,
         author: opts.author,
         tree: await this.readSources(),
       })
-      return { sessionId: id, base: head, branch }
+      return { sessionId: s.id, base: s.base, branch }
     })
   }
 
   /** Apply ops atomically: nothing is applied if one fails. */
   async apply(opts: { sessionId: string; ops: SessionOp[] }) {
-    const s = await this.loadSession(opts.sessionId)
-    const next = new Map(s.tree)
-    for (const op of opts.ops) applyOp(next, op)
-    for (const op of opts.ops) {
-      this.ctx.storage.sql.exec(
-        `INSERT INTO ops (session_id, op) VALUES (?, ?)`,
-        opts.sessionId,
-        JSON.stringify(op),
-      )
-    }
-    this.ctx.storage.sql.exec(`UPDATE sessions SET updated_at = ? WHERE id = ?`, Date.now(), opts.sessionId)
-    s.tree = next
+    await this.loadSession(opts.sessionId)
+    this.store.sessions.apply(opts.sessionId, opts.ops)
   }
 
   async read(opts: { sessionId: string; path: string }): Promise<string | null> {
@@ -377,14 +302,12 @@ export class ProjectDO extends DurableObject<Env> {
       this.broadcast({ type: 'build-error', session: s.id, errors: built.errors })
       return built
     }
-    const prev = this.drafts.get(s.id)
-    const build = (prev?.build ?? 0) + 1
-    const files = [...(prev?.files ?? []), built.dist].slice(-MAX_DRAFTS_KEPT)
-    this.drafts.set(s.id, { branch: s.branch, build, files })
+    // throws if the session ended while building
+    const build = this.store.sessions.addDraft(s.id, built.dist)
     this.broadcast({
       type: 'update',
       kind: 'draft',
-      url: await this.moduleUrl(`d/${encodeURIComponent(s.id)}/${build}`),
+      url: this.moduleUrl(`d/${encodeURIComponent(s.id)}/${build}`),
       session: s.id,
       branch: s.branch,
       build,
@@ -398,10 +321,7 @@ export class ProjectDO extends DurableObject<Env> {
     build: number
     path: string
   }): Promise<string | null> {
-    const d = this.drafts.get(opts.sessionId)
-    if (!d) return null
-    const index = d.files.length - 1 - (d.build - opts.build)
-    return d.files[index]?.get(opts.path) ?? null
+    return this.store.sessions.draftFiles(opts.sessionId, opts.build)?.get(opts.path) ?? null
   }
 
   /** Build, commit and push. Fails (and keeps the session open) when the build fails. */
@@ -418,8 +338,9 @@ export class ProjectDO extends DurableObject<Env> {
       if (head !== s.base) {
         if (!opts.rebase) return { ok: false, reason: 'conflict', head }
         try {
-          tree = new Map(headTree)
-          for (const op of this.sessionOps(s.id)) applyOp(tree, op)
+          const rebased = new Map(headTree)
+          for (const op of this.store.sessions.ops(s.id)) applyOp(rebased, op)
+          tree = rebased
         } catch {
           return { ok: false, reason: 'conflict', head }
         }
@@ -440,10 +361,7 @@ export class ProjectDO extends DurableObject<Env> {
   }
 
   async sessionsOpen(): Promise<Array<{ id: string; branch: string; author: Author }>> {
-    const rows = this.ctx.storage.sql
-      .exec(`SELECT id, branch, author FROM sessions WHERE status = 'open'`)
-      .toArray() as { id: string; branch: string; author: string }[]
-    return rows.map((r) => ({ id: r.id, branch: r.branch, author: JSON.parse(r.author) }))
+    return this.store.sessions.open().map((s) => ({ id: s.id, branch: s.branch, author: s.author }))
   }
 
   // ── history ──
@@ -520,7 +438,7 @@ export class ProjectDO extends DurableObject<Env> {
       const sha = await this.sync(from)
       await git.branch({ fs: this.fs, dir: WORKDIR, ref: name, object: sha })
       await this.push(name)
-      await this.setHead(name, sha)
+      this.store.setHead(name, sha)
     })
   }
 
@@ -538,7 +456,7 @@ export class ProjectDO extends DurableObject<Env> {
           throw new Error(`NOT_FAST_FORWARD: ${branch} does not contain ${into}`)
         }
         await this.push(branch, into)
-        await this.setHead(into, sha)
+        this.store.setHead(into, sha)
         await this.announceCommit({
           branch: into,
           sha,
@@ -564,9 +482,7 @@ export class ProjectDO extends DurableObject<Env> {
         delete: true,
         onAuth: await this.onAuth(),
       })
-      const heads = await this.heads()
-      delete heads[name]
-      await this.ctx.storage.put('heads', heads)
+      this.store.deleteHead(name)
     })
   }
 
@@ -581,7 +497,7 @@ export class ProjectDO extends DurableObject<Env> {
       prefix: 'refs/heads/',
       onAuth: await this.onAuth(),
     })
-    const heads = await this.heads()
+    const heads = this.store.heads()
     for (const ref of refs) {
       const branch = ref.ref.replace('refs/heads/', '')
       if (heads[branch] !== ref.oid) await this.afterPush(branch)
@@ -629,15 +545,13 @@ export class ProjectDO extends DurableObject<Env> {
     this.ctx.acceptWebSocket(pair[1])
     const hello: LiveMessage = {
       type: 'hello',
-      heads: await this.heads(),
-      drafts: await Promise.all(
-        [...this.drafts].map(async ([session, d]) => ({
-          url: await this.moduleUrl(`d/${encodeURIComponent(session)}/${d.build}`),
-          session,
-          branch: d.branch,
-          build: d.build,
-        })),
-      ),
+      heads: { ...this.store.heads() },
+      drafts: this.store.sessions.drafts().map((d) => ({
+        url: this.moduleUrl(`d/${encodeURIComponent(d.session)}/${d.build}`),
+        session: d.session,
+        branch: d.branch,
+        build: d.build,
+      })),
     }
     pair[1].send(JSON.stringify(hello))
     return new Response(null, { status: 101, webSocket: pair[0] })
@@ -652,8 +566,8 @@ export class ProjectDO extends DurableObject<Env> {
   }
 
   /** Module url relative to the Worker origin, served by `projectsPublic` */
-  private async moduleUrl(route: string) {
-    const { projectId } = await this.meta()
+  private moduleUrl(route: string) {
+    const { projectId } = this.meta()
     return `/p/${projectId}/${route}/index.js`
   }
 
@@ -666,7 +580,7 @@ export class ProjectDO extends DurableObject<Env> {
     this.broadcast({
       type: 'update',
       kind: 'commit',
-      url: await this.moduleUrl(`r/${commit.sha}`),
+      url: this.moduleUrl(`r/${commit.sha}`),
       ...commit,
     })
   }
@@ -688,55 +602,37 @@ export class ProjectDO extends DurableObject<Env> {
     return run
   }
 
-  private sessionOps(id: string): SessionOp[] {
-    const rows = this.ctx.storage.sql
-      .exec(`SELECT op FROM ops WHERE session_id = ? ORDER BY seq`, id)
-      .toArray() as { op: string }[]
-    return rows.map((r) => JSON.parse(r.op))
-  }
-
   /** In-memory session, or rebuilt from head + the stored op log after hibernation */
-  private async loadSession(id: string): Promise<Session> {
-    return this.sessions.get(id) ?? this.serial(() => this.rebuildSession(id))
+  private async loadSession(id: string): Promise<LoadedSession> {
+    return this.store.sessions.loaded(id) ?? this.serial(() => this.rebuildSession(id))
   }
 
   /** Must run inside `serial`. Replays the op log over the current head. */
-  private async rebuildSession(id: string): Promise<Session> {
-    const cached = this.sessions.get(id)
+  private async rebuildSession(id: string): Promise<LoadedSession> {
+    const cached = this.store.sessions.loaded(id)
     if (cached) return cached
-    const row = this.ctx.storage.sql
-      .exec(`SELECT branch, base, author, status FROM sessions WHERE id = ?`, id)
-      .toArray()[0] as
-      | { branch: string; base: string; author: string; status: string }
-      | undefined
-    if (!row || row.status !== 'open') throw new Error(`SESSION_NOT_FOUND: ${id}`)
-    await this.sync(row.branch)
+    const record = this.store.sessions.get(id)
+    if (!record) throw new Error(`SESSION_NOT_FOUND: ${id}`)
+    await this.sync(record.branch)
     const tree = await this.readSources()
-    for (const op of this.sessionOps(id)) applyOp(tree, op)
+    for (const op of this.store.sessions.ops(id)) applyOp(tree, op)
     // A head that moved since `base` is reported by commit() as a conflict
-    const s: Session = { id, branch: row.branch, base: row.base, author: JSON.parse(row.author), tree }
-    this.sessions.set(id, s)
-    return s
+    return this.store.sessions.restoreTree(id, tree)
   }
 
-  private endSession(id: string, outcome: 'committed' | 'discarded') {
-    this.ctx.storage.sql.exec(`UPDATE sessions SET status = ? WHERE id = ?`, outcome, id)
-    this.ctx.storage.sql.exec(`DELETE FROM ops WHERE session_id = ?`, id)
-    this.sessions.delete(id)
-    this.drafts.delete(id)
+  private endSession(id: string, outcome: SessionOutcome) {
+    this.store.sessions.end(id, outcome)
     this.broadcast({ type: 'draft-end', session: id, outcome })
   }
 
   private assertNoOpenSession(branch: string) {
-    const rows = this.ctx.storage.sql
-      .exec(`SELECT id FROM sessions WHERE branch = ? AND status = 'open'`, branch)
-      .toArray()
-    if (rows.length) throw new Error(`SESSION_ACTIVE: ${(rows[0] as any).id} on branch ${branch}`)
+    const [open] = this.store.sessions.open(branch)
+    if (open) throw new Error(`SESSION_ACTIVE: ${open.id} on branch ${branch}`)
   }
 
   // ───────────────────────── private: build ─────────────────────────
 
-  private async runBuild(tree: Map<string, string>): Promise<
+  private async runBuild(tree: Tree): Promise<
     | { ok: true; dist: Map<string, string> }
     | { ok: false; errors: BuildError[]; errorText: string }
   > {
@@ -760,25 +656,15 @@ export class ProjectDO extends DurableObject<Env> {
 
   // ───────────────────────── private: git ─────────────────────────
 
-  private async meta() {
-    const meta = await this.ctx.storage.get<{ projectId: string; repo: string }>('meta')
+  private meta() {
+    const meta = this.store.meta.get()
     if (!meta) throw new Error('NOT_INITIALIZED: call init() first')
     return meta
   }
 
-  private async heads(): Promise<Record<string, string>> {
-    return (await this.ctx.storage.get<Record<string, string>>('heads')) ?? {}
-  }
-
-  private async setHead(branch: string, sha: string) {
-    const heads = await this.heads()
-    heads[branch] = sha
-    await this.ctx.storage.put('heads', heads)
-  }
-
   /** Handle on the Artifacts repo. Waits while a fork or import is in progress. */
   private async repo(): Promise<ArtifactsRepo> {
-    const { repo } = await this.meta()
+    const { repo } = this.meta()
     for (let attempt = 0; ; attempt++) {
       try {
         return await this.env.ARTIFACTS.get(repo)
@@ -791,11 +677,11 @@ export class ProjectDO extends DurableObject<Env> {
   }
 
   private async remote(): Promise<{ url: string }> {
-    const cached = await this.ctx.storage.get<string>('remote')
+    const cached = this.store.remote.get()
     if (cached) return { url: cached }
     using repo = await this.repo()
     const { remote } = await repo.info()
-    await this.ctx.storage.put('remote', remote)
+    this.store.remote.set(remote)
     return { url: remote }
   }
 
@@ -829,7 +715,7 @@ export class ProjectDO extends DurableObject<Env> {
     if (!remoteSha) throw new Error(`BRANCH_NOT_FOUND: ${branch}`)
     await git.writeRef({ fs, dir, ref: `refs/heads/${branch}`, value: remoteSha, force: true })
     await git.checkout({ fs, dir, ref: branch, force: true })
-    await this.setHead(branch, remoteSha)
+    this.store.setHead(branch, remoteSha)
     return remoteSha
   }
 
@@ -910,7 +796,7 @@ export class ProjectDO extends DurableObject<Env> {
   /** Build `sources`, write sources + dist into the working tree, commit and push. */
   private async commitTree(
     branch: string,
-    sources: Map<string, string>,
+    sources: Tree,
     message: string,
     author: Author,
   ): Promise<CommitResult> {
@@ -943,7 +829,7 @@ export class ProjectDO extends DurableObject<Env> {
       author: authorToGit(author),
     })
     await this.push(branch)
-    await this.setHead(branch, sha)
+    this.store.setHead(branch, sha)
     await this.announceCommit({ branch, sha, message, author })
     return { ok: true, sha }
   }

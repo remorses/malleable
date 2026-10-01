@@ -160,4 +160,5 @@ All methods take a single object argument, in the RPC, the client and the REST b
 - `git.commit({ ref })` needs the full ref (`refs/heads/main`). A short name writes a stray ref and the push fails with a bare 500.
 - `git.fetch` needs the `origin` remote configured (`addRemote`) and returns the fetched sha in `fetchHead`.
 - The DO keeps the clone in memory only. After hibernation the first call re-fetches (depth 1) and replays the session op log.
+- All DO state goes through `ProjectStore` (`src/project-store.ts`). It writes SQLite/KV first, then its in-memory cache, and loads caches lazily, so a fresh instance after hibernation reads storage. `ProjectDO` never touches `ctx.storage`.
 - Debug failed pushes through `gitHttp` in `project-do.ts`: it keeps the 5xx response body.
