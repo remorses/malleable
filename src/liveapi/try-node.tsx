@@ -21,7 +21,6 @@ async function main() {
 
   // Connect to the API
   const connected = await newClient.connect()
-  setTimeout(() => { }, 1000 * 100)
 }
 
 main()
