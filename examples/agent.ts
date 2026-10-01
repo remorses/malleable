@@ -1,19 +1,19 @@
 // Plays the role of an agent: edits a project in two "messages", one commit each.
 // Usage: LOVEPACK_API_KEY=... pnpm tsx examples/agent.ts <projectId> [endpoint]
-import { Lovepack } from '../src/client.ts'
+import { Project } from '../src/client.ts'
 
 const [projectId = 'example', endpoint = 'https://remote-bundler.fumabase.com'] = process.argv.slice(2)
 const apiKey = process.env.LOVEPACK_API_KEY!
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
-const project = new Lovepack({ endpoint, apiKey }).project({ id: projectId })
+const project = new Project({ endpoint, apiKey, id: projectId })
 console.log('init', (await project.init()).heads)
 console.log(`open ${endpoint}/view/${projectId}`)
 
 async function message(text: string, files: Record<string, string>) {
   const session = await project.openSession({ author: { kind: 'agent', id: 'example-agent' } })
   for (const [path, content] of Object.entries(files)) {
-    await session.write({ path, content })
+    await session.apply({ ops: [{ op: 'write', path, content }] })
     console.log('draft', path, await session.build())
     await sleep(1500)
   }

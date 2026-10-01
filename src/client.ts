@@ -37,21 +37,13 @@ export interface ClientOptions {
 /**
  * HTTP client for the lovepack REST API. Mirrors the ProjectDO RPC methods:
  *
- *   const project = new Lovepack({ endpoint, apiKey }).project({ id: 'u123' })
+ *   const project = new Project({ endpoint, apiKey, id: 'u123' })
  *   await project.init()
  *   const session = await project.openSession({ author })
- *   await session.write({ path: 'App.tsx', content: code })
+ *   await session.apply({ ops: [{ op: 'write', path: 'App.tsx', content: code }] })
  *   await session.build()                          // draft, viewers see it live
  *   await session.commit({ message: 'Add chart' }) // one commit per agent message
  */
-export class Lovepack {
-  constructor(private options: ClientOptions) {}
-
-  project({ id }: { id: string }) {
-    return new Project(this.options, id)
-  }
-}
-
 async function call<T>(
   options: ClientOptions,
   method: string,
@@ -74,10 +66,13 @@ async function call<T>(
 }
 
 export class Project {
-  constructor(
-    private options: ClientOptions,
-    readonly id: string,
-  ) {}
+  private options: ClientOptions
+  readonly id: string
+
+  constructor({ id, ...options }: ClientOptions & { id: string }) {
+    this.options = options
+    this.id = id
+  }
 
   private path(suffix = '') {
     return `/api/projects/${encodeURIComponent(this.id)}${suffix}`
@@ -140,21 +135,6 @@ export class Project {
     await call(this.options, 'DELETE', this.path(`/branches/${encodeURIComponent(name)}`))
   }
 
-  /** Public URL of a built file. `ref` is a branch (mutable) or a commit sha (immutable). */
-  fileUrl({ ref, file = 'index.js' }: { ref: string; file?: string }) {
-    return `${this.options.endpoint}/p/${encodeURIComponent(this.id)}/r/${encodeURIComponent(ref)}/${file}`
-  }
-
-  /**
-   * Import the default export (the entry component) of a build.
-   * Use the `url` of an `update` message: every draft and commit has its own url,
-   * so the browser module cache never returns an older build. Branch urls are mutable.
-   */
-  async load({ url }: { url: string }) {
-    const mod = await import(/* @vite-ignore */ new URL(url, this.options.endpoint).href)
-    return mod.default
-  }
-
   /** Live updates of this project. Reconnects with backoff until `close()`. */
   watch({ onMessage }: { onMessage: (msg: LiveMessage) => void }) {
     const wsUrl = `${this.options.endpoint.replace(/^http/, 'ws')}/p/${encodeURIComponent(this.id)}/live`
@@ -196,19 +176,6 @@ export class Session {
 
   async apply({ ops }: { ops: SessionOp[] }) {
     await call(this.options, 'POST', this.path('/ops'), { ops })
-  }
-
-  write({ path, content }: { path: string; content: string }) {
-    return this.apply({ ops: [{ op: 'write', path, content }] })
-  }
-
-  /** Fails unless `oldString` occurs exactly once */
-  replace({ path, oldString, newString }: { path: string; oldString: string; newString: string }) {
-    return this.apply({ ops: [{ op: 'replace', path, oldString, newString }] })
-  }
-
-  remove({ path }: { path: string }) {
-    return this.apply({ ops: [{ op: 'delete', path }] })
   }
 
   async read({ path }: { path: string }) {

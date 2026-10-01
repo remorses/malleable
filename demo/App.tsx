@@ -5,7 +5,7 @@ import { LiveMessageAssembler } from '../src/liveapi/genai-to-ui-message'
 import { tool } from 'ai'
 import { z } from 'zod'
 import { useStore } from './store'
-import { Lovepack, type Session } from '../src/client'
+import { Project, type Session } from '../src/client'
 import type { UIMessage } from 'ai'
 import type { LiveServerMessage } from '@google/genai'
 import importMap from 'virtual:importmap'
@@ -38,7 +38,7 @@ const lovepackKey =
     localStorage.setItem('lovepack-key', key)
     return key
   })()
-const project = new Lovepack({ endpoint: ENDPOINT, apiKey: lovepackKey }).project({ id: projectId })
+const project = new Project({ endpoint: ENDPOINT, apiKey: lovepackKey, id: projectId })
 
 const projectReady = project.init()
 
@@ -71,13 +71,15 @@ async function commitTurn() {
 // The same socket would update any other open tab.
 project.watch({
   onMessage: async (msg) => {
+    // module urls are relative to the Worker origin
+    const show = async (url: string) => {
+      const mod = await import(/* @vite-ignore */ new URL(url, ENDPOINT).href)
+      useStore.setState({ previewComponent: mod.default })
+    }
     if (msg.type === 'hello') {
-      if (msg.heads.main) {
-        const url = project.fileUrl({ ref: msg.heads.main })
-        useStore.setState({ previewComponent: await project.load({ url }) })
-      }
+      if (msg.heads.main) await show(`/p/${projectId}/r/${msg.heads.main}/index.js`)
     } else if (msg.type === 'update') {
-      useStore.setState({ previewComponent: await project.load({ url: msg.url }) })
+      await show(msg.url)
     } else if (msg.type === 'build-error') {
       console.error(msg.errors.map((e) => e.text).join('\n'))
     }
@@ -100,9 +102,9 @@ const tools = {
       const s = await getSession()
 
       if (content !== undefined || (oldString === '' && newString !== undefined)) {
-        await s.write({ path, content: (content ?? newString)! })
+        await s.apply({ ops: [{ op: 'write', path, content: (content ?? newString)! }] })
       } else if (oldString !== undefined && newString !== undefined) {
-        await s.replace({ path, oldString, newString })
+        await s.apply({ ops: [{ op: 'replace', path, oldString, newString }] })
       } else {
         throw new Error('Either content or both oldString and newString must be provided')
       }

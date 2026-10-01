@@ -3,7 +3,7 @@ import { Spiceflow } from 'spiceflow'
 import { cors } from 'spiceflow/cors'
 import { z } from 'zod'
 import { viewPage } from './view-page.js'
-import { getProject, repoNameFor, DIST_DIR, type ProjectDO } from './project-do.js'
+import { repoNameFor, DIST_DIR, type ProjectDO } from './project-do.js'
 
 export interface ProjectsEnv {
   ARTIFACTS: Artifacts
@@ -94,12 +94,6 @@ async function hmacHex(secret: string, data: string) {
   return [...sig].map((b) => b.toString(16).padStart(2, '0')).join('')
 }
 
-async function mintGitToken(env: ProjectsEnv, projectId: string, scope: GitScope, ttl: number) {
-  const expiresAt = Math.floor(Date.now() / 1000) + ttl
-  const mac = await hmacHex(env.LOVEPACK_API_KEY, `${projectId}.${scope}.${expiresAt}`)
-  return { token: `lp_${scope}_${expiresAt}_${mac}`, expiresAt }
-}
-
 /** Returns the granted scope, or undefined when the token is invalid, expired or for another project */
 async function checkGitToken(env: ProjectsEnv, projectId: string, token: string): Promise<GitScope | undefined> {
   const [prefix, scope, expiry, mac] = token.split('_')
@@ -132,8 +126,11 @@ const gitPaths = {
   'git-receive-pack': { method: 'POST' },
 } as const
 
-const stubFor = (env: ProjectsEnv, projectId: string) =>
-  getProject({ namespace: env.PROJECT, projectId })
+/** Durable Object stub of a project. Throws INVALID_PROJECT_ID for malformed ids. */
+const stubFor = (env: ProjectsEnv, projectId: string) => {
+  repoNameFor(projectId)
+  return env.PROJECT.get(env.PROJECT.idFromName(projectId))
+}
 
 /**
  * Management API: REST wrapper over the ProjectDO RPC methods.
@@ -191,7 +188,9 @@ export const projectsApi = new Spiceflow()
     async handler({ request, params, state }) {
       const { scope, ttl } = await request.json()
       repoNameFor(params.id)
-      const { token, expiresAt } = await mintGitToken(state.env, params.id, scope, ttl)
+      const expiresAt = Math.floor(Date.now() / 1000) + ttl
+      const mac = await hmacHex(state.env.LOVEPACK_API_KEY, `${params.id}.${scope}.${expiresAt}`)
+      const token = `lp_${scope}_${expiresAt}_${mac}`
       const origin = new URL(request.url).origin
       const url = `${origin}/git/${params.id}.git`
       return {

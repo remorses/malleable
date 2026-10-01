@@ -12,9 +12,9 @@ A Cloudflare Worker that bundles TypeScript/JSX with Tailwind on the fly. Two mo
 Agents edit files in a **session**, viewers see **live drafts**, each agent message becomes one **git commit**. Undo, restore and branches are built in.
 
 ```ts
-const project = getProject({ namespace: env.PROJECT, projectId: 'u123' }) // Durable Object stub, RPC
+const project = env.PROJECT.get(env.PROJECT.idFromName('u123'))           // Durable Object stub, RPC
 const { sessionId } = await project.openSession({ author: { kind: 'agent', id: 'ses_1' } })
-await project.write({ sessionId, path: 'App.tsx', content: code })
+await project.apply({ sessionId, ops: [{ op: 'write', path: 'App.tsx', content: code }] })
 await project.build({ sessionId })                            // draft: viewers update live
 await project.commit({ sessionId, message: 'Add chart' })     // one commit, sources + dist
 await project.undo()                                      // new commit with the previous sources

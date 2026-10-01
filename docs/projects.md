@@ -38,14 +38,17 @@ export { ProjectDO } from './project-do.js'   // the class must be exported from
 ## Flow
 
 ```ts
-import { getProject } from './project-do'
-
-const project = getProject({ namespace: env.PROJECT, projectId: 'u123' })
+const project = env.PROJECT.get(env.PROJECT.idFromName('u123'))   // Durable Object stub, RPC
 await project.init({ projectId: 'u123' })               // idempotent; { template } forks a repo
 
 const { sessionId } = await project.openSession({ author: { kind: 'agent', id: 'ses_1' } })
-await project.write({ sessionId, path: 'App.tsx', content: code })  // in memory, logged in DO SQLite
-await project.replace({ sessionId, path: 'App.tsx', oldString, newString }) // throws unless `oldString` occurs once
+await project.apply({                                   // atomic, in memory, logged in DO SQLite
+  sessionId,
+  ops: [
+    { op: 'write', path: 'App.tsx', content: code },
+    { op: 'replace', path: 'Card.tsx', oldString, newString }, // throws unless `oldString` occurs once
+  ],
+})
 await project.build({ sessionId })                      // draft: viewers update, nothing is committed
 await project.commit({ sessionId, message: 'Add chart' }) // build + git add . + commit + push
 // or project.discard({ sessionId })
@@ -56,7 +59,6 @@ await project.commit({ sessionId, message: 'Add chart' }) // build + git add . +
 - **Head moved since open** returns `{ ok: false, reason: 'conflict' }`. Retry with `{ rebase: true }` to replay the ops over the new head.
 - **History**: `log`, `undo` (new commit with the previous sources), `restore({ sha })`. History is never rewritten.
 - **Branches**: `createBranch`, `branches`, `merge` (fast-forward only), `deleteBranch`.
-- **Atomic edits**: `apply({ sessionId, ops })` applies several ops or none.
 - **Drafts live in DO memory only.** The last 3 builds per session are kept. A DO restart loses them; call `build` again.
 
 ## Repo layout
@@ -125,16 +127,19 @@ LOVEPACK_API_KEY=... pnpm tsx examples/agent.ts demo1     # then open $ORIGIN/vi
 `src/client.ts` wraps the REST routes and the socket. `demo/App.tsx` is the reference use.
 
 ```ts
-const project = new Lovepack({ endpoint, apiKey }).project({ id: 'u123' })
+const project = new Project({ endpoint, apiKey, id: 'u123' })
 project.watch({
   onMessage: async (msg) => {
     // draft or commit, every update has its own module url
-    if (msg.type === 'update') setComponent(await project.load({ url: msg.url }))
+    if (msg.type === 'update') {
+      const mod = await import(new URL(msg.url, endpoint).href)
+      setComponent(() => mod.default)
+    }
   },
 })
 ```
 
-All methods take a single object argument, in the RPC, the client and the REST bodies.
+All methods take a single object argument, in the RPC, the client and the REST bodies. Edits go through one method, `apply({ ops })`.
 
 ### Live messages
 

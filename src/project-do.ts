@@ -94,17 +94,6 @@ export function repoNameFor(projectId: string): string {
   return `p-${projectId}`
 }
 
-export function getProject({
-  namespace,
-  projectId,
-}: {
-  namespace: DurableObjectNamespace<ProjectDO>
-  projectId: string
-}) {
-  repoNameFor(projectId)
-  return namespace.get(namespace.idFromName(projectId))
-}
-
 // ───────────────────────── internals ─────────────────────────
 
 interface Env {
@@ -187,10 +176,6 @@ function sameTree(a: Map<string, string>, b: Map<string, string>) {
   return true
 }
 
-function isInProgress(e: any) {
-  return /IN_PROGRESS/.test(`${e?.code ?? ''} ${e?.message ?? ''}`)
-}
-
 /** isomorphic-git drops the response body of failed requests. Keep it, it holds the server's reason. */
 const gitHttp: typeof http = {
   async request(req) {
@@ -216,8 +201,6 @@ async function step<T>(label: string, fn: () => Promise<T>): Promise<T> {
     })
   }
 }
-
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
 // ───────────────────────── the Durable Object ─────────────────────────
 
@@ -257,35 +240,33 @@ export class ProjectDO extends DurableObject<Env> {
 
   /** Idempotent. Forks `template` into a new repo, or creates an empty repo with a starter app. */
   async init(opts: { projectId: string; template?: string }): Promise<ProjectInfo> {
-    return this.serial(() => this.initLocked(opts))
-  }
-
-  private async initLocked(opts: { projectId: string; template?: string }): Promise<ProjectInfo> {
-    const repo = repoNameFor(opts.projectId)
-    const existing = await this.ctx.storage.get<{ projectId: string }>('meta')
-    if (existing) return this.info()
-    await this.ctx.storage.put('meta', { projectId: opts.projectId, repo })
-    try {
+    return this.serial(async () => {
+      const repo = repoNameFor(opts.projectId)
+      const existing = await this.ctx.storage.get<{ projectId: string }>('meta')
+      if (existing) return this.info()
+      await this.ctx.storage.put('meta', { projectId: opts.projectId, repo })
       try {
-        if (opts.template) {
-          using template = await this.env.ARTIFACTS.get(opts.template)
-          await template.fork(repo, { defaultBranchOnly: true })
-        } else {
-          await this.env.ARTIFACTS.create(repo, { setDefaultBranch: 'main' })
+        try {
+          if (opts.template) {
+            using template = await this.env.ARTIFACTS.get(opts.template)
+            await template.fork(repo, { defaultBranchOnly: true })
+          } else {
+            await this.env.ARTIFACTS.create(repo, { setDefaultBranch: 'main' })
+          }
+        } catch (e: any) {
+          // A previous init may have created the repo and failed before the first commit
+          if (!/ALREADY_EXISTS/.test(`${e?.code} ${e?.message}`)) throw e
         }
-      } catch (e: any) {
-        // A previous init may have created the repo and failed before the first commit
-        if (!/ALREADY_EXISTS/.test(`${e?.code} ${e?.message}`)) throw e
+        using handle = await this.repo()
+        const empty = (await handle.log({ ref: 'main', limit: 1 })).length === 0
+        if (empty && !opts.template) await this.seed()
+        else await this.sync('main')
+      } catch (e) {
+        await this.ctx.storage.delete('meta')
+        throw e
       }
-      using handle = await this.repo()
-      const empty = (await handle.log({ ref: 'main', limit: 1 })).length === 0
-      if (empty && !opts.template) await this.seed()
-      else await this.sync('main')
-    } catch (e) {
-      await this.ctx.storage.delete('meta')
-      throw e
-    }
-    return this.info()
+      return this.info()
+    })
   }
 
   async info(): Promise<ProjectInfo> {
@@ -344,31 +325,19 @@ export class ProjectDO extends DurableObject<Env> {
     })
   }
 
-  async write(opts: { sessionId: string; path: string; content: string }) {
-    const { sessionId, path, content } = opts
-    await this.mutate(sessionId, { op: 'write', path, content })
-  }
-
-  async replace(opts: {
-    sessionId: string
-    path: string
-    oldString: string
-    newString: string
-  }) {
-    const { sessionId, path, oldString, newString } = opts
-    await this.mutate(sessionId, { op: 'replace', path, oldString, newString })
-  }
-
-  async remove(opts: { sessionId: string; path: string }) {
-    await this.mutate(opts.sessionId, { op: 'delete', path: opts.path })
-  }
-
-  /** Apply several ops atomically: nothing is applied if one fails. */
+  /** Apply ops atomically: nothing is applied if one fails. */
   async apply(opts: { sessionId: string; ops: SessionOp[] }) {
     const s = await this.loadSession(opts.sessionId)
     const next = new Map(s.tree)
     for (const op of opts.ops) applyOp(next, op)
-    for (const op of opts.ops) this.logOp(opts.sessionId, op)
+    for (const op of opts.ops) {
+      this.ctx.storage.sql.exec(
+        `INSERT INTO ops (session_id, op) VALUES (?, ?)`,
+        opts.sessionId,
+        JSON.stringify(op),
+      )
+    }
+    this.ctx.storage.sql.exec(`UPDATE sessions SET updated_at = ? WHERE id = ?`, Date.now(), opts.sessionId)
     s.tree = next
   }
 
@@ -415,7 +384,7 @@ export class ProjectDO extends DurableObject<Env> {
     this.broadcast({
       type: 'update',
       kind: 'draft',
-      url: await this.draftUrl(s.id, build),
+      url: await this.moduleUrl(`d/${encodeURIComponent(s.id)}/${build}`),
       session: s.id,
       branch: s.branch,
       build,
@@ -663,7 +632,7 @@ export class ProjectDO extends DurableObject<Env> {
       heads: await this.heads(),
       drafts: await Promise.all(
         [...this.drafts].map(async ([session, d]) => ({
-          url: await this.draftUrl(session, d.build),
+          url: await this.moduleUrl(`d/${encodeURIComponent(session)}/${d.build}`),
           session,
           branch: d.branch,
           build: d.build,
@@ -686,10 +655,6 @@ export class ProjectDO extends DurableObject<Env> {
   private async moduleUrl(route: string) {
     const { projectId } = await this.meta()
     return `/p/${projectId}/${route}/index.js`
-  }
-
-  private draftUrl(session: string, build: number) {
-    return this.moduleUrl(`d/${encodeURIComponent(session)}/${build}`)
   }
 
   private async announceCommit(commit: {
@@ -728,17 +693,6 @@ export class ProjectDO extends DurableObject<Env> {
       .exec(`SELECT op FROM ops WHERE session_id = ? ORDER BY seq`, id)
       .toArray() as { op: string }[]
     return rows.map((r) => JSON.parse(r.op))
-  }
-
-  private logOp(id: string, op: SessionOp) {
-    this.ctx.storage.sql.exec(`INSERT INTO ops (session_id, op) VALUES (?, ?)`, id, JSON.stringify(op))
-    this.ctx.storage.sql.exec(`UPDATE sessions SET updated_at = ? WHERE id = ?`, Date.now(), id)
-  }
-
-  private async mutate(sessionId: string, op: SessionOp) {
-    const s = await this.loadSession(sessionId)
-    applyOp(s.tree, op)
-    this.logOp(sessionId, op)
   }
 
   /** In-memory session, or rebuilt from head + the stored op log after hibernation */
@@ -829,8 +783,9 @@ export class ProjectDO extends DurableObject<Env> {
       try {
         return await this.env.ARTIFACTS.get(repo)
       } catch (e) {
-        if (!isInProgress(e) || attempt >= 20) throw e
-        await sleep(500)
+        const inProgress = /IN_PROGRESS/.test(`${(e as any)?.code ?? ''} ${(e as any)?.message ?? ''}`)
+        if (!inProgress || attempt >= 20) throw e
+        await new Promise((r) => setTimeout(r, 500))
       }
     }
   }
