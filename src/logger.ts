@@ -35,10 +35,6 @@ export class Logger {
     return Array.from(this.completedTimings.values())
   }
 
-  clearTimings(): void {
-    this.completedTimings.clear()
-  }
-
   // Generate Server-Timing header value
   getServerTimingHeader(): string {
     const timings = this.getTimings()
@@ -55,20 +51,9 @@ export class Logger {
       })
       .join(', ')
   }
-
-  error(message: string, error?: any): void {
-    console.error(`[ERROR] ${message}`, error)
-  }
-
-  log(message: string, ...args: any[]): void {
-    console.log(`[LOG] ${message}`, ...args)
-  }
 }
 
-// Create a singleton logger instance
-export const logger = new Logger()
-
-// Create scoped logger for request-specific timings
+/** Request-scoped timings for the Server-Timing header. */
 export function createRequestLogger(): Logger {
   return new Logger()
 }

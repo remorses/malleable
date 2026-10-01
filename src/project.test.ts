@@ -188,8 +188,8 @@ describe('projects: session, draft, commit, undo, branches', () => {
         "text": "✘ [ERROR] [plugin local-files] Broken.tsx (1:19): Unexpectedly reached the end of input.
 
           /Broken.tsx:1:19:
-      1 │ export default <div
-        ╵                    ^
+      1: export default <div
+                            ^
       ",
       }
     `)
@@ -466,7 +466,7 @@ describe('git remote', () => {
     expect({ url: write.url.replace(URL_BASE, '<origin>'), scope: write.scope }).toMatchInlineSnapshot(`
       {
         "scope": "write",
-        "url": "<origin>/git/g-ligp1k3s.git",
+        "url": "<origin>/git/g-ft0iuz0q.git",
       }
     `)
 

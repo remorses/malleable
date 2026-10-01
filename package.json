@@ -10,7 +10,6 @@
   },
   "type": "module",
   "dependencies": {
-    "@ai-sdk/openai": "^2.0.8",
     "@rollup/browser": "4.63.5",
     "@rollup/plugin-commonjs": "^29.0.3",
     "@tailwindcss/typography": "^0.5.20",
@@ -35,7 +34,6 @@
     "@types/react-dom": "^19.1.7",
     "@vitejs/plugin-react": "^5.0.0",
     "importmap-vite-plugin": "^0.0.0",
-    "node-web-audio-api": "^1.0.4",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
     "vite": "^7.1.1",

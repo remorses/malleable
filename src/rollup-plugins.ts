@@ -2,53 +2,43 @@ import type { Plugin } from '@rollup/browser'
 import path from 'path-browserify'
 import { transform as sucrase } from 'sucrase'
 import dedent from 'string-dedent'
-import {
-  fetchModuleSource,
-  getPackageName,
-} from './cdn-modules.ts'
+import { fetchCdnModule, getPackageName } from './cdn-modules.ts'
 import type { BuildCache } from './build.ts'
 
-const VIRTUAL_ENTRY = '\0virtual:entry'
 const CDN_URL = 'https://esm.sh'
 const RESOLVE_EXTENSIONS = ['', '.ts', '.tsx', '.js', '.jsx', '.mjs', '.css', '.json']
 const isHttp = (id: string) => /^https?:\/\//.test(id)
 
 const js = dedent
 
-/** Wraps the user entry: re-exports it and adds a stylesheet link around the default export. */
-export function virtualEntryPlugin(options: {
+/** Reserved project path of the generated entry module. */
+export const ENTRY_PATH = '/__lovepack_entry__.js'
+
+/** Entry module: re-exports the user entry and adds a stylesheet link around its default export. */
+export function entryWrapperSource(options: {
   actualEntryPath: string
   cssUrl?: string
-}): Plugin {
+}): string {
   const { actualEntryPath, cssUrl } = options
   const cssHref = cssUrl
     ? JSON.stringify(cssUrl)
     : `new URL('./index.css', import.meta.url).href`
-  const entrySpecifier = JSON.stringify('./' + actualEntryPath)
-  return {
-    name: 'virtual-entry',
-    resolveId(source) {
-      return source === VIRTUAL_ENTRY ? VIRTUAL_ENTRY : null
-    },
-    load(id) {
-      if (id !== VIRTUAL_ENTRY) return null
-      // createElement instead of JSX so this module needs no transform
-      return js`
-        import React from 'react';
-        import * as ActualEntry from ${entrySpecifier};
-        export * from ${entrySpecifier};
-        const OriginalDefault = ActualEntry.default;
-        export default function WrappedComponent(props) {
-          return React.createElement(
-            React.Fragment,
-            null,
-            React.createElement('link', { rel: 'stylesheet', href: ${cssHref} }),
-            OriginalDefault ? React.createElement(OriginalDefault, props) : null,
-          );
-        }
-      `
-    },
-  }
+  const entry = JSON.stringify('./' + actualEntryPath)
+  // createElement keeps the wrapper independent of the JSX transform
+  return js`
+    import React from 'react';
+    import * as ActualEntry from ${entry};
+    export * from ${entry};
+    const OriginalDefault = ActualEntry.default;
+    export default function WrappedComponent(props) {
+      return React.createElement(
+        React.Fragment,
+        null,
+        React.createElement('link', { rel: 'stylesheet', href: ${cssHref} }),
+        OriginalDefault ? React.createElement(OriginalDefault, props) : null,
+      );
+    }
+  `
 }
 
 /** Modules in execution order: dependencies before their importer, each visited once. */
@@ -63,27 +53,6 @@ function executionOrder(root: string, deps: (id: string) => string[]): string[] 
   }
   visit(root)
   return order
-}
-
-const CSS_IMPORT = /@import\s+(?:url\(\s*)?(["'])([^"']+)\1\s*\)?([^;]*);/g
-
-/** Inlines local `@import "./x.css"` rules in place. Remote and non-local imports stay. */
-function inlineCssImports(
-  id: string,
-  css: string,
-  files: Map<string, string>,
-  stack: string[] = [],
-): string {
-  if (stack.includes(id)) return ''
-  return css.replace(CSS_IMPORT, (rule, _q, spec: string, conditions: string) => {
-    if (isHttp(spec) || spec.startsWith('data:')) return rule
-    const target = path.posix.resolve(path.posix.dirname(id), spec)
-    const content = files.get(target)
-    if (content === undefined) return rule
-    const inner = inlineCssImports(target, content, files, [...stack, id])
-    const cond = conditions.trim()
-    return cond ? `@media ${cond} {\n${inner}\n}` : inner
-  })
 }
 
 type Node = { type: string; start: number; end: number; [key: string]: any }
@@ -119,15 +88,17 @@ function replaceNodeEnv(code: string, parse: (code: string) => Node): string {
   return out
 }
 
-/** Resolves, loads and transforms the in-memory project files. Collects imported CSS; Tailwind processes it later. */
+/** Resolves, loads and transforms the in-memory project files. Imported CSS is emitted as `@import` lines for Tailwind. */
 export function localFilesPlugin(options: {
   files: Array<{ path: string; content: string }>
+  /** Absolute path of the entry module, where CSS ordering starts */
+  entry: string
 }): Plugin {
   const fileMap = new Map<string, string>()
   for (const file of options.files) {
     fileMap.set(path.posix.resolve('/', file.path), file.content)
   }
-  const cssById = new Map<string, string>()
+  const cssIds = new Set<string>()
 
   return {
     name: 'local-files',
@@ -153,7 +124,7 @@ export function localFilesPlugin(options: {
       const content = fileMap.get(id)
       if (content === undefined) return null
       if (id.endsWith('.css')) {
-        cssById.set(id, inlineCssImports(id, content, fileMap))
+        cssIds.add(id)
         return { code: 'export default undefined', moduleSideEffects: true }
       }
       if (id.endsWith('.json')) return `export default ${content}`
@@ -174,21 +145,25 @@ export function localFilesPlugin(options: {
         })
         return { code: replaceNodeEnv(out.code, this.parse.bind(this)), map: null }
       } catch (e: any) {
-        this.error({
-          message: String(e.message)
-            .replace(/^Error transforming [^:]*: /, '')
-            .replace(/\s*\(\d+:\d+\)$/, ''),
-          loc: e.loc && { file: id, line: e.loc.line, column: Math.max(0, e.loc.column - 1) },
-        })
+        // the position as second argument makes Rollup add the code frame
+        this.error(
+          {
+            message: String(e.message)
+              .replace(/^Error transforming [^:]*: /, '')
+              .replace(/\s*\(\d+:\d+\)$/, ''),
+          },
+          e.loc && { line: e.loc.line, column: Math.max(0, e.loc.column - 1) },
+        )
       }
     },
     generateBundle() {
-      const css = executionOrder(VIRTUAL_ENTRY, (id) => {
+      // Tailwind resolves the imports, so cascade order, layers and @apply keep working
+      const css = executionOrder(options.entry, (id) => {
         const info = this.getModuleInfo(id)
         return info ? [...info.importedIds, ...info.dynamicallyImportedIds] : []
       })
-        .map((id) => cssById.get(id))
-        .filter(Boolean)
+        .filter((id) => cssIds.has(id))
+        .map((id) => `@import ${JSON.stringify(id)};`)
         .join('\n')
       if (css) this.emitFile({ type: 'asset', fileName: 'index.css', source: css })
     },
@@ -209,27 +184,35 @@ export function esmShPlugin(options: {
     const query = externalPackages.length
       ? '?' + new URLSearchParams({ external: externalPackages.join(',') })
       : ''
-    return `${CDN_URL}/${spec}${query}`.trim()
+    return `${CDN_URL}/${spec}${query}`
   }
+  // Module ids are the requested urls; imports inside a module resolve against its final url
+  const finalUrls = new Map<string, string>()
 
   return {
     name: 'esm-sh',
     resolveId(source, importer) {
       if (source.startsWith('\0')) return null
       if (isHttp(source)) return source
-      const fromCdn = importer && isHttp(importer)
-      if (fromCdn && source.startsWith('.')) {
-        return new URL(source, importer).toString().trim()
+      if (importer && isHttp(importer)) {
+        if (source.startsWith('.') || source.startsWith('/')) {
+          return new URL(source, finalUrls.get(importer) ?? importer).href
+        }
+      } else if (source.startsWith('.') || source.startsWith('/')) {
+        return null
       }
-      if (fromCdn && source.startsWith('/')) {
-        return new URL(source, new URL(importer).origin).toString().trim()
-      }
-      if (source.startsWith('.') || source.startsWith('/')) return null
       if (isExternal(source)) return { id: source, external: true }
       return cdnUrl(source)
     },
-    load(id) {
-      return isHttp(id) ? fetchModuleSource(id, cache) : null
+    async load(id) {
+      if (!isHttp(id)) return null
+      const { url, code } = await fetchCdnModule(id, cache)
+      finalUrls.set(id, url)
+      return code
+    },
+    resolveImportMeta(property, { moduleId }) {
+      if (property !== 'url' || !isHttp(moduleId)) return null
+      return JSON.stringify(finalUrls.get(moduleId) ?? moduleId)
     },
   }
 }

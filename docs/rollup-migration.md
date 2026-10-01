@@ -25,13 +25,13 @@ esbuild-wasm is replaced by `@rollup/browser` + sucrase. Plugins live in `src/ro
 | `--scenario npm` | wall p50 | 1312 ms | 358 ms |
 | cold isolate | CPU | 650-840 ms | 490-530 ms |
 
-**Where the time goes (workerd, local):** Tailwind (PostCSS) about 40 ms. Rollup plus sucrase about 3 ms. So the bundler is no longer the cost. Tailwind is.
+**Where the time goes (workerd, local):** Tailwind v3 (PostCSS, since replaced by v4 `compile()`) about 40 ms. Rollup plus sucrase about 3 ms. So the bundler is no longer the cost. Tailwind is.
 
 Rollup alone is not faster end to end on a cache miss, because Tailwind dominates. The wins come from the cache and from dropping the esbuild wasm.
 
 ## Cache (implemented)
 
-KV prefix `cache:v1:`, separate from `/bundle/*`. A KV error is a miss. Writes use `waitUntil`.
+KV prefix `cache:v3:`, separate from `/bundle/*`. A KV error is a miss. Writes use `waitUntil`.
 
 | Cache | Key | TTL |
 |---|---|---|

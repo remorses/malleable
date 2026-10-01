@@ -43,11 +43,11 @@ Bundle and transform TypeScript/JavaScript files with automatic dependency resol
   "files": [
     {
       "path": "index.tsx",
-      "content": "import React from 'react';\n\nfunction App() {\n  return <div className=\"text-blue-500\">Hello World</div>;\n}"
+      "content": "import React from 'react';\n\nexport default function App() {\n  return <div className=\"text-blue-500\">Hello World</div>;\n}"
     }
   ],
   "entryPoint": "index.tsx",  // Optional, defaults to first file
-  "externalPackages": ["react", "react-dom"],  // Optional, packages to mark as external
+  "externalPackages": ["react", "react-dom"],  // Optional, default [] (bundled from esm.sh)
   "siteId": "my-site"  // Required, [a-zA-Z0-9_-]+, output folder
 }
 ```
@@ -60,6 +60,7 @@ Bundle and transform TypeScript/JavaScript files with automatic dependency resol
   "htmlUrl": "https://remote-bundler.fumabase.com/bundle/my-site/index.html",
   "files": {
     "my-site/index.js": "https://remote-bundler.fumabase.com/bundle/my-site/index.js",
+    "my-site/index.css": "https://remote-bundler.fumabase.com/bundle/my-site/index.css",
     "my-site/chunks/[name]-[hash].js": "https://remote-bundler.fumabase.com/bundle/my-site/chunks/[name]-[hash].js"
   },
   "rawOutputs": [],
@@ -194,13 +195,9 @@ const response = await fetch('https://remote-bundler.fumabase.com/api/bundle', {
 });
 ```
 
-## Default External Packages
+## External Packages
 
-The following packages are marked as external by default (not bundled):
-- `react`
-- `react-dom`
-- `react/jsx-runtime`
-- `react/jsx-dev-runtime`
+`/api/bundle` bundles every bare import from esm.sh unless you list it in `externalPackages`. Projects (`lovepack.json`) default to `react`, `react-dom`, `react/jsx-runtime` and `react/jsx-dev-runtime`.
 
 ## CSS Variables
 

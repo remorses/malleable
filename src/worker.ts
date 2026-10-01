@@ -3,7 +3,7 @@ import { z } from 'zod'
 
 import { buildFiles, createKvBuildCache, formatBuildError } from './build.js'
 import { projectsApi, projectsPublic, type ProjectsEnv } from './projects-api.js'
-import { logger, createRequestLogger } from './logger.js'
+import { createRequestLogger } from './logger.js'
 import { IMPORTMAP } from './importmap.js'
 import { waitUntil } from 'cloudflare:workers'
 
@@ -39,8 +39,6 @@ const bundleSchema = z.object({
       'Only alphanumeric, underscore, and dash characters are allowed',
     ),
 })
-
-export type BundleInput = z.infer<typeof bundleSchema>
 
 // Tagged template for HTML syntax highlighting
 const html = (strings: TemplateStringsArray, ...values: any[]) =>
@@ -170,9 +168,6 @@ const app = new Spiceflow()
 
         let serverTimingHeader = reqLogger.getServerTimingHeader()
 
-        // Now store all files with metadata
-        const kvPromises: Promise<void>[] = []
-
         // Store CSS file
         filesToStore.push({
           filename: `${siteId}/index.css`,
@@ -185,13 +180,9 @@ const app = new Spiceflow()
         // The main entry file will be at siteId/index.js
         const mainJsUrl = fileUrls[`${siteId}/index.js`] || undefined
 
-        // Collect all CSS file URLs
-        const cssUrls: string[] = [cssUrl]
-        for (const [filename, url] of Object.entries(fileUrls)) {
-          if (filename.endsWith('.css')) {
-            cssUrls.push(url)
-          }
-        }
+        const cssUrls = Object.entries(fileUrls)
+          .filter(([filename]) => filename.endsWith('.css'))
+          .map(([, url]) => url)
 
         // Generate initial HTML for client-side rendering
         reqLogger.time(`html-generation`)
@@ -294,7 +285,7 @@ const app = new Spiceflow()
         try {
           reqLogger.timeEnd(`total`)
         } catch {}
-        logger.error(`Request error:`, error)
+        console.error(`Request error:`, error)
 
         const failure = formatBuildError(error)
         return Response.json(

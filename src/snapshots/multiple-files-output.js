@@ -80,7 +80,7 @@ function WrappedComponent(props) {
   return re.createElement(
     re.Fragment,
     null,
-    re.createElement('link', { rel: 'stylesheet', href: "https://remote-bundler.fumabase.com/bundle/test-7qk7e/index.css" }),
+    re.createElement('link', { rel: 'stylesheet', href: "https://remote-bundler.fumabase.com/bundle/test-fe66z/index.css" }),
     OriginalDefault ? re.createElement(OriginalDefault, props) : null,
   );
 }

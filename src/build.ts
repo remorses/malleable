@@ -1,10 +1,12 @@
 import { rollup, type Plugin, type RollupLog } from '@rollup/browser'
 import commonjsImport from '@rollup/plugin-commonjs'
-import { generateTailwindCSS } from './generate-tailwind.js'
+import path from 'path-browserify'
+import { generateTailwindCSS, type TailwindOptions } from './generate-tailwind.js'
 import {
+  ENTRY_PATH,
+  entryWrapperSource,
   esmShPlugin,
   localFilesPlugin,
-  virtualEntryPlugin,
 } from './rollup-plugins.ts'
 
 export interface BuildFile {
@@ -24,7 +26,7 @@ export interface BuildCache {
   put(key: string, value: string, ttlSeconds: number): void
 }
 
-const CACHE_VERSION = 'v2'
+const CACHE_VERSION = 'v3'
 
 /** KV-backed cache under the `cache:` prefix, separate from published `/bundle/*` keys. */
 export function createKvBuildCache(
@@ -53,12 +55,17 @@ const tailwindMemory = new Map<string, string>()
 const TAILWIND_MEMORY_LIMIT = 50
 const TAILWIND_TTL_SECONDS = 7 * 24 * 3600
 
-/** Tailwind CSS keyed by the exact source and CSS text, so a hit is always correct. */
-async function generateTailwindCached(code: string, userCss: string, cache?: BuildCache) {
-  const key = `tw:${CACHE_VERSION}:${await sha256Hex(`${code}\0${userCss}`)}`
+/** Tailwind CSS keyed by the exact source and project CSS, so a hit is always correct. */
+async function generateTailwindCached(
+  code: string,
+  options: Required<TailwindOptions>,
+  cache?: BuildCache,
+) {
+  const input = JSON.stringify([code, options.userCss, [...options.cssFiles]])
+  const key = `tw:${CACHE_VERSION}:${await sha256Hex(input)}`
   const hit = tailwindMemory.get(key) ?? (await cache?.get(key))
   if (hit != null) return hit
-  const css = await generateTailwindCSS(code, userCss)
+  const css = await generateTailwindCSS(code, options)
   if (tailwindMemory.size >= TAILWIND_MEMORY_LIMIT) {
     tailwindMemory.delete(tailwindMemory.keys().next().value!)
   }
@@ -118,32 +125,13 @@ const commonjs = commonjsImport as unknown as (
 
 const CODE_FILE = /\.(tsx?|jsx?|mjs|css|html)$/
 
-function codeFrame(source: string, line: number, column: number) {
-  const lines = source.split('\n')
-  const from = Math.max(1, line - 1)
-  const to = Math.min(lines.length, line + 1)
-  const width = String(to).length
-  const out: string[] = []
-  for (let n = from; n <= to; n++) {
-    out.push(`${String(n).padStart(width)} │ ${lines[n - 1]}`)
-    if (n === line) out.push(`${' '.repeat(width)} ╵ ${' '.repeat(column)}^`)
-  }
-  return out.join('\n')
-}
-
-export function formatBuildError(
-  error: any,
-  files: BuildFile[] = [],
-): BuildFailure {
+export function formatBuildError(error: any): BuildFailure {
   const message = String(error?.message || 'Build failed')
   // Rollup errors always carry a code; anything else is an internal failure
   const fromBundler = typeof error?.code === 'string'
   const loc = error?.loc as { file?: string; line: number; column: number } | undefined
   const file = loc?.file ?? error?.id
-  const source = files.find((f) => '/' + f.path.replace(/^\//, '') === file)?.content
-  const where = loc
-    ? `\n\n    ${file}:${loc.line}:${loc.column}:\n${source ? codeFrame(source, loc.line, loc.column) : (error.frame ?? '')}`
-    : ''
+  const where = loc ? `\n\n    ${file}:${loc.line}:${loc.column}:\n${error.frame ?? ''}` : ''
   return {
     ok: false,
     fromBundler,
@@ -168,10 +156,15 @@ export async function buildFiles(
     await loadRollupWasm()
     const warnings: RollupLog[] = []
     const bundle = await rollup({
-      input: '\0virtual:entry',
+      input: ENTRY_PATH,
       plugins: [
-        virtualEntryPlugin({ actualEntryPath: entryPoint, cssUrl }),
-        localFilesPlugin({ files }),
+        localFilesPlugin({
+          files: [
+            ...files,
+            { path: ENTRY_PATH, content: entryWrapperSource({ actualEntryPath: entryPoint, cssUrl }) },
+          ],
+          entry: ENTRY_PATH,
+        }),
         // local files only; CDN modules are already ESM
         commonjs({ include: /^\/[^?]*\.c?js$/ }),
         esmShPlugin({ externalPackages, cache }),
@@ -192,10 +185,15 @@ export async function buildFiles(
       path: o.fileName,
       text: o.type === 'chunk' ? o.code : String(o.source),
     }))
-    // CSS imported by the project goes through Tailwind too, so @apply works
+    // Imported CSS goes through Tailwind too, so @apply and @import work
     const importedCss = all.find((o) => o.path === 'index.css')?.text ?? ''
     const outputs = all.filter((o) => o.path !== 'index.css')
-    const css = await generateTailwindCached(allCode, importedCss, cache).catch((e) => {
+    const cssFiles = new Map(
+      files
+        .filter((f) => f.path.endsWith('.css'))
+        .map((f) => [path.posix.resolve('/', f.path), f.content]),
+    )
+    const css = await generateTailwindCached(allCode, { userCss: importedCss, cssFiles }, cache).catch((e) => {
       // project CSS that Tailwind rejects (bad @apply) is a user error
       throw importedCss ? Object.assign(e, { code: 'TAILWIND_ERROR' }) : e
     })
@@ -210,6 +208,6 @@ export async function buildFiles(
       })),
     }
   } catch (error) {
-    return formatBuildError(error, files)
+    return formatBuildError(error)
   }
 }

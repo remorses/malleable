@@ -1,9 +1,12 @@
+import pathBrowserify from 'path-browserify'
 import { compile, Polyfills } from 'tailwindcss'
 import typography from '@tailwindcss/typography'
 import themeCss from 'tailwindcss/theme.css'
 import utilitiesCss from 'tailwindcss/utilities.css'
 import preflightCss from 'tailwindcss/preflight.css'
 import shadcnThemeCss from './shadcn-theme.css'
+
+const pathPosix = pathBrowserify.posix
 
 // No `layer()` on purpose: layered rules lose to any unlayered CSS on the host page.
 const BASE_CSS = `
@@ -21,35 +24,78 @@ const STYLESHEETS: Record<string, string> = {
   'tailwindcss/utilities.css': utilitiesCss,
 }
 
+const GLUE = /[,;()=]+(?![^\[]*\])/
+
 /**
  * Extracts class candidates from source text. Over-generates on purpose:
- * `build()` ignores everything that is not a utility.
+ * `build()` ignores everything that is not a utility. Quotes and spaces inside
+ * `[...]` stay part of the token, so `before:content-['hi']` survives.
  * TODO: replace with the oxide scanner if it ever runs in workerd. https://github.com/tailwindlabs/tailwindcss/tree/main/crates/oxide
  */
 export function scanCandidates(source: string): string[] {
   const out = new Set<string>()
-  for (const token of source.split(/[\s"'`{}]+/)) {
-    if (!token) continue
-    out.add(token)
-    // glued tokens like cn(`a`,`b`); keep [...] arbitrary values intact
-    for (const part of token.split(/[,;()=]+(?![^\[]*\])/)) if (part) out.add(part)
+  let token = ''
+  let depth = 0
+  let quote = ''
+  const flush = () => {
+    if (token) {
+      out.add(token)
+      // glued tokens like cn(`a`,`b`)
+      for (const part of token.split(GLUE)) if (part) out.add(part)
+    }
+    token = ''
+    depth = 0
+    quote = ''
   }
+  for (const ch of source) {
+    if (ch === '\n') {
+      flush()
+    } else if (quote) {
+      if (ch === quote) quote = ''
+      token += ch
+    } else if (depth > 0) {
+      if (ch === '"' || ch === "'" || ch === '`') quote = ch
+      else if (ch === '[') depth++
+      else if (ch === ']') depth--
+      else if (/\s/.test(ch)) {
+        flush()
+        continue
+      }
+      token += ch
+    } else if (/[\s"'`{}]/.test(ch)) {
+      flush()
+    } else {
+      if (ch === '[') depth = 1
+      token += ch
+    }
+  }
+  flush()
   return [...out]
 }
 
-/** Compile Tailwind v4 CSS for the classes found in `code`, followed by `userCss` (may use @apply). */
+export interface TailwindOptions {
+  /** Project CSS that may use @apply or @import of other project files */
+  userCss?: string
+  /** Project stylesheets by absolute path, for `@import` resolution */
+  cssFiles?: Map<string, string>
+}
+
+/** Compile Tailwind v4 CSS for the classes found in `code`, followed by the project CSS. */
 export async function generateTailwindCSS(
   code: string,
-  userCss = '',
+  { userCss = '', cssFiles = new Map() }: TailwindOptions = {},
 ): Promise<string> {
   try {
     const compiler = await compile(`${BASE_CSS}\n${userCss}`, {
       base: '/',
       polyfills: Polyfills.All,
       loadStylesheet: async (id, base) => {
-        const content = STYLESHEETS[id]
-        if (content === undefined) throw new Error(`Cannot import "${id}"`)
-        return { path: id, base, content }
+        const builtin = STYLESHEETS[id]
+        if (builtin !== undefined) return { path: id, base, content: builtin }
+        const path = pathPosix.resolve(base, id)
+        const content = cssFiles.get(path)
+        if (content === undefined) throw new Error(`Cannot import "${id}" from ${base}`)
+        return { path, base: pathPosix.dirname(path), content }
       },
       loadModule: async (id, base) => {
         if (id !== '@tailwindcss/typography') {

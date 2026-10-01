@@ -11,12 +11,7 @@ import type {
 import { Type, Modality, LiveServerMessage } from '@google/genai'
 import { LiveMessageAssembler, mergeConsecutiveTextParts } from './genai-to-ui-message.js'
 import type { UIMessage } from 'ai'
-import { writeFileSync, mkdirSync } from 'fs'
-import { join, dirname } from 'path'
-import { fileURLToPath } from 'url'
 import exampleMessages from './mixtures/example.json' with { type: 'json' }
-
-const __dirname = dirname(fileURLToPath(import.meta.url))
 
 // Helper to create stable ID generator for tests
 function createStableIdGenerator(prefix = 'test') {
@@ -24,99 +19,18 @@ function createStableIdGenerator(prefix = 'test') {
   return () => `${prefix}_${++counter}`
 }
 
-// Process example.json messages
 describe('Example JSON Processing', () => {
-  it('should process all messages from example.json and save snapshot', () => {
-    const assembler = new LiveMessageAssembler({ 
-      idGenerator: createStableIdGenerator('msg') 
+  it('should process all messages from example.json', async () => {
+    const assembler = new LiveMessageAssembler({
+      idGenerator: createStableIdGenerator('msg'),
     })
     let allMessages: any[] = []
-
-    // Process each message
     for (const message of exampleMessages) {
-      const uiMessages = assembler.processMessage(message as LiveServerMessage)
-      allMessages = uiMessages // Always get the complete state
+      allMessages = assembler.processMessage(message as LiveServerMessage)
     }
-
-    // Create snapshots directory if it doesn't exist
-    const snapshotsDir = join(__dirname, 'snapshots')
-    mkdirSync(snapshotsDir, { recursive: true })
-
-    // Save the snapshot
-    const snapshotPath = join(snapshotsDir, 'example-ui-messages.json')
-    writeFileSync(snapshotPath, JSON.stringify(allMessages, null, 2))
-
-    // Verify we have messages
-    expect(allMessages.length).toBeGreaterThan(0)
-
-    // Basic structure check
-    if (allMessages.length > 0) {
-      expect(allMessages[0]).toHaveProperty('id')
-      expect(allMessages[0]).toHaveProperty('role')
-      expect(allMessages[0]).toHaveProperty('parts')
-    }
-  })
-})
-
-// Process partial streams
-describe('Partial Stream Processing', () => {
-  // Edge cases to test:
-  // 3 - Just after first user input
-  // 7 - Middle of assistant audio response  
-  // 789 - After turnComplete (message boundary)
-  // 812 - Just before user starts new input
-  // 889 - After user completes "generate a component"
-  // 1783 - After executableCode (tool call)
-  // 1796 - After toolCall function call
-  // 1809 - After codeExecutionResult (tool result)
-  // 1862 - After second codeExecutionResult
-  // 1914 - Just before interruption
-  // 1915 - At interruption point
-  // 1920 - After turnComplete following interruption
-  // 1947 - After final usageMetadata
-  const endIndexes = [
-    3,     // After first user input transcription
-    7,     // During assistant audio stream
-    789,   // After first turnComplete
-    812,   // Before next user input
-    889,   // After user says "generate a component"
-    1783,  // After executableCode part
-    1796,  // After toolCall functionCalls
-    1809,  // After first codeExecutionResult
-    1862,  // After second codeExecutionResult  
-    1914,  // Just before interrupted
-    1915,  // At interrupted=true
-    1920,  // After turnComplete post-interrupt
-    1947,  // After usage metadata
-  ]
-
-  endIndexes.forEach(endIndex => {
-    it(`should process messages up to index ${endIndex} and save snapshot`, () => {
-      const assembler = new LiveMessageAssembler({ 
-        idGenerator: createStableIdGenerator('msg') 
-      })
-      let allMessages: any[] = []
-
-      // Process messages up to endIndex
-      const messagesToProcess = exampleMessages.slice(0, endIndex + 1)
-
-      for (const message of messagesToProcess) {
-        const uiMessages = assembler.processMessage(message as LiveServerMessage)
-        allMessages = uiMessages
-      }
-
-      // Create snapshots directory if it doesn't exist
-      const snapshotsDir = join(__dirname, 'snapshots')
-      mkdirSync(snapshotsDir, { recursive: true })
-
-      // Save the snapshot with padded index for proper sorting
-      const paddedIndex = String(endIndex).padStart(4, '0')
-      const snapshotPath = join(snapshotsDir, `partial-${paddedIndex}-ui-messages.json`)
-      writeFileSync(snapshotPath, JSON.stringify(allMessages, null, 2))
-
-      // Log info about this snapshot
-      console.log(`Snapshot for index ${endIndex}: ${allMessages.length} UI messages`)
-    })
+    await expect(JSON.stringify(allMessages, null, 2)).toMatchFileSnapshot(
+      './snapshots/example-ui-messages.json',
+    )
   })
 })
 

@@ -4,7 +4,6 @@ import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import { importMapPlugin } from "importmap-vite-plugin";
 import { readFileSync } from "fs";
-import { TestsNotFoundError } from "vitest/node.js";
 
 // Custom plugin to handle WASM imports like Cloudflare Workers
 const wasmPlugin = (): Plugin => {
@@ -43,20 +42,25 @@ const wasmPlugin = (): Plugin => {
   };
 };
 
-// Vitest runs the Worker code in Node, where .css imports must be plain text like in wrangler
+// Vitest runs the Worker code in Node, where .css imports must be plain text like in wrangler.
+// The `.text.js` id suffix keeps Vite's own css handling (which would empty the module) away.
+const CSS_TEXT = ".css.text.js";
 const cssTextPlugin = (): Plugin => ({
   name: "css-as-text",
   enforce: "pre",
-  async load(id) {
-    if (!id.endsWith(".css")) return null;
-    return `export default ${JSON.stringify(readFileSync(id.split("?")[0], "utf8"))}`;
+  async resolveId(source, importer, options) {
+    if (!source.endsWith(".css")) return null;
+    const resolved = await this.resolve(source, importer, { ...options, skipSelf: true });
+    return resolved && `${resolved.id.split("?")[0]}${CSS_TEXT.slice(".css".length)}`;
+  },
+  load(id) {
+    if (!id.endsWith(CSS_TEXT)) return null;
+    const file = id.slice(0, -".text.js".length);
+    return `export default ${JSON.stringify(readFileSync(file, "utf8"))}`;
   },
 });
 
 export default defineConfig({
-  ssr: {
-    noExternal: [],
-  },
   resolve: {
     alias: {
       "cloudflare:workers": new URL(

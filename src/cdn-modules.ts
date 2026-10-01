@@ -1,115 +1,63 @@
-import { logger } from './logger.ts'
+export interface CdnModule {
+  /** Final url after redirects; relative imports resolve against this */
+  url: string
+  code: string
+}
 
-// Global caches that persist across requests
-const globalCodeCache = new Map<string, Expiring<string>>()
-const globalRedirectCache = new Map<string, Expiring<string>>()
+export interface CdnCache {
+  get(key: string): Promise<string | null>
+  put(key: string, value: string, ttl: number): void
+}
+
+// Per-isolate layer in front of the shared cache
+const memory = new Map<string, { module: CdnModule; expires: number }>()
 const MEMORY_TTL_MS = 3600 * 1000
 const MEMORY_LIMIT = 500
 
-interface Expiring<T> {
-  value: T
-  expires: number
+function remember(url: string, module: CdnModule) {
+  if (memory.size >= MEMORY_LIMIT) memory.delete(memory.keys().next().value!)
+  memory.set(url, { module, expires: Date.now() + MEMORY_TTL_MS })
 }
 
-function memoryGet<T>(map: Map<string, Expiring<T>>, key: string): T | undefined {
-  const hit = map.get(key)
-  if (!hit) return undefined
-  if (hit.expires < Date.now()) {
-    map.delete(key)
-    return undefined
-  }
-  return hit.value
-}
-
-function memorySet<T>(map: Map<string, Expiring<T>>, key: string, value: T) {
-  if (map.size >= MEMORY_LIMIT) map.delete(map.keys().next().value!)
-  map.set(key, { value, expires: Date.now() + MEMORY_TTL_MS })
-}
-
-/** Fetch a module from a CDN url, following redirects, with a per-isolate cache. */
-export async function fetchModuleSource(
+/** Fetch a module from a CDN url. Unversioned urls redirect to the latest version, so the cache TTL is short. */
+export async function fetchCdnModule(
   url: string,
-  cache?: { get(key: string): Promise<string | null>; put(key: string, value: string, ttl: number): void },
-): Promise<string> {
-  const cached = memoryGet(globalCodeCache, url)
-  if (cached !== undefined) {
-    logger.log(`Cache hit for ${url.substring(0, 50)}`)
-    return cached
-  }
-  // Unversioned CDN urls redirect to the latest version, so keep this short
-  const kvKey = `esm:${url}`
-  const stored = await cache?.get(kvKey)
+  cache?: CdnCache,
+): Promise<CdnModule> {
+  const hit = memory.get(url)
+  if (hit && hit.expires > Date.now()) return hit.module
+
+  const key = `esm:${url}`
+  const stored = await cache?.get(key)
   if (stored != null) {
-    memorySet(globalCodeCache, url, stored)
-    return stored
+    const module: CdnModule = JSON.parse(stored)
+    remember(url, module)
+    return module
   }
 
-  const resolvedUrl = await resolveRedirect(url, globalRedirectCache)
-
-  const fetchId = Math.random().toString(36).substring(2, 9)
-  logger.time(`${fetchId} fetch ${url.substring(0, 50)}`)
-  const response = await fetch(resolvedUrl)
-  logger.timeEnd(`${fetchId} fetch ${url.substring(0, 50)}`)
-
+  const response = await fetch(url)
   if (!response.ok) {
     throw new Error(
-      `Failed to fetch ${resolvedUrl}: ${response.status} ${response.statusText}`,
+      `Failed to fetch ${response.url}: ${response.status} ${response.statusText}`,
     )
   }
+  const text = await response.text()
+  if (!text) throw new Error(`https url returned empty string ${url}`)
 
-  const contentType = response.headers.get('content-type') || ''
-  const isJson = contentType.includes('application/json')
-
-  let contents = await response.text()
-  if (!contents) throw new Error(`https url returned empty string ${url}`)
-
-  if (contents.includes('import.meta.url')) {
-    contents = contents.replace(
-      /\bimport\.meta\.url\b/g,
-      JSON.stringify(resolvedUrl),
-    )
+  const isJson = (response.headers.get('content-type') || '').includes(
+    'application/json',
+  )
+  const module: CdnModule = {
+    url: response.url,
+    code: isJson ? `export default ${text}` : text,
   }
-
-  if (isJson) return `export default ${contents}`
-
-  memorySet(globalCodeCache, url, contents)
-  cache?.put(kvKey, contents, 3600)
-  return contents
+  remember(url, module)
+  cache?.put(key, JSON.stringify(module), 3600)
+  return module
 }
 
-// Helper function to extract package name from import path
+/** Package name of a bare import: `@org/pkg/sub` gives `@org/pkg`, `pkg/sub` gives `pkg`. */
 export function getPackageName(path: string): string {
-  // Handle scoped packages (@org/package)
-  if (path.startsWith('@')) {
-    const parts = path.split('/')
-    return parts.slice(0, 2).join('/')
-  }
-  // Handle regular packages
-  return path.split('/')[0]
-}
-
-// Helper function to resolve redirects
-async function resolveRedirect(
-  url: string,
-  cache: Map<string, Expiring<string>>,
-): Promise<string> {
-  const known = memoryGet(cache, url)
-  if (known !== undefined) return known
-
-  const response = await fetch(url, {
-    method: 'HEAD',
-    redirect: 'manual',
-  })
-
-  if (response.status >= 300 && response.status < 400) {
-    const location = response.headers.get('location')
-    if (location) {
-      const resolvedUrl = new URL(location, url).toString()
-      memorySet(cache, url, resolvedUrl)
-      return resolveRedirect(resolvedUrl, cache)
-    }
-  }
-
-  memorySet(cache, url, url)
-  return url
+  const parts = path.split('/')
+  return path.startsWith('@') ? parts.slice(0, 2).join('/') : parts[0]
 }
