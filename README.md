@@ -1,246 +1,104 @@
 # Lovepack 💝
 
-A Cloudflare Worker that bundles TypeScript/JSX with Tailwind on the fly. Two modes:
-
-| Mode | Use it for |
-|---|---|
-| **Projects** | Versioned UI in Cloudflare Artifacts. Agents edit, viewers see live drafts, users undo or push with plain `git`. |
-| **`/api/bundle`** | Stateless bundling. Send files, get URLs. |
-
-## Projects
-
-Agents edit files in a **session**, viewers see **live drafts**, each agent message becomes one **git commit**. Undo, restore and branches are built in.
+Versioned React UI projects on a Cloudflare Worker. Agents edit files in a **session**, viewers see **live drafts**, each agent message becomes one **git commit**. TypeScript, JSX and Tailwind are bundled on the fly.
 
 ```ts
-const project = env.PROJECT.get(env.PROJECT.idFromName('u123'))           // Durable Object stub, RPC
-const { sessionId } = await project.openSession({ author: { kind: 'agent', id: 'ses_1' } })
-await project.apply({ sessionId, ops: [{ op: 'write', path: 'App.tsx', content: code }] })
-await project.build({ sessionId })                            // draft: viewers update live
-await project.commit({ sessionId, message: 'Add chart' })     // one commit, sources + dist
-await project.undo()                                      // new commit with the previous sources
+import { Project } from './src/client.ts'
+
+const project = new Project({ endpoint: 'https://remote-bundler.fumabase.com', apiKey, id: 'u123' })
+await project.init()
+
+const session = await project.openSession({ author: { kind: 'agent', id: 'ses_1' } })
+await session.apply({ ops: [{ op: 'write', path: 'App.tsx', content: code }] })
+const draft = await session.build()             // draft: { ok, url } of the new module
+await session.commit({ message: 'Add chart' })  // one commit, sources + dist, returns its url
+await project.undo()                            // new commit with the previous sources
 ```
 
-Users can also edit with git:
+An agent loop in a Worker sends `draft.url` to the user in its own chat stream, next to the tokens. The browser only runs `import(new URL(url, endpoint))`. See [docs/projects.md](docs/projects.md#stream-component-urls-in-the-chat-response).
+
+Or follow every change of a project over a WebSocket:
+
+```ts
+project.watch({
+  onMessage: async (msg) => {
+    if (msg.type !== 'update') return
+    const mod = await import(new URL(msg.url, endpoint).href)  // draft or commit module
+    setComponent(() => mod.default)
+  },
+})
+```
+
+Users can also edit with plain git:
+
+```ts
+const { authenticatedUrl } = await project.gitAccess({ scope: 'write' })
+```
 
 ```bash
-git clone "$AUTHENTICATED_URL" app   # token from POST /api/projects/:id/git-access
-git commit -am 'Tweak' && git push origin main
-```
-
-Setup, REST routes, the client SDK and the git remote are in [docs/projects.md](docs/projects.md). Try it with `examples/agent.ts` and the `/view/:id` page.
-
-## Legacy API: `/api/bundle`
-
-### POST `/api/bundle`
-
-Bundle and transform TypeScript/JavaScript files with automatic dependency resolution from esm.sh CDN.
-
-**URL:** `https://remote-bundler.fumabase.com/api/bundle`
-
-**Request Body:**
-```json
-{
-  "files": [
-    {
-      "path": "index.tsx",
-      "content": "import React from 'react';\n\nexport default function App() {\n  return <div className=\"text-blue-500\">Hello World</div>;\n}"
-    }
-  ],
-  "entryPoint": "index.tsx",  // Optional, defaults to first file
-  "externalPackages": ["react", "react-dom"],  // Optional, default [] (bundled from esm.sh)
-  "siteId": "my-site"  // Required, [a-zA-Z0-9_-]+, output folder
-}
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "jsUrl": "https://remote-bundler.fumabase.com/bundle/my-site/index.js",
-  "htmlUrl": "https://remote-bundler.fumabase.com/bundle/my-site/index.html",
-  "files": {
-    "my-site/index.js": "https://remote-bundler.fumabase.com/bundle/my-site/index.js",
-    "my-site/index.css": "https://remote-bundler.fumabase.com/bundle/my-site/index.css",
-    "my-site/chunks/[name]-[hash].js": "https://remote-bundler.fumabase.com/bundle/my-site/chunks/[name]-[hash].js"
-  },
-  "rawOutputs": [],
-  "warnings": []  // Bundler warnings if any
-}
+git clone "$AUTHENTICATED_URL" app
+git commit -am 'Tweak' && git push origin main   # the worker builds dist/ on top
 ```
 
 ## Features
 
-- **TypeScript/JSX Support**: Full support for TypeScript and JSX syntax with React automatic runtime
-- **Automatic Bundling**: Uses Rollup (WASM) + sucrase for lightning-fast bundling
-- **CDN Resolution**: Automatically fetches npm packages from esm.sh
-- **Tailwind CSS**: Generates Tailwind CSS based on classes used in your code
-- **shadcn/ui Theme**: Includes default shadcn/ui theme configuration and CSS variables
-- **Typography Plugin**: Tailwind Typography plugin included for prose styles
-- **Multiple Files**: Support for projects with multiple files and relative imports
-- **Code Splitting**: Support for dynamic imports and React.lazy with automatic chunking
-- **KV storage**: `/api/bundle` outputs are stored in KV
-- **Server Timing**: Detailed performance metrics via Server-Timing headers
+- **Sessions**: atomic `write` / `replace` / `delete` ops, one open session per branch
+- **Drafts**: `build()` publishes a module to viewers without touching git
+- **History**: every commit holds sources and `dist/`; `undo`, `restore`, branches, fast-forward `merge`
+- **Git remote**: clone and push with short-lived tokens
+- **Bundling**: Rollup (wasm) + sucrase, code splitting for dynamic imports and `React.lazy`
+- **npm packages**: bare imports load from esm.sh; React stays external by default
+- **Tailwind CSS v4**: generated from the classes in your code, imported CSS supports `@apply`
+- **shadcn/ui theme** and the Typography plugin included
 
-## Example Usage
+## Project config
 
-### Using cURL
-```bash
-curl -X POST https://remote-bundler.fumabase.com/api/bundle \
-  -H "Content-Type: application/json" \
-  -d '{
-    "files": [{
-      "path": "app.tsx",
-      "content": "import React from \"react\";\nexport default function App() {\n  return <div className=\"p-4 bg-primary text-primary-foreground rounded-lg\">Hello</div>;\n}"
-    }],
-    "externalPackages": ["react"],
-    "siteId": "demo"
-  }'
+`lovepack.json` at the repo root. Missing keys use the defaults:
+
+```json
+{
+  "entry": "App.tsx",
+  "externalPackages": ["react", "react-dom", "react/jsx-runtime", "react/jsx-dev-runtime"]
+}
 ```
 
-### Using JavaScript
-```javascript
-const response = await fetch('https://remote-bundler.fumabase.com/api/bundle', {
-  method: 'POST',
-  headers: {
-    'Content-Type': 'application/json',
-  },
-  body: JSON.stringify({
-    files: [{
-      path: 'index.tsx',
-      content: `
-        import React from 'react';
+The entry module default-exports the component. Every bare import not listed in `externalPackages` is bundled from esm.sh.
 
-        function Button() {
-          return (
-            <button className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90">
-              Click me
-            </button>
-          );
-        }
+## CSS variables
 
-        export default Button;
-      `
-    }],
-    externalPackages: ['react'],
-    siteId: 'demo'
-  })
-});
+The generated CSS includes the default shadcn/ui variables for light and dark mode:
 
-const result = await response.json();
-console.log(result.jsUrl);   // URL to bundled JavaScript
-console.log(result.htmlUrl); // URL to preview HTML page
-```
-
-### Multiple Files with Imports
-```javascript
-const response = await fetch('https://remote-bundler.fumabase.com/api/bundle', {
-  method: 'POST',
-  headers: {
-    'Content-Type': 'application/json',
-  },
-  body: JSON.stringify({
-    files: [
-      {
-        path: 'utils.ts',
-        content: `
-          export const formatPrice = (price: number) => {
-            return new Intl.NumberFormat('en-US', {
-              style: 'currency',
-              currency: 'USD'
-            }).format(price);
-          };
-        `
-      },
-      {
-        path: 'Button.tsx',
-        content: `
-          import React from 'react';
-
-          export const Button = ({ children, onClick }) => (
-            <button
-              className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
-              onClick={onClick}
-            >
-              {children}
-            </button>
-          );
-        `
-      },
-      {
-        path: 'app.tsx',
-        content: `
-          import React from 'react';
-          import { Button } from './Button';
-          import { formatPrice } from './utils';
-
-          export default function App() {
-            const price = 99.99;
-            return (
-              <div className="p-8 bg-gray-100">
-                <h1 className="text-3xl font-bold mb-4">Product</h1>
-                <p className="text-xl mb-4">{formatPrice(price)}</p>
-                <Button onClick={() => alert('Purchased!')}>
-                  Buy Now
-                </Button>
-              </div>
-            );
-          }
-        `
-      }
-    ],
-    entryPoint: 'app.tsx',
-    externalPackages: ['react'],
-    siteId: 'demo'
-  })
-});
-```
-
-## External Packages
-
-`/api/bundle` bundles every bare import from esm.sh unless you list it in `externalPackages`. Projects (`lovepack.json`) default to `react`, `react-dom`, `react/jsx-runtime` and `react/jsx-dev-runtime`.
-
-## CSS Variables
-
-The generated CSS includes default shadcn/ui CSS variables for both light and dark modes. These variables define colors for:
 - `--primary`, `--secondary`, `--destructive`, `--muted`, `--accent`
-- `--background`, `--foreground`
-- `--card`, `--popover`
-- `--border`, `--input`, `--ring`
-- `--radius` (border radius)
+- `--background`, `--foreground`, `--card`, `--popover`
+- `--border`, `--input`, `--ring`, `--radius`
 
-## Web Interface
+## Docs
 
-Visit [https://remote-bundler.fumabase.com](https://remote-bundler.fumabase.com) to use the interactive web UI for uploading and bundling files.
+Setup, every REST route, live messages and the git remote are in [docs/projects.md](docs/projects.md).
+
+Try it with an agent script, then open `/view/<projectId>`:
+
+```bash
+LOVEPACK_API_KEY=... pnpm tsx examples/agent.ts demo1
+LOVEPACK_API_KEY=... pnpm tsx examples/dashboard-agent.ts dash1
+```
 
 ## Development
 
 ```bash
-# Install dependencies
 pnpm install
-
-# Run locally
-pnpm dev
-
-# Secrets for projects: LOVEPACK_API_KEY in .dev.vars (local) and `wrangler secret put` (deployed)
-
-# Run tests (they hit the deployed worker, deploy first)
-pnpm test
-pnpm test:local   # legacy /api/bundle tests against the local bundler
-
-# Deploy to Cloudflare Workers
-pnpm deployment
+pnpm dev          # wrangler dev; put LOVEPACK_API_KEY in .dev.vars
+pnpm deployment   # typecheck and deploy
+pnpm test         # runs against the deployed worker, deploy first
 ```
 
-## Testing
+| Test | Covers |
+|---|---|
+| `src/bundle.test.ts` | Tailwind output, CSS imports, relative and npm imports, code splitting, build errors |
+| `src/project.test.ts` | sessions, drafts, commit, undo, branches, live messages, git clone and push |
+| `src/generate-tailwind.test.ts` | Tailwind class scanner, local, no network |
 
-The project uses Vitest for testing with snapshots for output validation. Tests cover:
-- TSX/JSX transformation
-- Tailwind CSS extraction with modifiers
-- Multiple file bundling with imports
-- Dynamic imports and code splitting
-- Error handling and formatting
-- NPM package resolution
-- Projects end to end (`src/project.test.ts`): sessions, drafts, commit, undo, branches, git clone and push. Needs `LOVEPACK_API_KEY`.
+The worker tests need `LOVEPACK_API_KEY` (env or `.dev.vars`) and `deno` on the PATH.
 
 ## License
 

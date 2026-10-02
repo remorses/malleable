@@ -14,15 +14,8 @@ const js = dedent
 /** Reserved project path of the generated entry module. */
 export const ENTRY_PATH = '/__lovepack_entry__.js'
 
-/** Entry module: re-exports the user entry and adds a stylesheet link around its default export. */
-export function entryWrapperSource(options: {
-  actualEntryPath: string
-  cssUrl?: string
-}): string {
-  const { actualEntryPath, cssUrl } = options
-  const cssHref = cssUrl
-    ? JSON.stringify(cssUrl)
-    : `new URL('./index.css', import.meta.url).href`
+/** Entry module: re-exports the user entry and links `index.css` next to it, around its default export. */
+export function entryWrapperSource(actualEntryPath: string): string {
   const entry = JSON.stringify('./' + actualEntryPath)
   // createElement keeps the wrapper independent of the JSX transform
   return js`
@@ -34,7 +27,7 @@ export function entryWrapperSource(options: {
       return React.createElement(
         React.Fragment,
         null,
-        React.createElement('link', { rel: 'stylesheet', href: ${cssHref} }),
+        React.createElement('link', { rel: 'stylesheet', href: new URL('./index.css', import.meta.url).href }),
         OriginalDefault ? React.createElement(OriginalDefault, props) : null,
       );
     }

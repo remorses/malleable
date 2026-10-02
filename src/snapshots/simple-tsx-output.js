@@ -8,7 +8,7 @@ function WrappedComponent(props) {
   return React.createElement(
     React.Fragment,
     null,
-    React.createElement('link', { rel: 'stylesheet', href: "https://remote-bundler.fumabase.com/bundle/test-b3knh/index.css" }),
+    React.createElement('link', { rel: 'stylesheet', href: new URL('./index.css', import.meta.url).href }),
     OriginalDefault ? React.createElement(OriginalDefault, props) : null,
   );
 }

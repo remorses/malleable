@@ -5,7 +5,7 @@ description: Plan, baseline latency and cache design for replacing esbuild-wasm 
 
 # Swap esbuild-wasm for Rollup
 
-All bundler code sits behind `buildFiles()` in `src/build.ts`. `worker.ts` and `project-do.ts` only call that. The swap touches about 5 files and no callers.
+All bundler code sits behind `buildFiles()` in `src/build.ts`. `project-do.ts` only calls that. The swap touches about 5 files and no callers.
 
 ## Status: done
 
@@ -13,7 +13,7 @@ esbuild-wasm is replaced by `@rollup/browser` + sucrase. Plugins live in `src/ro
 
 ## Results (measured in Workers)
 
-`scripts/bench-bundle.ts` for wall time. CPU time comes from `wrangler tail` (`cpuTime`), because `performance.now()` is frozen during CPU in Workers. Old version was deployed as `lovepack-esbuild-bench` for A/B.
+`scripts/bench-bundle.ts` for wall time (these numbers were measured on the removed `/api/bundle` route; the script now times `session.build()`). CPU time comes from `wrangler tail` (`cpuTime`), because `performance.now()` is frozen during CPU in Workers. Old version was deployed as `lovepack-esbuild-bench` for A/B.
 
 | Scenario | Metric | esbuild | rollup + KV cache |
 |---|---|---|---|
@@ -31,7 +31,7 @@ Rollup alone is not faster end to end on a cache miss, because Tailwind dominate
 
 ## Cache (implemented)
 
-KV prefix `cache:v3:`, separate from `/bundle/*`. A KV error is a miss. Writes use `waitUntil`.
+KV prefix `cache:v3:`. A KV error is a miss. Writes use `waitUntil`.
 
 | Cache | Key | TTL |
 |---|---|---|

@@ -61,6 +61,39 @@ await project.commit({ sessionId, message: 'Add chart' }) // build + git add . +
 - **Branches**: `createBranch`, `branches`, `merge` (fast-forward only), `deleteBranch`.
 - **Drafts live in DO memory only.** The last 3 builds per session are kept. A DO restart loses them; call `build` again.
 
+## Stream component urls in the chat response
+
+`build`, `commit`, `undo`, `restore` and `merge` return the `url` of the new entry module, relative to the Worker origin. An agent loop in a Worker can send it to the user in the same stream as its tokens. The client needs no `watch`.
+
+```
+ browser ──POST /chat──▶ agent Worker ──RPC──▶ ProjectDO
+    ▲                        │  tool call: apply + build  ──▶ { ok, url: '/p/u123/d/s_1/2/index.js' }
+    └── SSE: tokens, ui-url ◀┘
+```
+
+```ts
+// agent Worker, inside a tool of the AI chat
+const result = await project.build({ sessionId })
+if (result.ok) writer.write({ type: 'data-ui', data: { url: result.url } })   // same SSE stream as tokens
+else return result.errorText                                                  // let the model fix the code
+
+// browser
+const mod = await import(new URL(part.data.url, LOVEPACK_ORIGIN).href)
+setComponent(() => mod.default)
+```
+
+### Errors
+
+| Error | Where it shows | What the user sees |
+|---|---|---|
+| Syntax error, missing import, bad `@apply` | `build` returns `{ ok: false, errorText }`, no url | nothing changes; give `errorText` to the model |
+| Module throws at top level | `import(url)` rejects in the browser | client keeps the previous module |
+| Component throws in render or an effect | React error boundary in the browser | client keeps the previous module |
+
+The server cannot run the component, so runtime errors are only caught in the browser. `/view/:id` (`src/view-page.ts`) and `demo/App.tsx` show the pattern: render each module in an error boundary keyed by its url, and keep the last module that did not throw as the fallback. Errors in event handlers and async code are not caught by error boundaries.
+
+Commit urls (`/p/:id/r/<sha>/index.js`) are immutable, so store them in chat history. Draft urls stop working after a DO restart or after 3 newer builds; reload them from the commit.
+
 ## Repo layout
 
 | Path | Content |
@@ -95,11 +128,13 @@ The entry module default-exports the component. Its CSS is loaded relative to th
 
 Users can edit with plain git. The Worker proxies Artifacts' git remote and checks its own tokens, so Artifacts credentials never leave the Worker.
 
-```bash
-# mint a token (API key needed); scope read|write, ttl 60..86400 seconds
-curl -X POST $ORIGIN/api/projects/u123/git-access -H "Authorization: Bearer $LOVEPACK_API_KEY" \
-  -H 'content-type: application/json' -d '{"scope":"write"}'   # => { url, authenticatedUrl, password, expiresAt }
+```ts
+// mint a token (API key needed); scope read|write, ttl 60..86400 seconds
+const { authenticatedUrl } = await project.gitAccess({ scope: 'write', ttl: 3600 })
+// => { url, authenticatedUrl, username, password, scope, expiresAt }
+```
 
+```bash
 git clone "$AUTHENTICATED_URL" app && cd app
 # edit App.tsx
 git commit -am 'Tweak' && git push origin main
@@ -108,11 +143,7 @@ git commit -am 'Tweak' && git push origin main
 - **After a push**, `ProjectDO.afterGitPush()` builds the pushed sources. If `dist/` does not match, it adds a commit `Build dist for pushed sources`, and viewers get an `update`. Run `git pull` to get it.
 - **Tokens** are stateless HMACs (`lp_<scope>_<expiry>_<mac>`) signed with `LOVEPACK_API_KEY`, bound to one project.
 - **Push while an agent session is open** is allowed. The session's next `commit` returns `conflict`; retry with `rebase: true`.
-- A push with a build error still lands, viewers get `draft-error`, and the head keeps its old `dist/`.
-
-## Legacy `/api/bundle`
-
-The stateless `POST /api/bundle` route still works (KV storage, `/bundle/<siteId>/*`). It shares `src/build.ts` with projects. Projects add history, drafts and git.
+- A push with a build error still lands, viewers get `build-error` with `session: 'git-push'`, and the head keeps its old `dist/`.
 
 ## Example
 
@@ -124,7 +155,14 @@ LOVEPACK_API_KEY=... pnpm tsx examples/agent.ts demo1     # then open $ORIGIN/vi
 
 ## Client
 
-`src/client.ts` wraps the REST routes and the socket. `demo/App.tsx` is the reference use.
+`src/client.ts` wraps every REST route and the socket. `demo/App.tsx` and `examples/*.ts` are the reference use.
+
+| Class | Methods |
+|---|---|
+| `Project` | `init`, `info`, `openSession`, `sessions`, `log`, `files`, `undo`, `restore`, `branches`, `createBranch`, `merge`, `deleteBranch`, `gitAccess`, `watch` |
+| `Session` | `apply`, `read`, `list`, `diff`, `build`, `commit`, `discard` |
+
+Failed calls throw `LovepackError` with `status` and `code` (for example `SESSION_ACTIVE`, `REPLACE_AMBIGUOUS`). Responses are plain JSON.
 
 ```ts
 const project = new Project({ endpoint, apiKey, id: 'u123' })

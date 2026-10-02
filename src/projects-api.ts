@@ -85,7 +85,17 @@ function fileResponse(body: BodyInit, path: string, immutable: boolean) {
 
 // ── git access tokens: stateless, `lp_<scope>_<expiry>_<hmac(projectId.scope.expiry)>` ──
 
-type GitScope = 'read' | 'write'
+export type GitScope = 'read' | 'write'
+
+export interface GitAccess {
+  url: string
+  /** `git clone` URL with the token embedded; use only for short-lived commands */
+  authenticatedUrl: string
+  username: string
+  password: string
+  scope: GitScope
+  expiresAt: number
+}
 
 async function hmacHex(secret: string, data: string) {
   const enc = new TextEncoder()
@@ -185,7 +195,7 @@ export const projectsApi = new Spiceflow()
       scope: z.enum(['read', 'write']).default('write'),
       ttl: z.number().int().min(60).max(86400).default(3600),
     }),
-    async handler({ request, params, state }) {
+    async handler({ request, params, state }): Promise<GitAccess> {
       const { scope, ttl } = await request.json()
       repoNameFor(params.id)
       const expiresAt = Math.floor(Date.now() / 1000) + ttl
@@ -195,7 +205,6 @@ export const projectsApi = new Spiceflow()
       const url = `${origin}/git/${params.id}.git`
       return {
         url,
-        // `git clone` URL with the token embedded; use only for short-lived commands
         authenticatedUrl: url.replace('://', `://x:${token}@`),
         username: 'x',
         password: token,
@@ -332,7 +341,7 @@ export const projectsApi = new Spiceflow()
 
 /**
  * Public read routes. Meant to be loaded by the browser: `import()` of built modules and the live socket.
- * Access is by project id, like the old /bundle/* routes.
+ * Access is by project id.
  */
 export const projectsPublic = new Spiceflow()
   .state('env', {} as ProjectsEnv)

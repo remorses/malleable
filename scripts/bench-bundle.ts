@@ -1,7 +1,8 @@
-// Benchmark POST /api/bundle latency. Usage:
-//   tsx scripts/bench-bundle.ts [--url https://remote-bundler.fumabase.com] [--runs 20] [--scenario small|multi|npm] [--vary]
-// Prints per-run wall time + Server-Timing, then p50/p95 and per-metric medians.
+// Benchmark draft build latency (`session.build()`) of one project. Usage:
+//   LOVEPACK_API_KEY=... tsx scripts/bench-bundle.ts [--url https://remote-bundler.fumabase.com] [--runs 20] [--scenario small|multi|npm] [--vary]
+// Prints per-run wall time, then p50/p95. The files are written before the timer starts.
 import { parseArgs } from 'node:util'
+import { Project } from '../src/client.ts'
 
 const { values } = parseArgs({
   options: {
@@ -13,13 +14,6 @@ const { values } = parseArgs({
   },
 })
 const runs = Number(values.runs)
-
-const EXTERNAL = [
-  'react',
-  'react-dom',
-  'react/jsx-runtime',
-  'react/jsx-dev-runtime',
-]
 
 const small = [
   {
@@ -89,15 +83,6 @@ export default function App() {
 
 const files = { small, multi, npm }[values.scenario!] ?? multi
 
-function parseServerTiming(header: string | null) {
-  const out: Record<string, number> = {}
-  for (const part of (header ?? '').split(',')) {
-    const m = part.trim().match(/^([^;]+);dur=([\d.]+)/)
-    if (m) out[m[1]] = Number(m[2])
-  }
-  return out
-}
-
 const median = (xs: number[]) => {
   const s = [...xs].sort((a, b) => a - b)
   return s[Math.floor(s.length / 2)]
@@ -107,37 +92,37 @@ const pct = (xs: number[], p: number) => {
   return s[Math.min(s.length - 1, Math.floor(s.length * p))]
 }
 
-console.log(`bench url=${values.url} scenario=${values.scenario} runs=${runs}`)
-const wall: number[] = []
-const timings: Record<string, number[]> = {}
+const project = new Project({
+  endpoint: values.url!,
+  apiKey: process.env.LOVEPACK_API_KEY!,
+  id: `bench-${Date.now()}`,
+})
+console.log(`bench url=${values.url} project=${project.id} scenario=${values.scenario} runs=${runs}`)
+await project.init()
+console.log('project initialized')
+const session = await project.openSession({ author: { kind: 'agent', id: 'bench' } })
+console.log(`session ${session.id} opened`)
 
-for (let i = 0; i < runs; i++) {
-  const siteId = `bench-${Date.now()}-${i}`
-  const start = performance.now()
-  const res = await fetch(`${values.url}/api/bundle`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      siteId,
-      files: values.vary
-        ? files.map((f) => ({ ...f, content: `${f.content}\n// ${siteId}` }))
-        : files,
-      entryPoint: 'App.tsx',
-      externalPackages: EXTERNAL,
-    }),
-  })
-  const body: any = await res.json()
-  const ms = performance.now() - start
-  if (!res.ok || body.error) {
-    console.error(`run ${i} FAILED ${res.status}`, body.error ?? '')
-    process.exit(1)
+const wall: number[] = []
+try {
+  for (let i = 0; i < runs; i++) {
+    await session.apply({
+      ops: files.map(({ path, content }) => ({
+        op: 'write' as const,
+        path,
+        content: values.vary ? `${content}\n// run ${Date.now()}-${i}` : content,
+      })),
+    })
+    const start = performance.now()
+    const result = await session.build()
+    const ms = performance.now() - start
+    if (!result.ok) throw new Error(`run ${i} failed:\n${result.errorText}`)
+    wall.push(ms)
+    console.log(`run ${String(i).padStart(2)} wall=${ms.toFixed(0)}ms build=${result.build}`)
   }
-  const st = parseServerTiming(res.headers.get('server-timing'))
-  wall.push(ms)
-  for (const [k, v] of Object.entries(st)) (timings[k] ??= []).push(v)
-  console.log(
-    `run ${String(i).padStart(2)} wall=${ms.toFixed(0)}ms ${JSON.stringify(st)}`,
-  )
+} finally {
+  await session.discard()
+  console.log('session discarded')
 }
 
 console.log('\n--- summary (first run = cold-ish, excluded from warm stats) ---')
@@ -146,6 +131,3 @@ console.log(`cold run : ${wall[0].toFixed(0)}ms`)
 console.log(
   `warm wall: p50=${median(warm).toFixed(0)}ms p95=${pct(warm, 0.95).toFixed(0)}ms min=${Math.min(...warm).toFixed(0)}ms`,
 )
-for (const [k, v] of Object.entries(timings)) {
-  console.log(`  ${k.padEnd(24)} warm p50=${median(v.slice(1))}ms cold=${v[0]}ms`)
-}

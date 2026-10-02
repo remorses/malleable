@@ -7,11 +7,14 @@ import type {
   ProjectInfo,
   SessionOp,
 } from './project-do.js'
+import type { GitAccess, GitScope } from './projects-api.js'
 
 export type {
   Author,
   BuildResult,
   CommitResult,
+  GitAccess,
+  GitScope,
   LiveMessage,
   LogEntry,
   ProjectInfo,
@@ -97,6 +100,16 @@ export class Project {
     return new Session(this.options, this, s.sessionId, s.branch, s.base)
   }
 
+  /** Open sessions, at most one per branch */
+  sessions() {
+    return call<Array<{ id: string; branch: string; author: Author }>>(this.options, 'GET', this.path('/sessions'))
+  }
+
+  /** Short-lived token for the git remote. `scope` defaults to write, `ttl` (seconds) to 3600. */
+  gitAccess(opts: { scope?: GitScope; ttl?: number } = {}) {
+    return call<GitAccess>(this.options, 'POST', this.path('/git-access'), opts)
+  }
+
   log(opts: { branch?: string; limit?: number } = {}) {
     const q = new URLSearchParams()
     if (opts.branch) q.set('branch', opts.branch)
@@ -128,7 +141,7 @@ export class Project {
 
   /** Fast-forward only */
   merge(opts: { branch: string; into?: string }) {
-    return call<{ sha: string }>(this.options, 'POST', this.path('/merge'), opts)
+    return call<{ sha: string; url: string }>(this.options, 'POST', this.path('/merge'), opts)
   }
 
   async deleteBranch({ name }: { name: string }) {

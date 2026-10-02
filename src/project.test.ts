@@ -3,10 +3,11 @@ import { readFileSync, mkdtempSync, writeFileSync, existsSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { LovepackError, Project, type Author, type LiveMessage } from './client.ts'
 
 // Runs against the deployed worker: deploy first (`pnpm deployment`)
-const URL_BASE = 'https://remote-bundler.fumabase.com'
-const KEY =
+const endpoint = 'https://remote-bundler.fumabase.com'
+const apiKey =
   process.env.LOVEPACK_API_KEY ??
   /LOVEPACK_API_KEY=(\S+)/.exec(readFileSync('.dev.vars', 'utf8'))![1]
 
@@ -22,93 +23,112 @@ function stable(value: unknown) {
       })
       .replace(/s_[0-9a-f-]{12,}/g, '<session>')
       .replace(/Undo [0-9a-f]{7}:/g, 'Undo <short>:')
-      .replace(/t-[a-z0-9]{8}/g, '<project>'),
+      .replace(/[tg]-[a-z0-9]{8}/g, '<project>'),
   )
 }
 
-async function api(method: string, path: string, body?: unknown) {
-  const res = await fetch(`${URL_BASE}${path}`, {
-    method,
-    headers: {
-      authorization: `Bearer ${KEY}`,
-      'content-type': 'application/json',
-    },
-    body: body === undefined ? undefined : JSON.stringify(body),
-  })
-  return { status: res.status, json: (await res.json()) as any }
+/** Error of a rejected client call, as plain data */
+function failure(promise: Promise<unknown>) {
+  return promise.then(
+    () => 'no error',
+    (e: LovepackError) => ({ status: e.status, code: e.code, message: e.message }),
+  )
 }
 
-const author = { kind: 'agent', id: 'test-agent' }
+/** Collects every live message of a project */
+function watchLive(project: Project) {
+  const messages: LiveMessage[] = []
+  const waiters: Array<() => void> = []
+  const live = project.watch({
+    onMessage(m) {
+      messages.push(m)
+      waiters.splice(0).forEach((w) => w())
+    },
+  })
+  const until = (pred: (m: LiveMessage) => boolean) =>
+    new Promise<void>((resolve) => {
+      const check = () => (messages.some(pred) ? resolve() : waiters.push(check))
+      check()
+    })
+  return { messages, until, close: live.close }
+}
+
+const newProject = (prefix: string) =>
+  new Project({ endpoint, apiKey, id: `${prefix}-${Math.random().toString(36).slice(2, 10)}` })
+
+const author: Author = { kind: 'agent', id: 'test-agent' }
 
 describe('projects: session, draft, commit, undo, branches', () => {
   it('runs the full flow', { timeout: 180_000 }, async () => {
-    const id = `t-${Math.random().toString(36).slice(2, 10)}`
-    const p = `/api/projects/${id}`
-
-    const init = await api('POST', p, {})
-    expect(stable(init)).toMatchInlineSnapshot(`
+    const project = newProject('t')
+    expect(stable(await project.init())).toMatchInlineSnapshot(`
       {
-        "json": {
-          "defaultBranch": "main",
-          "heads": {
-            "main": "<sha0>",
-          },
-          "projectId": "<project>",
-          "repo": "p-<project>",
+        "defaultBranch": "main",
+        "heads": {
+          "main": "<sha0>",
         },
-        "status": 200,
+        "projectId": "<project>",
+        "repo": "p-<project>",
       }
     `)
 
-    // live socket: collect every message the DO broadcasts
-    const messages: any[] = []
-    const waiters: Array<() => void> = []
-    const ws = new WebSocket(`${URL_BASE.replace('https', 'wss')}/p/${id}/live`)
-    ws.onmessage = (e) => {
-      messages.push(JSON.parse(String(e.data)))
-      waiters.splice(0).forEach((w) => w())
-    }
-    const until = (pred: (m: any) => boolean) =>
-      new Promise<void>((resolve) => {
-        const check = () => (messages.some(pred) ? resolve() : waiters.push(check))
-        check()
-      })
-    await until((m) => m.type === 'hello')
+    const live = watchLive(project)
+    await live.until((m) => m.type === 'hello')
 
-    const unauthorized = await fetch(`${URL_BASE}${p}`)
-    expect(unauthorized.status).toMatchInlineSnapshot(`401`)
+    const unauthorized = new Project({ endpoint, apiKey: 'wrong', id: project.id })
+    expect(await failure(unauthorized.info())).toMatchInlineSnapshot(`
+      {
+        "code": undefined,
+        "message": "Missing or invalid API key. Send \`Authorization: Bearer <LOVEPACK_API_KEY>\`.",
+        "status": 401,
+      }
+    `)
 
     // open a session; a second one on the same branch is rejected
-    const open = await api('POST', `${p}/sessions`, { author })
-    const sid = open.json.sessionId as string
-    expect(stable(open.json.base)).toMatchInlineSnapshot(`"<sha0>"`)
-    const busy = await api('POST', `${p}/sessions`, { author })
-    expect(busy.status).toMatchInlineSnapshot(`409`)
+    const session = await project.openSession({ author })
+    expect(stable(session.base)).toMatchInlineSnapshot(`"<sha0>"`)
+    expect(stable(await project.sessions())).toMatchInlineSnapshot(`
+      [
+        {
+          "author": {
+            "id": "test-agent",
+            "kind": "agent",
+          },
+          "branch": "main",
+          "id": "<session>",
+        },
+      ]
+    `)
+    expect(stable(await failure(project.openSession({ author })))).toMatchInlineSnapshot(`
+      {
+        "code": "SESSION_ACTIVE",
+        "message": "SESSION_ACTIVE: <session> on branch main",
+        "status": 409,
+      }
+    `)
 
     // ops are atomic: a failing op applies nothing
-    const bad = await api('POST', `${p}/sessions/${sid}/ops`, {
+    const bad = session.apply({
       ops: [
         { op: 'write', path: 'Card.tsx', content: 'export const x = 1' },
         { op: 'replace', path: 'App.tsx', oldString: 'nope', newString: 'x' },
       ],
     })
-    expect(bad).toMatchInlineSnapshot(`
+    expect(await failure(bad)).toMatchInlineSnapshot(`
       {
-        "json": {
-          "code": "REPLACE_NOT_FOUND",
-          "message": "REPLACE_NOT_FOUND: App.tsx",
-        },
+        "code": "REPLACE_NOT_FOUND",
+        "message": "REPLACE_NOT_FOUND: App.tsx",
         "status": 422,
       }
     `)
-    expect((await api('GET', `${p}/sessions/${sid}/files`)).json).toMatchInlineSnapshot(`
+    expect(await session.list()).toMatchInlineSnapshot(`
       [
         "App.tsx",
         "lovepack.json",
       ]
     `)
 
-    const ops = await api('POST', `${p}/sessions/${sid}/ops`, {
+    await session.apply({
       ops: [
         {
           op: 'write',
@@ -119,20 +139,12 @@ describe('projects: session, draft, commit, undo, branches', () => {
         {
           op: 'write',
           path: 'App.tsx',
-          content:
-            "import Card from './Card'\nexport default function App() { return <Card title=\"Revenue\" /> }",
+          content: "import Card from './Card'\nexport default function App() { return <Card title=\"Revenue\" /> }",
         },
       ],
     })
-    expect(ops).toMatchInlineSnapshot(`
-      {
-        "json": {
-          "ok": true,
-        },
-        "status": 200,
-      }
-    `)
-    expect((await api('GET', `${p}/sessions/${sid}/diff`)).json).toMatchInlineSnapshot(`
+    expect(await session.read({ path: 'Card.tsx' })).toMatchInlineSnapshot(`"export default function Card({ title }: { title: string }) { return <div className="rounded border p-4 bg-blue-500">{title}</div> }"`)
+    expect(await session.diff()).toMatchInlineSnapshot(`
       [
         [
           "modified",
@@ -146,83 +158,68 @@ describe('projects: session, draft, commit, undo, branches', () => {
     `)
 
     // draft build is served from the DO and is not in git history
-    const build = await api('POST', `${p}/sessions/${sid}/build`)
-    expect(build).toMatchInlineSnapshot(`
+    const build = await session.build()
+    expect(stable(build)).toMatchInlineSnapshot(`
       {
-        "json": {
-          "build": 1,
-          "files": [
-            "index.js",
-            "index.css",
-          ],
-          "ok": true,
-        },
-        "status": 200,
+        "build": 1,
+        "files": [
+          "index.js",
+          "index.css",
+        ],
+        "ok": true,
+        "url": "/p/<project>/d/<session>/1/index.js",
       }
     `)
-    const draftJs = await fetch(`${URL_BASE}/p/${id}/d/${sid}/1/index.js`)
+    // the agent gets the module url back, no socket needed
+    if (!build.ok) throw new Error(build.errorText)
+    const draftJs = await fetch(new URL(build.url, endpoint))
     expect(draftJs.status).toMatchInlineSnapshot(`200`)
     expect((await draftJs.text()).includes('Revenue')).toMatchInlineSnapshot(`true`)
-    const draftCss = await (await fetch(`${URL_BASE}/p/${id}/d/${sid}/1/index.css`)).text()
+    const draftCss = await (await fetch(new URL('index.css', new URL(build.url, endpoint)))).text()
     expect(draftCss.includes('bg-blue-500')).toMatchInlineSnapshot(`true`)
-    // the update message carries the module url, so viewers never build paths themselves
-    await until((m) => m.type === 'update' && m.kind === 'draft')
-    const draftUpdate = messages.find((m) => m.type === 'update' && m.kind === 'draft')
-    expect((await fetch(`${URL_BASE}${draftUpdate.url}`)).status).toMatchInlineSnapshot(`200`)
-    expect((await api('GET', `${p}/log`)).json.length).toMatchInlineSnapshot(`1`)
+    // viewers get the same url over the socket
+    await live.until((m) => m.type === 'update' && m.kind === 'draft' && m.url === build.url)
+    expect((await project.log()).length).toMatchInlineSnapshot(`1`)
 
     // a broken build blocks the commit and keeps the session open
-    await api('POST', `${p}/sessions/${sid}/ops`, {
-      ops: [{ op: 'write', path: 'Broken.tsx', content: 'export default <div' }],
-    })
-    await api('POST', `${p}/sessions/${sid}/ops`, {
+    await session.apply({
       ops: [
-        {
-          op: 'write',
-          path: 'App.tsx',
-          content: "import B from './Broken'\nexport default function App() { return <B /> }",
-        },
+        { op: 'write', path: 'Broken.tsx', content: 'export default <div' },
+        { op: 'write', path: 'App.tsx', content: "import B from './Broken'\nexport default function App() { return <B /> }" },
       ],
     })
-    const failed = await api('POST', `${p}/sessions/${sid}/commit`, { message: 'broken' })
-    expect({ status: failed.status, reason: failed.json.reason, text: failed.json.errorText }).toMatchInlineSnapshot(`
-      {
-        "reason": "build-error",
-        "status": 200,
-        "text": "✘ [ERROR] [plugin local-files] Broken.tsx (1:19): Unexpectedly reached the end of input.
+    const failed = await session.commit({ message: 'broken' })
+    expect(failed.ok === false && failed.reason === 'build-error' && failed.errorText).toMatchInlineSnapshot(`
+      "✘ [ERROR] [plugin local-files] Broken.tsx (1:19): Unexpectedly reached the end of input.
 
           /Broken.tsx:1:19:
       1: export default <div
                             ^
-      ",
-      }
+      "
     `)
-    await api('POST', `${p}/sessions/${sid}/ops`, {
+    await session.apply({
       ops: [
         { op: 'delete', path: 'Broken.tsx' },
         {
           op: 'write',
           path: 'App.tsx',
-          content:
-            "import Card from './Card'\nexport default function App() { return <Card title=\"Revenue\" /> }",
+          content: "import Card from './Card'\nexport default function App() { return <Card title=\"Revenue\" /> }",
         },
       ],
     })
 
     // commit: one commit holds sources and dist
-    const commit = await api('POST', `${p}/sessions/${sid}/commit`, { message: 'Add revenue card' })
+    const commit = await session.commit({ message: 'Add revenue card' })
     expect(stable(commit)).toMatchInlineSnapshot(`
       {
-        "json": {
-          "ok": true,
-          "sha": "<sha1>",
-        },
-        "status": 200,
+        "ok": true,
+        "sha": "<sha1>",
+        "url": "/p/<project>/r/<sha1>/index.js",
       }
     `)
-    const sha = commit.json.sha as string
-    const log = await api('GET', `${p}/log`)
-    expect(stable(log.json.map(({ time, ...c }: any) => c))).toMatchInlineSnapshot(`
+    if (!commit.ok) throw new Error('commit failed')
+    expect((await fetch(new URL(commit.url, endpoint))).status).toMatchInlineSnapshot(`200`)
+    expect(stable((await project.log()).map(({ time, ...c }) => c))).toMatchInlineSnapshot(`
       [
         {
           "author": {
@@ -248,7 +245,7 @@ describe('projects: session, draft, commit, undo, branches', () => {
     `)
 
     // committed output is served by sha (immutable) and by branch
-    const bySha = await fetch(`${URL_BASE}/p/${id}/r/${sha}/index.js`)
+    const bySha = await fetch(new URL(commit.url, endpoint))
     expect({
       status: bySha.status,
       cache: bySha.headers.get('cache-control'),
@@ -260,7 +257,7 @@ describe('projects: session, draft, commit, undo, branches', () => {
         "type": "text/javascript; charset=utf-8",
       }
     `)
-    const byBranch = await fetch(`${URL_BASE}/p/${id}/r/main/index.css`)
+    const byBranch = await fetch(`${endpoint}/p/${project.id}/r/main/index.css`)
     expect({
       status: byBranch.status,
       cache: byBranch.headers.get('cache-control'),
@@ -274,27 +271,27 @@ describe('projects: session, draft, commit, undo, branches', () => {
     `)
 
     // the session ended; its id is gone
-    expect((await api('POST', `${p}/sessions/${sid}/build`)).status).toMatchInlineSnapshot(`404`)
+    expect(stable(await failure(session.build()))).toMatchInlineSnapshot(`
+      {
+        "code": "SESSION_NOT_FOUND",
+        "message": "SESSION_NOT_FOUND: <session>",
+        "status": 404,
+      }
+    `)
 
     // second session: replace, commit, then undo restores the previous sources
-    const s2 = (await api('POST', `${p}/sessions`, { author })).json.sessionId as string
-    const ambiguous = await api('POST', `${p}/sessions/${s2}/ops`, {
-      ops: [{ op: 'replace', path: 'App.tsx', oldString: 'e', newString: 'E' }],
-    })
-    expect({ status: ambiguous.status, code: ambiguous.json.code }).toMatchInlineSnapshot(`
+    const s2 = await project.openSession({ author })
+    const ambiguous = s2.apply({ ops: [{ op: 'replace', path: 'App.tsx', oldString: 'e', newString: 'E' }] })
+    expect(await failure(ambiguous)).toMatchInlineSnapshot(`
       {
         "code": "REPLACE_AMBIGUOUS",
+        "message": "REPLACE_AMBIGUOUS: App.tsx",
         "status": 422,
       }
     `)
-    await api('POST', `${p}/sessions/${s2}/ops`, {
-      ops: [{ op: 'replace', path: 'App.tsx', oldString: 'Revenue', newString: 'Sales' }],
-    })
-    const second = await api('POST', `${p}/sessions/${s2}/commit`, { message: 'Rename card' })
-    expect(second.json.ok).toMatchInlineSnapshot(`true`)
-    expect(
-      (await api('GET', `${p}/files?ref=main`)).json,
-    ).toMatchInlineSnapshot(`
+    await s2.apply({ ops: [{ op: 'replace', path: 'App.tsx', oldString: 'Revenue', newString: 'Sales' }] })
+    expect((await s2.commit({ message: 'Rename card' })).ok).toMatchInlineSnapshot(`true`)
+    expect(await project.files()).toMatchInlineSnapshot(`
       [
         "App.tsx",
         "Card.tsx",
@@ -302,24 +299,21 @@ describe('projects: session, draft, commit, undo, branches', () => {
       ]
     `)
 
-    const undo = await api('POST', `${p}/undo`, {})
-    expect(stable(undo)).toMatchInlineSnapshot(`
+    expect(stable(await project.undo())).toMatchInlineSnapshot(`
       {
-        "json": {
-          "ok": true,
-          "sha": "<sha2>",
-        },
-        "status": 200,
+        "ok": true,
+        "sha": "<sha2>",
+        "url": "/p/<project>/r/<sha2>/index.js",
       }
     `)
-    const jsAfterUndo = await (await fetch(`${URL_BASE}/p/${id}/r/main/index.js`)).text()
+    const jsAfterUndo = await (await fetch(`${endpoint}/p/${project.id}/r/main/index.js`)).text()
     expect({ revenue: jsAfterUndo.includes('Revenue'), sales: jsAfterUndo.includes('Sales') }).toMatchInlineSnapshot(`
       {
         "revenue": true,
         "sales": false,
       }
     `)
-    expect((await api('GET', `${p}/log`)).json.map((c: any) => c.message.replace(/[0-9a-f]{7}/, '<short>'))).toMatchInlineSnapshot(`
+    expect(stable((await project.log()).map((c) => c.message))).toMatchInlineSnapshot(`
       [
         "Undo <short>: Rename card",
         "Rename card",
@@ -329,31 +323,30 @@ describe('projects: session, draft, commit, undo, branches', () => {
     `)
 
     // branches: create, work on it, fast-forward merge
-    expect((await api('POST', `${p}/branches`, { name: 'draft' })).json).toMatchInlineSnapshot(`
-      {
-        "ok": true,
-      }
-    `)
-    expect((await api('GET', `${p}/branches`)).json).toMatchInlineSnapshot(`
+    await project.createBranch({ name: 'draft' })
+    expect(await project.branches()).toMatchInlineSnapshot(`
       [
         "draft",
         "main",
       ]
     `)
-    const s3 = (await api('POST', `${p}/sessions`, { author, branch: 'draft' })).json.sessionId as string
-    await api('POST', `${p}/sessions/${s3}/ops`, {
-      ops: [{ op: 'write', path: 'Extra.tsx', content: 'export const extra = 1' }],
-    })
-    expect((await api('POST', `${p}/sessions/${s3}/commit`, { message: 'Extra on draft' })).json.ok).toMatchInlineSnapshot(`true`)
-    expect((await api('GET', `${p}/files?ref=main`)).json).toMatchInlineSnapshot(`
+    const s3 = await project.openSession({ author, branch: 'draft' })
+    await s3.apply({ ops: [{ op: 'write', path: 'Extra.tsx', content: 'export const extra = 1' }] })
+    expect((await s3.commit({ message: 'Extra on draft' })).ok).toMatchInlineSnapshot(`true`)
+    expect(await project.files()).toMatchInlineSnapshot(`
       [
         "App.tsx",
         "Card.tsx",
         "lovepack.json",
       ]
     `)
-    expect((await api('POST', `${p}/merge`, { branch: 'draft' })).status).toMatchInlineSnapshot(`200`)
-    expect((await api('GET', `${p}/files?ref=main`)).json).toMatchInlineSnapshot(`
+    expect(stable(await project.merge({ branch: 'draft' }))).toMatchInlineSnapshot(`
+      {
+        "sha": "<sha3>",
+        "url": "/p/<project>/r/<sha3>/index.js",
+      }
+    `)
+    expect(await project.files()).toMatchInlineSnapshot(`
       [
         "App.tsx",
         "Card.tsx",
@@ -361,18 +354,19 @@ describe('projects: session, draft, commit, undo, branches', () => {
         "lovepack.json",
       ]
     `)
-    expect((await api('DELETE', `${p}/branches/draft`)).json).toMatchInlineSnapshot(`
-      {
-        "ok": true,
-      }
+    await project.deleteBranch({ name: 'draft' })
+    expect(await project.branches()).toMatchInlineSnapshot(`
+      [
+        "main",
+      ]
     `)
 
     // viewers saw drafts and commits in order
-    await until((m) => m.type === 'update' && m.message === 'Merge draft')
-    ws.close()
-    const commitUrls = messages.filter((m) => m.type === 'update' && m.kind === 'commit').map((m) => m.url)
+    await live.until((m) => m.type === 'update' && m.kind === 'commit' && m.message === 'Merge draft')
+    live.close()
+    const commitUrls = live.messages.flatMap((m) => (m.type === 'update' && m.kind === 'commit' ? [m.url] : []))
     expect(
-      await Promise.all(commitUrls.map(async (url) => (await fetch(`${URL_BASE}${url}`)).status)),
+      await Promise.all(commitUrls.map(async (url) => (await fetch(`${endpoint}${url}`)).status)),
     ).toMatchInlineSnapshot(`
       [
         200,
@@ -382,7 +376,7 @@ describe('projects: session, draft, commit, undo, branches', () => {
         200,
       ]
     `)
-    expect(stable(messages.map(({ author, ...m }: any) => m))).toMatchInlineSnapshot(`
+    expect(stable(live.messages.map((m) => ({ ...m, author: undefined })))).toMatchInlineSnapshot(`
       [
         {
           "drafts": [],
@@ -416,9 +410,9 @@ describe('projects: session, draft, commit, undo, branches', () => {
           "branch": "main",
           "kind": "commit",
           "message": "Rename card",
-          "sha": "<sha3>",
+          "sha": "<sha4>",
           "type": "update",
-          "url": "/p/<project>/r/<sha3>/index.js",
+          "url": "/p/<project>/r/<sha4>/index.js",
         },
         {
           "outcome": "committed",
@@ -437,9 +431,9 @@ describe('projects: session, draft, commit, undo, branches', () => {
           "branch": "draft",
           "kind": "commit",
           "message": "Extra on draft",
-          "sha": "<sha4>",
+          "sha": "<sha3>",
           "type": "update",
-          "url": "/p/<project>/r/<sha4>/index.js",
+          "url": "/p/<project>/r/<sha3>/index.js",
         },
         {
           "outcome": "committed",
@@ -450,9 +444,9 @@ describe('projects: session, draft, commit, undo, branches', () => {
           "branch": "main",
           "kind": "commit",
           "message": "Merge draft",
-          "sha": "<sha4>",
+          "sha": "<sha3>",
           "type": "update",
-          "url": "/p/<project>/r/<sha4>/index.js",
+          "url": "/p/<project>/r/<sha3>/index.js",
         },
       ]
     `)
@@ -471,30 +465,17 @@ function gitError(fn: () => unknown) {
 
 describe('git remote', () => {
   it('clone, push sources, dist is built on top', { timeout: 120_000 }, async () => {
-    const id = `g-${Math.random().toString(36).slice(2, 10)}`
-    const p = `/api/projects/${id}`
-    await api('POST', p, {})
+    const project = newProject('g')
+    await project.init()
+    const live = watchLive(project)
+    await live.until((m) => m.type === 'hello')
 
-    const messages: any[] = []
-    const waiters: Array<() => void> = []
-    const ws = new WebSocket(`${URL_BASE.replace('https', 'wss')}/p/${id}/live`)
-    ws.onmessage = (e) => {
-      messages.push(JSON.parse(String(e.data)))
-      waiters.splice(0).forEach((w) => w())
-    }
-    const until = (pred: (m: any) => boolean) =>
-      new Promise<void>((resolve) => {
-        const check = () => (messages.some(pred) ? resolve() : waiters.push(check))
-        check()
-      })
-    await until((m) => m.type === 'hello')
-
-    const write = (await api('POST', `${p}/git-access`, { scope: 'write' })).json
-    const read = (await api('POST', `${p}/git-access`, { scope: 'read' })).json
-    expect({ url: write.url.replace(URL_BASE, '<origin>').replace(id, '<id>'), scope: write.scope }).toMatchInlineSnapshot(`
+    const write = await project.gitAccess({ scope: 'write' })
+    const read = await project.gitAccess({ scope: 'read' })
+    expect(stable({ url: write.url.replace(endpoint, '<origin>'), scope: write.scope })).toMatchInlineSnapshot(`
       {
         "scope": "write",
-        "url": "<origin>/git/<id>.git",
+        "url": "<origin>/git/<project>.git",
       }
     `)
 
@@ -518,17 +499,17 @@ describe('git remote', () => {
     writeFileSync(join(w, 'App.tsx'), 'export default function App() { return <div className="p-4 bg-red-500">From git</div> }\n')
     git(w, 'commit', '-am', 'Edit from git')
     git(w, 'push', 'origin', 'main')
-    await until((m) => m.type === 'update' && m.message === 'Build dist for pushed sources')
+    await live.until((m) => m.type === 'update' && m.kind === 'commit' && m.message === 'Build dist for pushed sources')
 
-    const js = await (await fetch(`${URL_BASE}/p/${id}/r/main/index.js`)).text()
-    const css = await (await fetch(`${URL_BASE}/p/${id}/r/main/index.css`)).text()
+    const js = await (await fetch(`${endpoint}/p/${project.id}/r/main/index.js`)).text()
+    const css = await (await fetch(`${endpoint}/p/${project.id}/r/main/index.css`)).text()
     expect({ js: js.includes('From git'), tailwind: css.includes('bg-red-500') }).toMatchInlineSnapshot(`
       {
         "js": true,
         "tailwind": true,
       }
     `)
-    expect((await api('GET', `${p}/log`)).json.map((c: any) => c.message)).toMatchInlineSnapshot(`
+    expect((await project.log()).map((c) => c.message)).toMatchInlineSnapshot(`
       [
         "Build dist for pushed sources",
         "Edit from git",
@@ -556,6 +537,6 @@ describe('git remote', () => {
         "remote: Missing or invalid git token. Create one with POST /api/projects/:id/git-access",
       ]
     `)
-    ws.close()
+    live.close()
   })
 })

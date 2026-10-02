@@ -2,7 +2,7 @@ use pnpm to install dependencies
 
 after changes run `pnpm tsc`. after every big change run `pnpm deployment` to deploy the script and `pnpm test` to update snapshots (-u --run are already passed)
 
-`pnpm test` runs against the deployed worker. `pnpm test:local` (`USE_LOCAL=1`) runs the legacy `/api/bundle` tests against the local bundler.
+`pnpm test` runs against the deployed worker. Use the typed client (`src/client.ts`) in tests, scripts and examples, not raw `fetch` to `/api/*`.
 
 
 to read github files and repos docs use gitchamber. use `curl https://gitchamber.com` to see docs
@@ -33,27 +33,16 @@ Before updating Spiceflow code always read https://getspiceflow.com to know how 
 
 ## Project Overview
 
-This is a Cloudflare Workers project that provides a bundling API for TypeScript/TSX/JSX code transformation and Tailwind CSS generation.
+This is a Cloudflare Workers project for versioned React UI projects: agents edit files, the worker bundles TypeScript/TSX/JSX with Tailwind CSS and commits sources plus `dist/` to Cloudflare Artifacts.
 
 ### Key Features
 
 - TypeScript/TSX/JSX bundling using Rollup (`@rollup/browser`, patched wasm loader) + sucrase
 - Tailwind CSS v4 generation via `compile()` (no PostCSS), see `docs/tailwind-v4-upgrade.md`
 - npm package resolution via esm.sh CDN
-- Interactive web UI with file upload support
+- Live viewer page at `/view/:id`
 - Deployed at: https://remote-bundler.fumabase.com
-
-### API Endpoint (legacy, stateless)
-
-POST /api/bundle
-
-- `files`: `{ path, content }[]` (required)
-- `entryPoint`: entry file (default: first file)
-- `externalPackages`: packages to treat as external (default: [])
-- `siteId`: output id, `[a-zA-Z0-9_-]+` (required)
-
-Output is stored in KV and served from `GET /bundle/<siteId>/*`.
 
 ## Projects (Artifacts)
 
-See `docs/projects.md`. Build logic shared with `/api/bundle` lives in `src/build.ts`. `ProjectDO` (`src/project-do.ts`) is the single writer; its storage and caches live only in `ProjectStore` (`src/project-store.ts`); REST in `src/projects-api.ts`; client in `src/client.ts`. `src/project.test.ts` runs against the deployed worker and needs `LOVEPACK_API_KEY` (read from `.dev.vars`).
+See `docs/projects.md`. Build logic lives in `src/build.ts` (Rollup plugins in `src/rollup-plugins.ts`). `ProjectDO` (`src/project-do.ts`) is the single writer; its storage and caches live only in `ProjectStore` (`src/project-store.ts`); REST in `src/projects-api.ts`; client in `src/client.ts`. `src/project.test.ts` and `src/bundle.test.ts` run against the deployed worker and need `LOVEPACK_API_KEY` (read from `.dev.vars`). `bundle.test.ts` tests bundler output through draft builds of one project.

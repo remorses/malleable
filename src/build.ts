@@ -1,4 +1,4 @@
-import { rollup, type Plugin, type RollupLog } from '@rollup/browser'
+import { rollup, type Plugin } from '@rollup/browser'
 import commonjsImport from '@rollup/plugin-commonjs'
 import path from 'path-browserify'
 import { generateTailwindCSS, type TailwindOptions } from './generate-tailwind.js'
@@ -28,7 +28,7 @@ export interface BuildCache {
 
 const CACHE_VERSION = 'v4'
 
-/** KV-backed cache under the `cache:` prefix, separate from published `/bundle/*` keys. */
+/** KV-backed cache under the `cache:` prefix. */
 export function createKvBuildCache(
   kv: KVNamespace,
   waitUntil: (promise: Promise<unknown>) => void,
@@ -80,24 +80,16 @@ export interface BuildOptions {
   files: BuildFile[]
   entryPoint: string
   externalPackages: string[]
-  /** Absolute CSS URL for the entry. When omitted the CSS is resolved relative to the entry module. */
-  cssUrl?: string
-  /** Output dir name inside the virtual fs, only used to strip prefixes */
-  outdir?: string
 }
 
 export interface BuildSuccess {
   ok: true
   outputs: BuildOutput[]
   css: string
-  warnings: any[]
-  rawOutputs: Array<{ path: string; size: number }>
 }
 
 export interface BuildFailure {
   ok: false
-  /** True when the bundler reported the errors (user code problem) */
-  fromBundler: boolean
   /** Formatted bundler messages, no ANSI colors */
   errorText: string
   errors: Array<{ file?: string; line?: number; text: string }>
@@ -125,16 +117,13 @@ const commonjs = commonjsImport as unknown as (
 
 const CODE_FILE = /\.(tsx?|jsx?|mjs|css|html)$/
 
-export function formatBuildError(error: any): BuildFailure {
+function formatBuildError(error: any): BuildFailure {
   const message = String(error?.message || 'Build failed')
-  // Rollup errors always carry a code; anything else is an internal failure
-  const fromBundler = typeof error?.code === 'string'
   const loc = error?.loc as { file?: string; line: number; column: number } | undefined
   const file = loc?.file ?? error?.id
   const where = loc ? `\n\n    ${file}:${loc.line}:${loc.column}:\n${error.frame ?? ''}` : ''
   return {
     ok: false,
-    fromBundler,
     errorText: `✘ [ERROR] ${message}${where}\n`,
     errors: [{ file, line: loc?.line, text: message }],
   }
@@ -144,8 +133,7 @@ export function formatBuildError(error: any): BuildFailure {
 export async function buildFiles(
   options: BuildOptions,
 ): Promise<BuildSuccess | BuildFailure> {
-  const outdir = options.outdir ?? 'out'
-  const { files, entryPoint, externalPackages, cssUrl, cache } = options
+  const { files, entryPoint, externalPackages, cache } = options
 
   const allCode = files
     .filter((f) => CODE_FILE.test(f.path))
@@ -154,22 +142,19 @@ export async function buildFiles(
 
   try {
     await loadRollupWasm()
-    const warnings: RollupLog[] = []
     const bundle = await rollup({
       input: ENTRY_PATH,
       plugins: [
         localFilesPlugin({
-          files: [
-            ...files,
-            { path: ENTRY_PATH, content: entryWrapperSource({ actualEntryPath: entryPoint, cssUrl }) },
-          ],
+          files: [...files, { path: ENTRY_PATH, content: entryWrapperSource(entryPoint) }],
           entry: ENTRY_PATH,
         }),
         // local files only; CDN modules are already ESM
         commonjs({ include: /^\/[^?]*\.c?js$/ }),
         esmShPlugin({ externalPackages, cache }),
       ],
-      onwarn: (w) => warnings.push(w),
+      // warnings are not shown to users; CDN modules emit many of them
+      onwarn: () => {},
     })
     const output = await bundle
       .generate({
@@ -193,20 +178,8 @@ export async function buildFiles(
         .filter((f) => f.path.endsWith('.css'))
         .map((f) => [path.posix.resolve('/', f.path), f.content]),
     )
-    const css = await generateTailwindCached(allCode, { userCss: importedCss, cssFiles }, cache).catch((e) => {
-      // project CSS that Tailwind rejects (bad @apply) is a user error
-      throw importedCss ? Object.assign(e, { code: 'TAILWIND_ERROR' }) : e
-    })
-    return {
-      ok: true,
-      css,
-      warnings: warnings.map((w) => ({ code: w.code, text: w.message })),
-      outputs,
-      rawOutputs: outputs.map((o) => ({
-        path: `/${outdir}/${o.path}`,
-        size: new TextEncoder().encode(o.text).byteLength,
-      })),
-    }
+    const css = await generateTailwindCached(allCode, { userCss: importedCss, cssFiles }, cache)
+    return { ok: true, css, outputs }
   } catch (error) {
     return formatBuildError(error)
   }

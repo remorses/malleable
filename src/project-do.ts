@@ -21,13 +21,17 @@ export { DIST_DIR, type Author, type SessionOp } from './project-store.js'
 
 export type BuildError = { file?: string; line?: number; text: string }
 
+/**
+ * `url` is the entry module of the result, relative to the Worker origin. An agent can send it
+ * to the user in its own response stream, so the client does not need `watch`.
+ */
 export type CommitResult =
-  | { ok: true; sha: string; noop?: boolean }
+  | { ok: true; sha: string; url: string; noop?: boolean }
   | { ok: false; reason: 'build-error'; errors: BuildError[]; errorText: string }
   | { ok: false; reason: 'conflict'; head: string }
 
 export type BuildResult =
-  | { ok: true; build: number; files: string[] }
+  | { ok: true; build: number; url: string; files: string[] }
   | { ok: false; errors: BuildError[]; errorText: string }
 
 export interface LogEntry {
@@ -304,15 +308,9 @@ export class ProjectDO extends DurableObject<Env> {
     }
     // throws if the session ended while building
     const build = this.store.sessions.addDraft(s.id, built.dist)
-    this.broadcast({
-      type: 'update',
-      kind: 'draft',
-      url: this.moduleUrl(`d/${encodeURIComponent(s.id)}/${build}`),
-      session: s.id,
-      branch: s.branch,
-      build,
-    })
-    return { ok: true, build, files: [...built.dist.keys()] }
+    const url = this.moduleUrl(`d/${encodeURIComponent(s.id)}/${build}`)
+    this.broadcast({ type: 'update', kind: 'draft', url, session: s.id, branch: s.branch, build })
+    return { ok: true, build, url, files: [...built.dist.keys()] }
   }
 
   /** Output file of a draft build, served by the Worker at /d/:session/:build/* */
@@ -347,7 +345,7 @@ export class ProjectDO extends DurableObject<Env> {
       }
       if (sameTree(tree, headTree)) {
         this.endSession(s.id, 'committed')
-        return { ok: true, sha: head, noop: true }
+        return { ok: true, sha: head, url: this.moduleUrl(`r/${head}`), noop: true }
       }
       const res = await this.commitTree(s.branch, tree, opts.message, s.author)
       if (!res.ok) return res
@@ -443,7 +441,7 @@ export class ProjectDO extends DurableObject<Env> {
   }
 
   /** Fast-forward `branch` into `into`. */
-  async merge(opts: { branch: string; into?: string }): Promise<{ sha: string }> {
+  async merge(opts: { branch: string; into?: string }): Promise<{ sha: string; url: string }> {
     const { branch, into = 'main' } = opts
     return this.serial(async () => {
       this.assertNoOpenSession(into)
@@ -457,14 +455,14 @@ export class ProjectDO extends DurableObject<Env> {
         }
         await this.push(branch, into)
         this.store.setHead(into, sha)
-        await this.announceCommit({
+        this.announceCommit({
           branch: into,
           sha,
           message: `Merge ${branch}`,
           author: { kind: 'system', id: 'lovepack' },
         })
       }
-      return { sha }
+      return { sha, url: this.moduleUrl(`r/${sha}`) }
     })
   }
 
@@ -520,7 +518,7 @@ export class ProjectDO extends DurableObject<Env> {
       const expected = new Map([...built.dist].map(([p, c]) => [`${DIST_DIR}/${p}`, c]))
       if (sameTree(expected, await this.readDist())) {
         // The push already carries a matching dist: just tell viewers
-        await this.announceCommit({
+        this.announceCommit({
           branch,
           sha: head,
           message: 'Pushed with git',
@@ -571,18 +569,15 @@ export class ProjectDO extends DurableObject<Env> {
     return `/p/${projectId}/${route}/index.js`
   }
 
-  private async announceCommit(commit: {
+  private announceCommit(commit: {
     branch: string
     sha: string
     message: string
     author: Author
   }) {
-    this.broadcast({
-      type: 'update',
-      kind: 'commit',
-      url: this.moduleUrl(`r/${commit.sha}`),
-      ...commit,
-    })
+    const url = this.moduleUrl(`r/${commit.sha}`)
+    this.broadcast({ type: 'update', kind: 'commit', url, ...commit })
+    return url
   }
 
   private broadcast(msg: LiveMessage) {
@@ -830,8 +825,8 @@ export class ProjectDO extends DurableObject<Env> {
     })
     await this.push(branch)
     this.store.setHead(branch, sha)
-    await this.announceCommit({ branch, sha, message, author })
-    return { ok: true, sha }
+    const url = this.announceCommit({ branch, sha, message, author })
+    return { ok: true, sha, url }
   }
 
   /** First commit for a project created without a template */
