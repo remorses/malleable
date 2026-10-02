@@ -470,11 +470,18 @@ describe('git remote', () => {
     const live = watchLive(project)
     await live.until((m) => m.type === 'hello')
 
-    const write = await project.gitAccess({ scope: 'write' })
-    const read = await project.gitAccess({ scope: 'read' })
-    expect(stable({ url: write.url.replace(endpoint, '<origin>'), scope: write.scope })).toMatchInlineSnapshot(`
+    // tokens never expire by default; a ttl sets an expiry
+    const write = await project.createGitToken({ label: 'laptop' })
+    const read = await project.createGitToken({ scope: 'read', ttl: 3600 })
+    expect({
+      url: stable(write.url.replace(endpoint, '<origin>')),
+      expires: [write.expiresAt, read.expiresAt! - read.createdAt],
+    }).toMatchInlineSnapshot(`
       {
-        "scope": "write",
+        "expires": [
+          null,
+          3600000,
+        ],
         "url": "<origin>/git/<project>.git",
       }
     `)
@@ -521,6 +528,30 @@ describe('git remote', () => {
     git(w, 'pull', '--ff-only', 'origin', 'main')
     expect(existsSync(join(w, 'dist', 'index.js'))).toMatchInlineSnapshot(`true`)
 
+    // listing shows usage but never the secret
+    expect(
+      (await project.gitTokens()).map(({ id, createdAt, expiresAt, lastUsedAt, ...t }) => ({
+        ...t,
+        expires: expiresAt !== null,
+        used: lastUsedAt !== null,
+      })),
+    ).toMatchInlineSnapshot(`
+      [
+        {
+          "expires": false,
+          "label": "laptop",
+          "scope": "write",
+          "used": true,
+        },
+        {
+          "expires": true,
+          "label": "",
+          "scope": "read",
+          "used": false,
+        },
+      ]
+    `)
+
     // a read token can clone but not push; a bad token is refused
     const r = join(root, 'r')
     git(root, 'clone', read.authenticatedUrl, 'r')
@@ -529,12 +560,25 @@ describe('git remote', () => {
     git(r, 'commit', '-m', 'x')
     expect(gitError(() => git(r, 'push', 'origin', 'main'))).toMatchInlineSnapshot(`
       [
-        "remote: Missing or invalid git token. Create one with POST /api/projects/:id/git-access",
+        "remote: Missing or invalid git token. Create one with POST /api/projects/:id/git-tokens",
       ]
     `)
     expect(gitError(() => git(root, 'clone', write.url.replace('://', '://x:bad@'), 'bad'))).toMatchInlineSnapshot(`
       [
-        "remote: Missing or invalid git token. Create one with POST /api/projects/:id/git-access",
+        "remote: Missing or invalid git token. Create one with POST /api/projects/:id/git-tokens",
+      ]
+    `)
+
+    // a revoked token stops working at once
+    await project.revokeGitToken({ id: write.id })
+    expect(gitError(() => git(w, 'fetch', 'origin'))).toMatchInlineSnapshot(`
+      [
+        "remote: Missing or invalid git token. Create one with POST /api/projects/:id/git-tokens",
+      ]
+    `)
+    expect((await project.gitTokens()).map((t) => t.scope)).toMatchInlineSnapshot(`
+      [
+        "read",
       ]
     `)
     live.close()

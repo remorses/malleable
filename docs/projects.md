@@ -22,13 +22,14 @@ A **project** is a git repo in Cloudflare Artifacts plus a Durable Object (`Proj
   "compatibility_date": "2026-09-01",
   "artifacts": [{ "binding": "ARTIFACTS", "namespace": "lovepack" }],
   "kv_namespaces": [{ "binding": "jsCache", "id": "<kv id>" }],  // build cache
+  "vars": { "PUBLIC_URL": "https://remote-bundler.fumabase.com" },  // origin used in git remote urls
   "durable_objects": { "bindings": [{ "class_name": "ProjectDO", "name": "PROJECT" }] },
   "migrations": [{ "tag": "v3", "new_sqlite_classes": ["ProjectDO"] }]
 }
 ```
 
 ```bash
-wrangler secret put LOVEPACK_API_KEY     # REST auth and git token signing key
+wrangler secret put LOVEPACK_API_KEY     # REST auth
 ```
 
 ```ts
@@ -121,7 +122,8 @@ The entry module default-exports the component. Its CSS is loaded relative to th
 | `/p/:id/d/:sid/:build/*` | GET | draft build file |
 | `/p/:id/live` | WS | `hello`, `update` (`kind: 'draft' \| 'commit'`), `build-error`, `draft-end` |
 | `/view/:id` | GET | minimal live viewer page |
-| `/api/projects/:id/git-access` | POST | mint a git token, see Git remote |
+| `/api/projects/:id/git-tokens` | POST, GET | create a git token (secret shown once), list tokens |
+| `/api/projects/:id/git-tokens/:tokenId` | DELETE | revoke a git token |
 | `/git/:id.git/*` | GET, POST | git smart HTTP proxy |
 
 ## Git remote
@@ -129,9 +131,13 @@ The entry module default-exports the component. Its CSS is loaded relative to th
 Users can edit with plain git. The Worker proxies Artifacts' git remote and checks its own tokens, so Artifacts credentials never leave the Worker.
 
 ```ts
-// mint a token (API key needed); scope read|write, ttl 60..86400 seconds
-const { authenticatedUrl } = await project.gitAccess({ scope: 'write', ttl: 3600 })
-// => { url, authenticatedUrl, username, password, scope, expiresAt }
+// REST client (API key) or DO RPC from a Worker: same arguments, same result.
+// scope read|write (default write); ttl in seconds, omit it for a token that never expires
+const { id, authenticatedUrl } = await project.createGitToken({ label: 'laptop' })
+// => { id, token, url, authenticatedUrl, username, scope, label, createdAt, expiresAt, lastUsedAt }
+
+await project.gitTokens()             // list, with lastUsedAt; secrets are never returned again
+await project.revokeGitToken({ id })  // the next git request with it gets 401
 ```
 
 ```bash
@@ -141,7 +147,7 @@ git commit -am 'Tweak' && git push origin main
 ```
 
 - **After a push**, `ProjectDO.afterGitPush()` builds the pushed sources. If `dist/` does not match, it adds a commit `Build dist for pushed sources`, and viewers get an `update`. Run `git pull` to get it.
-- **Tokens** are stateless HMACs (`lp_<scope>_<expiry>_<mac>`) signed with `LOVEPACK_API_KEY`, bound to one project.
+- **Tokens** (`lpgit_<48 hex>`) live in the project DO (`GitTokenStore` in `src/project-store.ts`). Only their SHA-256 is stored. Every git request asks the DO to verify the token, so revocation is immediate.
 - **Push while an agent session is open** is allowed. The session's next `commit` returns `conflict`; retry with `rebase: true`.
 - A push with a build error still lands, viewers get `build-error` with `session: 'git-push'`, and the head keeps its old `dist/`.
 
@@ -159,7 +165,7 @@ LOVEPACK_API_KEY=... pnpm tsx examples/agent.ts demo1     # then open $ORIGIN/vi
 
 | Class | Methods |
 |---|---|
-| `Project` | `init`, `info`, `openSession`, `sessions`, `log`, `files`, `undo`, `restore`, `branches`, `createBranch`, `merge`, `deleteBranch`, `gitAccess`, `watch` |
+| `Project` | `init`, `info`, `openSession`, `sessions`, `log`, `files`, `undo`, `restore`, `branches`, `createBranch`, `merge`, `deleteBranch`, `createGitToken`, `gitTokens`, `revokeGitToken`, `watch` |
 | `Session` | `apply`, `read`, `list`, `diff`, `build`, `commit`, `discard` |
 
 Failed calls throw `LovepackError` with `status` and `code` (for example `SESSION_ACTIVE`, `REPLACE_AMBIGUOUS`). Responses are plain JSON.

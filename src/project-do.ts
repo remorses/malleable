@@ -9,13 +9,15 @@ import {
   DIST_DIR,
   ProjectStore,
   type Author,
+  type GitScope,
+  type GitTokenInfo,
   type LoadedSession,
   type SessionOp,
   type SessionOutcome,
   type Tree,
 } from './project-store.js'
 
-export { DIST_DIR, type Author, type SessionOp } from './project-store.js'
+export { DIST_DIR, type Author, type GitScope, type GitTokenInfo, type SessionOp } from './project-store.js'
 
 // ───────────────────────── public types (RPC-safe plain data) ─────────────────────────
 
@@ -33,6 +35,16 @@ export type CommitResult =
 export type BuildResult =
   | { ok: true; build: number; url: string; files: string[] }
   | { ok: false; errors: BuildError[]; errorText: string }
+
+/** A new git token with ready-to-use remote urls. `token` is returned only here. */
+export interface CreatedGitToken extends GitTokenInfo {
+  token: string
+  /** `https://<worker>/git/<projectId>.git` */
+  url: string
+  /** `url` with the token embedded. Git saves it in .git/config. */
+  authenticatedUrl: string
+  username: string
+}
 
 export interface LogEntry {
   sha: string
@@ -108,6 +120,7 @@ export function repoNameFor(projectId: string): string {
 interface Env {
   ARTIFACTS: Artifacts
   jsCache: KVNamespace
+  PUBLIC_URL: string
 }
 
 const WORKDIR = '/w'
@@ -482,6 +495,38 @@ export class ProjectDO extends DurableObject<Env> {
       })
       this.store.deleteHead(name)
     })
+  }
+
+  // ── git remote tokens ──
+
+  /** Revocable token for the git remote. Without `ttl` (seconds) it never expires. */
+  async createGitToken(opts: { scope?: GitScope; label?: string; ttl?: number } = {}): Promise<CreatedGitToken> {
+    const { projectId } = this.meta()
+    const created = await this.store.gitTokens.create({
+      scope: opts.scope ?? 'write',
+      label: opts.label ?? '',
+      ttlMs: opts.ttl && opts.ttl * 1000,
+    })
+    const url = `${this.env.PUBLIC_URL}/git/${projectId}.git`
+    return {
+      ...created,
+      url,
+      authenticatedUrl: url.replace('://', `://x:${created.token}@`),
+      username: 'x',
+    }
+  }
+
+  async gitTokens(): Promise<GitTokenInfo[]> {
+    return this.store.gitTokens.list()
+  }
+
+  async revokeGitToken(opts: { id: string }) {
+    this.store.gitTokens.revoke(opts.id)
+  }
+
+  /** Called by the Worker on every git request. Undefined means refuse. */
+  async verifyGitToken(opts: { token: string }): Promise<GitScope | undefined> {
+    return this.store.gitTokens.verify(opts.token)
   }
 
   // ── external pushes (git remote proxied by the Worker) ──

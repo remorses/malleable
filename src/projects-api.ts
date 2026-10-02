@@ -41,6 +41,7 @@ const statusByCode: Record<string, number> = {
   SESSION_ACTIVE: 409,
   NOT_FAST_FORWARD: 409,
   CANNOT_DELETE_DEFAULT_BRANCH: 400,
+  GIT_TOKEN_NOT_FOUND: 404,
 }
 
 /** Errors thrown by the DO start with a `CODE:` prefix. Map them to HTTP statuses. */
@@ -83,34 +84,13 @@ function fileResponse(body: BodyInit, path: string, immutable: boolean) {
   })
 }
 
-// ── git access tokens: stateless, `lp_<scope>_<expiry>_<hmac(projectId.scope.expiry)>` ──
+// ── git remote tokens: stored per project in the DO, see GitTokenStore ──
 
-export type GitScope = 'read' | 'write'
-
-export interface GitAccess {
-  url: string
-  /** `git clone` URL with the token embedded; use only for short-lived commands */
-  authenticatedUrl: string
-  username: string
-  password: string
-  scope: GitScope
-  expiresAt: number
-}
-
-async function hmacHex(secret: string, data: string) {
-  const enc = new TextEncoder()
-  const key = await crypto.subtle.importKey('raw', enc.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign'])
-  const sig = new Uint8Array(await crypto.subtle.sign('HMAC', key, enc.encode(data)))
-  return [...sig].map((b) => b.toString(16).padStart(2, '0')).join('')
-}
-
-/** Returns the granted scope, or undefined when the token is invalid, expired or for another project */
-async function checkGitToken(env: ProjectsEnv, projectId: string, token: string): Promise<GitScope | undefined> {
-  const [prefix, scope, expiry, mac] = token.split('_')
-  if (prefix !== 'lp' || (scope !== 'read' && scope !== 'write') || !mac) return undefined
-  if (Number(expiry) < Date.now() / 1000) return undefined
-  const expected = await hmacHex(env.LOVEPACK_API_KEY, `${projectId}.${scope}.${expiry}`)
-  return (await keyMatches(mac, expected)) ? scope : undefined
+/** Password of a Basic auth header, empty when missing */
+function basicPassword(request: Request) {
+  const header = request.headers.get('authorization') ?? ''
+  if (!header.startsWith('Basic ')) return ''
+  return atob(header.slice('Basic '.length)).split(':').slice(1).join(':')
 }
 
 // Upstream (Artifacts) remote and write token, cached per isolate
@@ -190,27 +170,28 @@ export const projectsApi = new Spiceflow()
   })
   .route({
     method: 'POST',
-    path: '/api/projects/:id/git-access',
+    path: '/api/projects/:id/git-tokens',
     request: z.object({
       scope: z.enum(['read', 'write']).default('write'),
-      ttl: z.number().int().min(60).max(86400).default(3600),
+      label: z.string().max(100).default(''),
+      /** Seconds until expiry. Omit for a token that never expires. */
+      ttl: z.number().int().min(60).optional(),
     }),
-    async handler({ request, params, state }): Promise<GitAccess> {
-      const { scope, ttl } = await request.json()
-      repoNameFor(params.id)
-      const expiresAt = Math.floor(Date.now() / 1000) + ttl
-      const mac = await hmacHex(state.env.LOVEPACK_API_KEY, `${params.id}.${scope}.${expiresAt}`)
-      const token = `lp_${scope}_${expiresAt}_${mac}`
-      const origin = new URL(request.url).origin
-      const url = `${origin}/git/${params.id}.git`
-      return {
-        url,
-        authenticatedUrl: url.replace('://', `://x:${token}@`),
-        username: 'x',
-        password: token,
-        scope,
-        expiresAt,
-      }
+    async handler({ request, params, state }) {
+      return stubFor(state.env, params.id).createGitToken(await request.json())
+    },
+  })
+  .route({
+    method: 'GET',
+    path: '/api/projects/:id/git-tokens',
+    handler: ({ params, state }) => stubFor(state.env, params.id).gitTokens(),
+  })
+  .route({
+    method: 'DELETE',
+    path: '/api/projects/:id/git-tokens/:tokenId',
+    async handler({ params, state }) {
+      await stubFor(state.env, params.id).revokeGitToken({ id: params.tokenId })
+      return { ok: true }
     },
   })
   .route({
@@ -407,14 +388,10 @@ export const projectsPublic = new Spiceflow()
         return new Response('Unsupported service', { status: 403 })
       }
 
-      const password = Buffer.from((request.headers.get('authorization') ?? '').replace(/^Basic /, ''), 'base64')
-        .toString()
-        .split(':')
-        .slice(1)
-        .join(':')
-      const scope = await checkGitToken(state.env, projectId, password)
+      const password = basicPassword(request)
+      const scope = password ? await stubFor(state.env, projectId).verifyGitToken({ token: password }) : undefined
       if (!scope || (service === 'git-receive-pack' && scope !== 'write')) {
-        return new Response('Missing or invalid git token. Create one with POST /api/projects/:id/git-access', {
+        return new Response('Missing or invalid git token. Create one with POST /api/projects/:id/git-tokens', {
           status: 401,
           headers: { 'WWW-Authenticate': 'Basic realm="lovepack"' },
         })

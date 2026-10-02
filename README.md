@@ -32,7 +32,7 @@ project.watch({
 Users can also edit with plain git:
 
 ```ts
-const { authenticatedUrl } = await project.gitAccess({ scope: 'write' })
+const { authenticatedUrl } = await project.createGitToken({ label: 'laptop' })  // revocable, no expiry
 ```
 
 ```bash

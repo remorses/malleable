@@ -268,6 +268,106 @@ class SessionStore {
   }
 }
 
+// ───────────────────────── git tokens ─────────────────────────
+
+export type GitScope = 'read' | 'write'
+
+/** A git token as listed. The secret itself is never stored, only its SHA-256. */
+export interface GitTokenInfo {
+  id: string
+  scope: GitScope
+  label: string
+  /** Unix ms */
+  createdAt: number
+  /** Unix ms, null when the token never expires */
+  expiresAt: number | null
+  /** Unix ms of the last accepted git request, null when never used */
+  lastUsedAt: number | null
+}
+
+type GitTokenRow = {
+  id: string
+  scope: GitScope
+  label: string
+  created_at: number
+  expires_at: number | null
+  last_used_at: number | null
+}
+
+const toTokenInfo = (r: GitTokenRow): GitTokenInfo => ({
+  id: r.id,
+  scope: r.scope,
+  label: r.label,
+  createdAt: r.created_at,
+  expiresAt: r.expires_at,
+  lastUsedAt: r.last_used_at,
+})
+
+const hex = (bytes: ArrayBuffer | Uint8Array) =>
+  [...new Uint8Array(bytes)].map((b) => b.toString(16).padStart(2, '0')).join('')
+
+async function sha256(text: string) {
+  return hex(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text)))
+}
+
+/** Revocable git remote tokens of one project */
+class GitTokenStore {
+  constructor(private sql: SqlStorage) {}
+
+  /** Returns the secret once; only its hash is stored */
+  async create(opts: { scope: GitScope; label: string; ttlMs?: number }): Promise<GitTokenInfo & { token: string }> {
+    const id = `gt_${hex(crypto.getRandomValues(new Uint8Array(6)))}`
+    const token = `lpgit_${hex(crypto.getRandomValues(new Uint8Array(24)))}`
+    const now = Date.now()
+    const row: GitTokenRow = {
+      id,
+      scope: opts.scope,
+      label: opts.label,
+      created_at: now,
+      expires_at: opts.ttlMs ? now + opts.ttlMs : null,
+      last_used_at: null,
+    }
+    this.sql.exec(
+      `INSERT INTO git_tokens (id, hash, scope, label, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?)`,
+      row.id,
+      await sha256(token),
+      row.scope,
+      row.label,
+      row.created_at,
+      row.expires_at,
+    )
+    return { ...toTokenInfo(row), token }
+  }
+
+  list(): GitTokenInfo[] {
+    return this.sql
+      .exec<GitTokenRow>(
+        `SELECT id, scope, label, created_at, expires_at, last_used_at FROM git_tokens ORDER BY created_at`,
+      )
+      .toArray()
+      .map(toTokenInfo)
+  }
+
+  revoke(id: string) {
+    const { rowsWritten } = this.sql.exec(`DELETE FROM git_tokens WHERE id = ?`, id)
+    if (!rowsWritten) throw new Error(`GIT_TOKEN_NOT_FOUND: ${id}`)
+  }
+
+  /** Scope of a valid token, undefined when unknown, revoked or expired. Records the use. */
+  async verify(token: string): Promise<GitScope | undefined> {
+    const now = Date.now()
+    const [row] = this.sql
+      .exec<{ id: string; scope: GitScope; expires_at: number | null }>(
+        `SELECT id, scope, expires_at FROM git_tokens WHERE hash = ?`,
+        await sha256(token),
+      )
+      .toArray()
+    if (!row || (row.expires_at !== null && row.expires_at < now)) return undefined
+    this.sql.exec(`UPDATE git_tokens SET last_used_at = ? WHERE id = ?`, now, row.id)
+    return row.scope
+  }
+}
+
 // ───────────────────────── project store ─────────────────────────
 
 export class ProjectStore {
@@ -275,6 +375,7 @@ export class ProjectStore {
   /** Git remote url of the Artifacts repo */
   readonly remote: KvField<'remote'>
   readonly sessions: SessionStore
+  readonly gitTokens: GitTokenStore
   private headsField: KvField<'heads'>
 
   constructor(storage: DurableObjectStorage) {
@@ -286,11 +387,16 @@ export class ProjectStore {
       CREATE TABLE IF NOT EXISTS ops (
         seq INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT NOT NULL, op TEXT NOT NULL
       );
+      CREATE TABLE IF NOT EXISTS git_tokens (
+        id TEXT PRIMARY KEY, hash TEXT NOT NULL UNIQUE, scope TEXT NOT NULL, label TEXT NOT NULL,
+        created_at INTEGER NOT NULL, expires_at INTEGER, last_used_at INTEGER
+      );
     `)
     this.meta = new KvField(storage.kv, 'meta')
     this.remote = new KvField(storage.kv, 'remote')
     this.headsField = new KvField(storage.kv, 'heads')
     this.sessions = new SessionStore(storage)
+    this.gitTokens = new GitTokenStore(storage.sql)
   }
 
   /** Last known remote sha per branch */

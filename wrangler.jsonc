@@ -9,6 +9,8 @@
     { "binding": "jsCache", "id": "6b37928db4814bf2a05819634cb9845b" },
   ],
   "artifacts": [{ "binding": "ARTIFACTS", "namespace": "lovepack" }],
+  // Public origin of this Worker, used in git remote urls. Override in .dev.vars for local dev.
+  "vars": { "PUBLIC_URL": "https://remote-bundler.fumabase.com" },
   "observability": {
     "enabled": true,
   },

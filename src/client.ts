@@ -2,19 +2,22 @@ import type {
   Author,
   BuildResult,
   CommitResult,
+  CreatedGitToken,
+  GitScope,
+  GitTokenInfo,
   LiveMessage,
   LogEntry,
   ProjectInfo,
   SessionOp,
 } from './project-do.js'
-import type { GitAccess, GitScope } from './projects-api.js'
 
 export type {
   Author,
   BuildResult,
   CommitResult,
-  GitAccess,
+  CreatedGitToken,
   GitScope,
+  GitTokenInfo,
   LiveMessage,
   LogEntry,
   ProjectInfo,
@@ -105,9 +108,21 @@ export class Project {
     return call<Array<{ id: string; branch: string; author: Author }>>(this.options, 'GET', this.path('/sessions'))
   }
 
-  /** Short-lived token for the git remote. `scope` defaults to write, `ttl` (seconds) to 3600. */
-  gitAccess(opts: { scope?: GitScope; ttl?: number } = {}) {
-    return call<GitAccess>(this.options, 'POST', this.path('/git-access'), opts)
+  /**
+   * Token for the git remote, revocable with `revokeGitToken`. `scope` defaults to write.
+   * Without `ttl` (seconds) it never expires. The secret is returned only once.
+   */
+  createGitToken(opts: { scope?: GitScope; label?: string; ttl?: number } = {}) {
+    return call<CreatedGitToken>(this.options, 'POST', this.path('/git-tokens'), opts)
+  }
+
+  /** Tokens of this project, without their secrets */
+  gitTokens() {
+    return call<GitTokenInfo[]>(this.options, 'GET', this.path('/git-tokens'))
+  }
+
+  async revokeGitToken(opts: { id: string }) {
+    await call(this.options, 'DELETE', this.path(`/git-tokens/${encodeURIComponent(opts.id)}`))
   }
 
   log(opts: { branch?: string; limit?: number } = {}) {
