@@ -1,9 +1,20 @@
-# Malleable UI
+<div align='center' class='hidden'>
+    <br/>
+    <br/>
+    <h3>Malleable UI</h3>
+    <p>Versioned React UI that AI agents edit, build and commit live</p>
+    <br/>
+    <br/>
+</div>
 
 Versioned React UI projects on a Cloudflare Worker. Agents edit files in a **session**, viewers see **live drafts**, each agent message becomes one **git commit**. TypeScript, JSX and Tailwind are bundled on the fly.
 
+```bash
+npm i @malleable/ui
+```
+
 ```ts
-import { Project } from './src/client.ts'
+import { Project } from '@malleable/ui'
 
 const project = new Project({ endpoint: 'https://remote-bundler.fumabase.com', apiKey, id: 'u123' })
 await project.init()

@@ -161,7 +161,7 @@ MALLEABLE_API_KEY=... pnpm tsx examples/agent.ts demo1     # then open $ORIGIN/v
 
 ## Client
 
-`src/client.ts` wraps every REST route and the socket. `demo/App.tsx` and `examples/*.ts` are the reference use.
+`@malleable/ui` (source in `src/client.ts`) wraps every REST route and the socket. `demo/App.tsx` and `examples/*.ts` are the reference use.
 
 | Class | Methods |
 |---|---|

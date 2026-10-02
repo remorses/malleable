@@ -2,8 +2,8 @@ import { DurableObject } from 'cloudflare:workers'
 import git from 'isomorphic-git'
 import http from 'isomorphic-git/http/web'
 import dedent from 'string-dedent'
-import { buildFiles, createKvBuildCache, type BuildFile } from './build.js'
-import { MemoryFS } from './memory-fs.js'
+import { buildFiles, createKvBuildCache, type BuildFile } from './build.ts'
+import { MemoryFS } from './memory-fs.ts'
 import type {
   Author,
   BuildError,
@@ -17,7 +17,7 @@ import type {
   LogEntry,
   ProjectInfo,
   SessionOp,
-} from './api-types.js'
+} from './api-types.ts'
 import {
   applyOp,
   DIST_DIR,
@@ -25,9 +25,9 @@ import {
   type LoadedSession,
   type SessionOutcome,
   type Tree,
-} from './project-store.js'
+} from './project-store.ts'
 
-export { DIST_DIR } from './project-store.js'
+export { DIST_DIR } from './project-store.ts'
 
 export interface ProjectConfig {
   /** Entry file, its default export is the component */

@@ -11,7 +11,7 @@ import type {
   LogEntry,
   ProjectInfo,
   SessionOp,
-} from './api-types.js'
+} from './api-types.ts'
 
 export type {
   Author,

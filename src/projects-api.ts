@@ -2,8 +2,8 @@ import { waitUntil } from 'cloudflare:workers'
 import { Spiceflow } from 'spiceflow'
 import { cors } from 'spiceflow/cors'
 import { z } from 'zod'
-import { viewPage } from './view-page.js'
-import { repoNameFor, DIST_DIR, type ProjectDO } from './project-do.js'
+import { viewPage } from './view-page.ts'
+import { repoNameFor, DIST_DIR, type ProjectDO } from './project-do.ts'
 
 export interface ProjectsEnv {
   ARTIFACTS: Artifacts

@@ -7,7 +7,7 @@
  * branch head plus the op log, and only `ProjectDO` can derive them (it needs git).
  */
 
-import type { Author, GitScope, GitTokenInfo, SessionOp } from './api-types.js'
+import type { Author, GitScope, GitTokenInfo, SessionOp } from './api-types.ts'
 
 export type Tree = ReadonlyMap<string, string>
 export type SessionOutcome = 'committed' | 'discarded'

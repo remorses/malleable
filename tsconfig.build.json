@@ -1,16 +1,24 @@
 {
-  // Builds only the published client. The worker is deployed by wrangler, not published.
-  "extends": "./tsconfig.json",
+  // Emits only the published client. The worker in src/ is bundled by wrangler, not published.
   "compilerOptions": {
-    "noEmit": false,
-    "allowImportingTsExtensions": false,
+    "allowImportingTsExtensions": true,
+    "rewriteRelativeImportExtensions": true,
+    "rootDir": "src",
+    "outDir": "dist",
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "target": "ESNext",
+    "lib": ["ESNext", "DOM"],
+    "types": [],
     "declaration": true,
     "declarationMap": true,
     "sourceMap": true,
-    "rootDir": "src",
-    "outDir": "dist",
-    "types": []
+    "noEmit": false,
+    "strict": true,
+    "noImplicitAny": false,
+    "noUncheckedIndexedAccess": true,
+    "skipLibCheck": true,
+    "useUnknownInCatchVariables": false
   },
-  "include": [],
   "files": ["src/client.ts"]
 }

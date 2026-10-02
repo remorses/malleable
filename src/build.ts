@@ -1,7 +1,7 @@
 import { rollup, type Plugin } from '@rollup/browser'
 import commonjsImport from '@rollup/plugin-commonjs'
 import path from 'path-browserify'
-import { generateTailwindCSS, type TailwindOptions } from './generate-tailwind.js'
+import { generateTailwindCSS, type TailwindOptions } from './generate-tailwind.ts'
 import {
   ENTRY_PATH,
   entryWrapperSource,

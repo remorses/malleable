@@ -1,7 +1,7 @@
 import { Spiceflow } from 'spiceflow'
-import { projectsApi, projectsPublic, type ProjectsEnv } from './projects-api.js'
+import { projectsApi, projectsPublic, type ProjectsEnv } from './projects-api.ts'
 
-export { ProjectDO } from './project-do.js'
+export { ProjectDO } from './project-do.ts'
 
 // Plain JSON responses: REST clients do not decode superjson metadata
 const app = new Spiceflow({ disableSuperJsonUnlessRpc: true })

@@ -8,7 +8,7 @@ import {
 
   aiToolToCallableTool,
   extractSchemaFromTool,
-} from './ai-tool-to-genai.js'
+} from './ai-tool-to-genai.ts'
 
 describe('AI Tool to GenAI Conversion', () => {
   it('should convert a simple Zod-based tool', () => {

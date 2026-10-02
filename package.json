@@ -1,24 +1,50 @@
 {
   "name": "@malleable/ui",
   "version": "0.0.0",
-  "description": "Typed client for Malleable UI: agents edit, build and commit React UI projects",
+  "description": "Typed client for Malleable UI: AI agents edit, build and commit versioned React UI projects",
+  "keywords": [
+    "malleable",
+    "ui",
+    "react",
+    "ai",
+    "agents",
+    "bundler",
+    "tailwind",
+    "cloudflare-workers",
+    "git",
+    "live-preview"
+  ],
   "license": "MIT",
-  "type": "module",
+  "homepage": "https://github.com/remorses/remote-bundler#readme",
+  "bugs": {
+    "url": "https://github.com/remorses/remote-bundler/issues"
+  },
   "repository": {
     "type": "git",
-    "url": "https://github.com/remorses/remote-bundler"
+    "url": "git+https://github.com/remorses/remote-bundler.git",
+    "directory": "."
   },
+  "type": "module",
+  "main": "./dist/client.js",
+  "types": "./dist/client.d.ts",
   "exports": {
+    "./package.json": "./package.json",
     ".": {
       "types": "./dist/client.d.ts",
       "default": "./dist/client.js"
     },
-    "./package.json": "./package.json"
+    "./src": {
+      "types": "./src/client.ts",
+      "default": "./src/client.ts"
+    },
+    "./src/*": {
+      "types": "./src/*.ts",
+      "default": "./src/*.ts"
+    }
   },
   "files": [
-    "dist",
-    "src/client.ts",
-    "src/api-types.ts"
+    "src",
+    "dist"
   ],
   "scripts": {
     "dev": "wrangler dev",
@@ -27,7 +53,7 @@
     "prettier": "prettier --write src",
     "deployment": "pnpm tsc && wrangler deploy --minify",
     "build": "tsc -p tsconfig.build.json",
-    "prepublishOnly": "pnpm build"
+    "prepublishOnly": "rimraf dist \"*.tsbuildinfo\" && pnpm build"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20260930.2",
@@ -48,10 +74,12 @@
     "path-browserify": "^1.0.1",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
+    "rimraf": "^6.1.3",
     "spiceflow": "^1.17.9",
     "string-dedent": "^3.0.2",
     "sucrase": "^3.35.1",
     "tailwindcss": "^4.3.3",
+    "typescript": "^7.0.2",
     "vite": "^7.1.1",
     "vitest": "^3.2.4",
     "wrangler": "^4.145.0",

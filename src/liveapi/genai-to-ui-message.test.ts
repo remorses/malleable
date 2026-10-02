@@ -9,7 +9,7 @@ import type {
   FunctionResponse,
 } from '@google/genai'
 import { Type, Modality, LiveServerMessage } from '@google/genai'
-import { LiveMessageAssembler, mergeConsecutiveTextParts } from './genai-to-ui-message.js'
+import { LiveMessageAssembler, mergeConsecutiveTextParts } from './genai-to-ui-message.ts'
 import type { UIMessage } from 'ai'
 import exampleMessages from './mixtures/example.json' with { type: 'json' }
 
