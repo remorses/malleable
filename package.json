@@ -52,7 +52,7 @@
     "test": "pnpm vitest -u --run",
     "prettier": "prettier --write src",
     "deployment": "pnpm tsc && wrangler deploy --minify",
-    "build": "tsc -p tsconfig.build.json",
+    "build": "tsc",
     "prepublishOnly": "rimraf dist \"*.tsbuildinfo\" && pnpm build"
   },
   "devDependencies": {

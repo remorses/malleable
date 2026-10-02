@@ -1,19 +1,24 @@
 {
   "compilerOptions": {
-    "target": "ESNext",
-    "module": "NodeNext",
-    "moduleResolution": "nodenext",
-    "esModuleInterop": true,
-    "noEmit": true,
     "allowImportingTsExtensions": true,
+    "rewriteRelativeImportExtensions": true,
+    "rootDir": "src",
+    "outDir": "dist",
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "target": "ESNext",
+    "lib": ["ESNext", "DOM", "DOM.Iterable"],
+    "types": ["@cloudflare/workers-types", "@types/node"],
+    "declaration": true,
+    "declarationMap": true,
+    "noEmit": false,
     "strict": true,
     "noImplicitAny": false,
-    "lib": ["esnext", "DOM", "DOM.Iterable"],
     "skipLibCheck": true,
     "useUnknownInCatchVariables": false,
-    "types": ["@cloudflare/workers-types", "@types/node"],
+    "esModuleInterop": true,
     "resolveJsonModule": true,
     "jsx": "react"
   },
-  "exclude": ["demo/**/*"]
+  "include": ["src"]
 }
