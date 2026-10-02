@@ -4,7 +4,7 @@ import { callableToolsFromObject } from '../src/liveapi/ai-tool-to-genai'
 import { LiveMessageAssembler } from '../src/liveapi/genai-to-ui-message'
 import { tool } from 'ai'
 import { z } from 'zod'
-import { useStore } from './store'
+import { useStore, type PreviewModule } from './store'
 import { Project, type Session } from '../src/client'
 import type { UIMessage } from 'ai'
 import type { LiveServerMessage } from '@google/genai'
@@ -67,14 +67,56 @@ async function commitTurn() {
   await refreshHistory()
 }
 
+// ── preview: keep the last working version when a new one fails to import or render ──
+
+/** A new module replaces the shown one; the shown one becomes the fallback unless it failed */
+function showModule(next: PreviewModule) {
+  useStore.setState(({ preview }) => {
+    const shownWorks = preview.shown && preview.shown.url !== preview.error?.url
+    return { preview: { shown: next, fallback: shownWorks ? preview.shown : preview.fallback, error: null } }
+  })
+}
+
+/** The module at `url` threw while importing or rendering: go back to the fallback */
+function previewFailed(url: string, error: Error) {
+  console.error(`preview ${url} failed`, error)
+  useStore.setState(({ preview }) => {
+    const failed = { url, message: error.message }
+    // an import error of a module never shown leaves the preview as is
+    if (preview.shown?.url !== url) return { preview: { ...preview, error: failed } }
+    // the fallback itself failed: nothing safe is left to show
+    const fallback = preview.fallback?.url === url ? null : preview.fallback
+    return { preview: { shown: fallback, fallback, error: failed } }
+  })
+}
+
+/** Catches render and effect errors of one module. Keyed by url so every module starts clean. */
+class PreviewBoundary extends React.Component<
+  { module: PreviewModule },
+  { failed: boolean }
+> {
+  state = { failed: false }
+  static getDerivedStateFromError() {
+    return { failed: true }
+  }
+  componentDidCatch(error: Error) {
+    previewFailed(this.props.module.url, error)
+  }
+  render() {
+    const { Component } = this.props.module
+    return this.state.failed ? null : <Component />
+  }
+}
+
 // Viewers render whatever the project socket says: drafts while the agent works, commits after.
 // The same socket would update any other open tab.
 project.watch({
   onMessage: async (msg) => {
-    // module urls are relative to the Worker origin
     const show = async (url: string) => {
-      const mod = await import(/* @vite-ignore */ new URL(url, ENDPOINT).href)
-      useStore.setState({ previewComponent: mod.default })
+      // module urls are relative to the Worker origin
+      const mod = await import(/* @vite-ignore */ new URL(url, ENDPOINT).href).catch((e: Error) => e)
+      if (mod instanceof Error) return previewFailed(url, mod)
+      showModule({ url, Component: mod.default })
     }
     if (msg.type === 'hello') {
       if (msg.heads.main) await show(`/p/${projectId}/r/${msg.heads.main}/index.js`)
@@ -300,7 +342,7 @@ export default function App() {
     logs,
     code,
     isGenerating,
-    previewComponent: PreviewComponent,
+    preview,
     history,
     uiMessages,
   } = useStore()
@@ -469,7 +511,12 @@ export default function App() {
               </h3>
 
               <div className='border border-border rounded-md p-4 min-h-[500px] bg-card flex flex-col items-center justify-center'>
-                {PreviewComponent && <PreviewComponent />}
+                {preview.error && (
+                  <p className='text-sm text-destructive mb-2'>
+                    Latest version failed, showing the previous one: {preview.error.message}
+                  </p>
+                )}
+                {preview.shown && <PreviewBoundary key={preview.shown.url} module={preview.shown} />}
               </div>
             </div>
 

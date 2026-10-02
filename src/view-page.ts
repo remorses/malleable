@@ -1,7 +1,15 @@
 import dedent from 'string-dedent'
-import { IMPORTMAP } from './importmap.js'
-
 const HTML = dedent
+
+const IMPORTMAP = JSON.stringify({
+  imports: {
+    react: 'https://esm.sh/react@19',
+    'react-dom': 'https://esm.sh/react-dom@19',
+    'react-dom/': 'https://esm.sh/react-dom@19/',
+    'react/jsx-runtime': 'https://esm.sh/react@19/jsx-runtime',
+    'react/jsx-dev-runtime': 'https://esm.sh/react@19/jsx-dev-runtime',
+  },
+})
 
 /**
  * Minimal live viewer: follows a project over the socket and renders its entry component.
@@ -27,10 +35,48 @@ export function viewPage(projectId: string) {
           const root = createRoot(document.getElementById('root'))
           const status = document.getElementById('status')
           const base = location.origin + '/p/' + id
+
+          // A module that fails to import or render is replaced by the last one that worked
+          let shown = null
+          let fallback = null
+          let failedUrl = null
+          class Boundary extends React.Component {
+            state = { failed: false }
+            static getDerivedStateFromError() {
+              return { failed: true }
+            }
+            componentDidCatch(error) {
+              failed(this.props.module, error)
+            }
+            render() {
+              return this.state.failed ? null : React.createElement(this.props.module.Component)
+            }
+          }
+          const render = () => {
+            root.render(shown && React.createElement(Boundary, { key: shown.url, module: shown }))
+          }
+          const failed = (module, error) => {
+            console.error('preview ' + module.url + ' failed', error)
+            failedUrl = module.url
+            if (shown?.url === module.url) {
+              shown = fallback?.url === module.url ? null : fallback
+              fallback = shown
+              render()
+            }
+            status.textContent = 'error in ' + module.label + ', showing ' + (shown ? shown.label : 'nothing') + ': ' + error.message
+          }
           const show = async (url, label) => {
-            const mod = await import(location.origin + url)
-            root.render(React.createElement(mod.default))
+            const module = { url, label }
+            try {
+              module.Component = (await import(location.origin + url)).default
+            } catch (error) {
+              return failed(module, error)
+            }
+            if (shown && shown.url !== failedUrl) fallback = shown
+            shown = module
+            failedUrl = null
             status.textContent = label
+            render()
           }
           if (pinned) {
             show('/p/' + id + '/r/' + pinned + '/index.js', 'pinned ' + pinned.slice(0, 7))
