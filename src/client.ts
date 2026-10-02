@@ -1,30 +1,34 @@
 import type {
   Author,
+  BuildError,
   BuildResult,
   CommitResult,
   CreatedGitToken,
   GitScope,
   GitTokenInfo,
+  DraftInfo,
   LiveMessage,
   LogEntry,
   ProjectInfo,
   SessionOp,
-} from './project-do.js'
+} from './api-types.js'
 
 export type {
   Author,
+  BuildError,
   BuildResult,
   CommitResult,
   CreatedGitToken,
   GitScope,
   GitTokenInfo,
+  DraftInfo,
   LiveMessage,
   LogEntry,
   ProjectInfo,
   SessionOp,
 }
 
-export class LovepackError extends Error {
+export class MalleableError extends Error {
   constructor(
     message: string,
     readonly status: number,
@@ -41,7 +45,7 @@ export interface ClientOptions {
 }
 
 /**
- * HTTP client for the lovepack REST API. Mirrors the ProjectDO RPC methods:
+ * HTTP client for the Malleable UI REST API. Mirrors the ProjectDO RPC methods:
  *
  *   const project = new Project({ endpoint, apiKey, id: 'u123' })
  *   await project.init()
@@ -66,7 +70,7 @@ async function call<T>(
   })
   const json = (await res.json()) as any
   if (!res.ok) {
-    throw new LovepackError(json.message ?? res.statusText, res.status, json.code)
+    throw new MalleableError(json.message ?? res.statusText, res.status, json.code)
   }
   return json as T
 }

@@ -1,4 +1,4 @@
-# Lovepack 💝
+# Malleable UI
 
 Versioned React UI projects on a Cloudflare Worker. Agents edit files in a **session**, viewers see **live drafts**, each agent message becomes one **git commit**. TypeScript, JSX and Tailwind are bundled on the fly.
 
@@ -53,7 +53,7 @@ git commit -am 'Tweak' && git push origin main   # the worker builds dist/ on to
 
 ## Project config
 
-`lovepack.json` at the repo root. Missing keys use the defaults:
+`malleable.json` at the repo root. Missing keys use the defaults:
 
 ```json
 {
@@ -79,15 +79,15 @@ Setup, every REST route, live messages and the git remote are in [docs/projects.
 Try it with an agent script, then open `/view/<projectId>`:
 
 ```bash
-LOVEPACK_API_KEY=... pnpm tsx examples/agent.ts demo1
-LOVEPACK_API_KEY=... pnpm tsx examples/dashboard-agent.ts dash1
+MALLEABLE_API_KEY=... pnpm tsx examples/agent.ts demo1
+MALLEABLE_API_KEY=... pnpm tsx examples/dashboard-agent.ts dash1
 ```
 
 ## Development
 
 ```bash
 pnpm install
-pnpm dev          # wrangler dev; put LOVEPACK_API_KEY in .dev.vars
+pnpm dev          # wrangler dev; put MALLEABLE_API_KEY in .dev.vars
 pnpm deployment   # typecheck and deploy
 pnpm test         # runs against the deployed worker, deploy first
 ```
@@ -98,7 +98,7 @@ pnpm test         # runs against the deployed worker, deploy first
 | `src/project.test.ts` | sessions, drafts, commit, undo, branches, live messages, git clone and push |
 | `src/generate-tailwind.test.ts` | Tailwind class scanner, local, no network |
 
-The worker tests need `LOVEPACK_API_KEY` (env or `.dev.vars`) and `deno` on the PATH.
+The worker tests need `MALLEABLE_API_KEY` (env or `.dev.vars`) and `deno` on the PATH.
 
 ## License
 

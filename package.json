@@ -1,42 +1,61 @@
 {
-  "name": "lovepack",
+  "name": "@malleable/ui",
+  "version": "0.0.0",
+  "description": "Typed client for Malleable UI: agents edit, build and commit React UI projects",
+  "license": "MIT",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/remorses/remote-bundler"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/client.d.ts",
+      "default": "./dist/client.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "src/client.ts",
+    "src/api-types.ts"
+  ],
   "scripts": {
     "dev": "wrangler dev",
     "demo": "vite",
     "test": "pnpm vitest -u --run",
     "prettier": "prettier --write src",
-    "deployment": "pnpm tsc && wrangler deploy --minify"
-  },
-  "type": "module",
-  "dependencies": {
-    "@rollup/browser": "4.63.5",
-    "@rollup/plugin-commonjs": "^29.0.3",
-    "@tailwindcss/typography": "^0.5.20",
-    "@types/path-browserify": "^1.0.3",
-    "ai": "^5.0.9",
-    "eventemitter3": "^5.0.1",
-    "isomorphic-git": "^1.42.4",
-    "path-browserify": "^1.0.1",
-    "spiceflow": "^1.17.9",
-    "string-dedent": "^3.0.2",
-    "sucrase": "^3.35.1",
-    "tailwindcss": "^4.3.3",
-    "vitest": "^3.2.4",
-    "zod": "^4.0.17"
+    "deployment": "pnpm tsc && wrangler deploy --minify",
+    "build": "tsc -p tsconfig.build.json",
+    "prepublishOnly": "pnpm build"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20260930.2",
     "@google/genai": "^1.14.0",
+    "@rollup/browser": "4.63.5",
+    "@rollup/plugin-commonjs": "^29.0.3",
+    "@tailwindcss/typography": "^0.5.20",
     "@tailwindcss/vite": "4.3.3",
     "@types/node": "^24.2.1",
+    "@types/path-browserify": "^1.0.3",
     "@types/react": "^19.1.9",
     "@types/react-dom": "^19.1.7",
     "@vitejs/plugin-react": "^5.0.0",
+    "ai": "^5.0.9",
+    "eventemitter3": "^5.0.1",
     "importmap-vite-plugin": "^0.0.0",
+    "isomorphic-git": "^1.42.4",
+    "path-browserify": "^1.0.1",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
+    "spiceflow": "^1.17.9",
+    "string-dedent": "^3.0.2",
+    "sucrase": "^3.35.1",
+    "tailwindcss": "^4.3.3",
     "vite": "^7.1.1",
+    "vitest": "^3.2.4",
     "wrangler": "^4.145.0",
+    "zod": "^4.0.17",
     "zustand": "^5.0.7"
   }
 }

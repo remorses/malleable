@@ -4,88 +4,30 @@ import http from 'isomorphic-git/http/web'
 import dedent from 'string-dedent'
 import { buildFiles, createKvBuildCache, type BuildFile } from './build.js'
 import { MemoryFS } from './memory-fs.js'
+import type {
+  Author,
+  BuildError,
+  BuildResult,
+  CommitResult,
+  CreatedGitToken,
+  DraftInfo,
+  GitScope,
+  GitTokenInfo,
+  LiveMessage,
+  LogEntry,
+  ProjectInfo,
+  SessionOp,
+} from './api-types.js'
 import {
   applyOp,
   DIST_DIR,
   ProjectStore,
-  type Author,
-  type GitScope,
-  type GitTokenInfo,
   type LoadedSession,
-  type SessionOp,
   type SessionOutcome,
   type Tree,
 } from './project-store.js'
 
-export { DIST_DIR, type Author, type GitScope, type GitTokenInfo, type SessionOp } from './project-store.js'
-
-// ───────────────────────── public types (RPC-safe plain data) ─────────────────────────
-
-export type BuildError = { file?: string; line?: number; text: string }
-
-/**
- * `url` is the entry module of the result, relative to the Worker origin. An agent can send it
- * to the user in its own response stream, so the client does not need `watch`.
- */
-export type CommitResult =
-  | { ok: true; sha: string; url: string; noop?: boolean }
-  | { ok: false; reason: 'build-error'; errors: BuildError[]; errorText: string }
-  | { ok: false; reason: 'conflict'; head: string }
-
-export type BuildResult =
-  | { ok: true; build: number; url: string; files: string[] }
-  | { ok: false; errors: BuildError[]; errorText: string }
-
-/** A new git token with ready-to-use remote urls. `token` is returned only here. */
-export interface CreatedGitToken extends GitTokenInfo {
-  token: string
-  /** `https://<worker>/git/<projectId>.git` */
-  url: string
-  /** `url` with the token embedded. Git saves it in .git/config. */
-  authenticatedUrl: string
-  username: string
-}
-
-export interface LogEntry {
-  sha: string
-  message: string
-  author: Author
-  time: number
-  parents: string[]
-}
-
-export interface ProjectInfo {
-  projectId: string
-  repo: string
-  defaultBranch: string
-  heads: Record<string, string>
-}
-
-/**
- * Messages sent to every WebSocket viewer of a project.
- * Every `update` carries the `url` of the new module, relative to the Worker origin.
- */
-export type LiveMessage =
-  | { type: 'hello'; heads: Record<string, string>; drafts: DraftInfo[] }
-  | ({ type: 'update'; kind: 'draft' } & DraftInfo)
-  | {
-      type: 'update'
-      kind: 'commit'
-      url: string
-      branch: string
-      sha: string
-      message: string
-      author: Author
-    }
-  | { type: 'build-error'; session: string; errors: BuildError[] }
-  | { type: 'draft-end'; session: string; outcome: 'committed' | 'discarded' }
-
-export interface DraftInfo {
-  url: string
-  session: string
-  branch: string
-  build: number
-}
+export { DIST_DIR } from './project-store.js'
 
 export interface ProjectConfig {
   /** Entry file, its default export is the component */
@@ -103,7 +45,7 @@ export const DEFAULT_CONFIG: ProjectConfig = {
   ],
 }
 
-export const CONFIG_PATH = 'lovepack.json'
+export const CONFIG_PATH = 'malleable.json'
 
 const projectIdRegex = /^[a-zA-Z0-9_-]{1,40}$/
 
@@ -128,7 +70,7 @@ const STALE_SESSION_MS = 10 * 60 * 1000
 
 const STARTER_APP = dedent`
   export default function App() {
-    return <div className="p-8 text-xl">Hello from lovepack</div>
+    return <div className="p-8 text-xl">Hello from Malleable UI</div>
   }
 `
 
@@ -140,7 +82,7 @@ function parseConfig(tree: Tree): ProjectConfig {
 }
 
 function authorToGit(author: Author) {
-  return { name: author.id, email: `${author.kind}@lovepack.local` }
+  return { name: author.id, email: `${author.kind}@malleable.local` }
 }
 
 function authorFromGit(a: { name: string; email: string }): Author {
@@ -472,7 +414,7 @@ export class ProjectDO extends DurableObject<Env> {
           branch: into,
           sha,
           message: `Merge ${branch}`,
-          author: { kind: 'system', id: 'lovepack' },
+          author: { kind: 'system', id: 'malleable' },
         })
       }
       return { sha, url: this.moduleUrl(`r/${sha}`) }
@@ -573,7 +515,7 @@ export class ProjectDO extends DurableObject<Env> {
       }
       return this.commitTree(branch, sources, 'Build dist for pushed sources', {
         kind: 'system',
-        id: 'lovepack',
+        id: 'malleable',
       })
     })
   }
@@ -884,7 +826,7 @@ export class ProjectDO extends DurableObject<Env> {
     ])
     const res = await this.commitTree('main', sources, 'Initialize project', {
       kind: 'system',
-      id: 'lovepack',
+      id: 'malleable',
     })
     if (!res.ok) throw new Error(`SEED_FAILED: ${JSON.stringify(res)}`)
   }

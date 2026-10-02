@@ -22,23 +22,23 @@ function setupImportMap() {
   }
 }
 
-// Project on the lovepack worker. Files live in an Artifacts git repo, one commit per agent message.
+// Project on the Malleable UI worker. Files live in an Artifacts git repo, one commit per agent message.
 const ENDPOINT = 'https://remote-bundler.fumabase.com'
 const projectId =
-  localStorage.getItem('lovepack-project') ||
+  localStorage.getItem('malleable-project') ||
   (() => {
     const id = `demo-${Math.random().toString(36).slice(2, 10)}`
-    localStorage.setItem('lovepack-project', id)
+    localStorage.setItem('malleable-project', id)
     return id
   })()
-const lovepackKey =
-  localStorage.getItem('lovepack-key') ||
+const malleableKey =
+  localStorage.getItem('malleable-key') ||
   (() => {
-    const key = window.prompt('Please enter your lovepack API key:') || ''
-    localStorage.setItem('lovepack-key', key)
+    const key = window.prompt('Please enter your Malleable UI API key:') || ''
+    localStorage.setItem('malleable-key', key)
     return key
   })()
-const project = new Project({ endpoint: ENDPOINT, apiKey: lovepackKey, id: projectId })
+const project = new Project({ endpoint: ENDPOINT, apiKey: malleableKey, id: projectId })
 
 const projectReady = project.init()
 

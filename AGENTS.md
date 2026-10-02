@@ -45,4 +45,4 @@ This is a Cloudflare Workers project for versioned React UI projects: agents edi
 
 ## Projects (Artifacts)
 
-See `docs/projects.md`. Build logic lives in `src/build.ts` (Rollup plugins in `src/rollup-plugins.ts`). `ProjectDO` (`src/project-do.ts`) is the single writer; its storage and caches live only in `ProjectStore` (`src/project-store.ts`); REST in `src/projects-api.ts`; client in `src/client.ts`. `src/project.test.ts` and `src/bundle.test.ts` run against the deployed worker and need `LOVEPACK_API_KEY` (read from `.dev.vars`). `bundle.test.ts` tests bundler output through draft builds of one project.
+See `docs/projects.md`. Build logic lives in `src/build.ts` (Rollup plugins in `src/rollup-plugins.ts`). `ProjectDO` (`src/project-do.ts`) is the single writer; its storage and caches live only in `ProjectStore` (`src/project-store.ts`); REST in `src/projects-api.ts`; client in `src/client.ts`. `src/project.test.ts` and `src/bundle.test.ts` run against the deployed worker and need `MALLEABLE_API_KEY` (read from `.dev.vars`). `bundle.test.ts` tests bundler output through draft builds of one project.

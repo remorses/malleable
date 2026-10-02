@@ -3,13 +3,13 @@ import { readFileSync, mkdtempSync, writeFileSync, existsSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { LovepackError, Project, type Author, type LiveMessage } from './client.ts'
+import { MalleableError, Project, type Author, type LiveMessage } from './client.ts'
 
 // Runs against the deployed worker: deploy first (`pnpm deployment`)
 const endpoint = 'https://remote-bundler.fumabase.com'
 const apiKey =
-  process.env.LOVEPACK_API_KEY ??
-  /LOVEPACK_API_KEY=(\S+)/.exec(readFileSync('.dev.vars', 'utf8'))![1]
+  process.env.MALLEABLE_API_KEY ??
+  /MALLEABLE_API_KEY=(\S+)/.exec(readFileSync('.dev.vars', 'utf8'))![1]
 
 const shas: string[] = []
 /** Replace commit shas with stable placeholders so snapshots do not change per run */
@@ -31,7 +31,7 @@ function stable(value: unknown) {
 function failure(promise: Promise<unknown>) {
   return promise.then(
     () => 'no error',
-    (e: LovepackError) => ({ status: e.status, code: e.code, message: e.message }),
+    (e: MalleableError) => ({ status: e.status, code: e.code, message: e.message }),
   )
 }
 
@@ -79,7 +79,7 @@ describe('projects: session, draft, commit, undo, branches', () => {
     expect(await failure(unauthorized.info())).toMatchInlineSnapshot(`
       {
         "code": undefined,
-        "message": "Missing or invalid API key. Send \`Authorization: Bearer <LOVEPACK_API_KEY>\`.",
+        "message": "Missing or invalid API key. Send \`Authorization: Bearer <MALLEABLE_API_KEY>\`.",
         "status": 401,
       }
     `)
@@ -124,7 +124,7 @@ describe('projects: session, draft, commit, undo, branches', () => {
     expect(await session.list()).toMatchInlineSnapshot(`
       [
         "App.tsx",
-        "lovepack.json",
+        "malleable.json",
       ]
     `)
 
@@ -234,7 +234,7 @@ describe('projects: session, draft, commit, undo, branches', () => {
         },
         {
           "author": {
-            "id": "lovepack",
+            "id": "malleable",
             "kind": "system",
           },
           "message": "Initialize project",
@@ -295,7 +295,7 @@ describe('projects: session, draft, commit, undo, branches', () => {
       [
         "App.tsx",
         "Card.tsx",
-        "lovepack.json",
+        "malleable.json",
       ]
     `)
 
@@ -337,7 +337,7 @@ describe('projects: session, draft, commit, undo, branches', () => {
       [
         "App.tsx",
         "Card.tsx",
-        "lovepack.json",
+        "malleable.json",
       ]
     `)
     expect(stable(await project.merge({ branch: 'draft' }))).toMatchInlineSnapshot(`
@@ -351,7 +351,7 @@ describe('projects: session, draft, commit, undo, branches', () => {
         "App.tsx",
         "Card.tsx",
         "Extra.tsx",
-        "lovepack.json",
+        "malleable.json",
       ]
     `)
     await project.deleteBranch({ name: 'draft' })
@@ -498,7 +498,7 @@ describe('git remote', () => {
     expect(git(w, 'ls-files').split('\n').filter((f) => !f.startsWith('dist/'))).toMatchInlineSnapshot(`
       [
         "App.tsx",
-        "lovepack.json",
+        "malleable.json",
         "",
       ]
     `)

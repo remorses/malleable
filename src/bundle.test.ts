@@ -8,8 +8,8 @@ import type { ProjectConfig } from './project-do.ts'
 
 const endpoint = 'https://remote-bundler.fumabase.com'
 const apiKey =
-  process.env.LOVEPACK_API_KEY ??
-  /LOVEPACK_API_KEY=(\S+)/.exec(readFileSync('.dev.vars', 'utf8'))![1]
+  process.env.MALLEABLE_API_KEY ??
+  /MALLEABLE_API_KEY=(\S+)/.exec(readFileSync('.dev.vars', 'utf8'))![1]
 
 const project = new Project({ endpoint, apiKey, id: `b-${Math.random().toString(36).slice(2, 10)}` })
 let session: Session
@@ -27,7 +27,7 @@ afterAll(() => session?.discard())
  */
 async function bundle(files: Record<string, string>, config: Partial<ProjectConfig> = {}) {
   // missing config keys fall back to the defaults (entry App.tsx, React external)
-  const next = { ...files, 'lovepack.json': JSON.stringify(config) }
+  const next = { ...files, 'malleable.json': JSON.stringify(config) }
   const keep = new Set(Object.keys(next))
   const stale = (await session.list()).filter((p) => !keep.has(p))
   await session.apply({

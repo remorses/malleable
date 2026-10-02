@@ -12,7 +12,7 @@ const isHttp = (id: string) => /^https?:\/\//.test(id)
 const js = dedent
 
 /** Reserved project path of the generated entry module. */
-export const ENTRY_PATH = '/__lovepack_entry__.js'
+export const ENTRY_PATH = '/__malleable_entry__.js'
 
 /** Entry module: re-exports the user entry and links `index.css` next to it, around its default export. */
 export function entryWrapperSource(actualEntryPath: string): string {

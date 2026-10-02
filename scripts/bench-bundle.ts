@@ -1,5 +1,5 @@
 // Benchmark draft build latency (`session.build()`) of one project. Usage:
-//   LOVEPACK_API_KEY=... tsx scripts/bench-bundle.ts [--url https://remote-bundler.fumabase.com] [--runs 20] [--scenario small|multi|npm] [--vary]
+//   MALLEABLE_API_KEY=... tsx scripts/bench-bundle.ts [--url https://remote-bundler.fumabase.com] [--runs 20] [--scenario small|multi|npm] [--vary]
 // Prints per-run wall time, then p50/p95. The files are written before the timer starts.
 import { parseArgs } from 'node:util'
 import { Project } from '../src/client.ts'
@@ -94,7 +94,7 @@ const pct = (xs: number[], p: number) => {
 
 const project = new Project({
   endpoint: values.url!,
-  apiKey: process.env.LOVEPACK_API_KEY!,
+  apiKey: process.env.MALLEABLE_API_KEY!,
   id: `bench-${Date.now()}`,
 })
 console.log(`bench url=${values.url} project=${project.id} scenario=${values.scenario} runs=${runs}`)

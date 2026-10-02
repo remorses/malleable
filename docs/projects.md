@@ -29,7 +29,7 @@ A **project** is a git repo in Cloudflare Artifacts plus a Durable Object (`Proj
 ```
 
 ```bash
-wrangler secret put LOVEPACK_API_KEY     # REST auth
+wrangler secret put MALLEABLE_API_KEY     # REST auth
 ```
 
 ```ts
@@ -79,7 +79,7 @@ if (result.ok) writer.write({ type: 'data-ui', data: { url: result.url } })   //
 else return result.errorText                                                  // let the model fix the code
 
 // browser
-const mod = await import(new URL(part.data.url, LOVEPACK_ORIGIN).href)
+const mod = await import(new URL(part.data.url, MALLEABLE_ORIGIN).href)
 setComponent(() => mod.default)
 ```
 
@@ -99,7 +99,7 @@ Commit urls (`/p/:id/r/<sha>/index.js`) are immutable, so store them in chat his
 
 | Path | Content |
 |---|---|
-| `lovepack.json` | `{ "entry": "App.tsx", "externalPackages": ["react", ...] }` |
+| `malleable.json` | `{ "entry": "App.tsx", "externalPackages": ["react", ...] }` |
 | source files | whatever the agent writes; `dist/` and `.git/` paths are rejected |
 | `dist/index.js`, `dist/chunks/*`, `dist/index.css` | build output, written by the DO on commit |
 
@@ -107,7 +107,7 @@ The entry module default-exports the component. Its CSS is loaded relative to th
 
 ## REST
 
-`/api/projects/*` needs `Authorization: Bearer $LOVEPACK_API_KEY`. `/p/*` and `/view/*` are **public by project id**, including the WebSocket. Use unguessable ids.
+`/api/projects/*` needs `Authorization: Bearer $MALLEABLE_API_KEY`. `/p/*` and `/view/*` are **public by project id**, including the WebSocket. Use unguessable ids.
 
 | Route | Method | Purpose |
 |---|---|---|
@@ -156,7 +156,7 @@ git commit -am 'Tweak' && git push origin main
 `/view/:id` is a minimal live viewer. `examples/agent.ts` plays an agent (two messages, one commit each):
 
 ```bash
-LOVEPACK_API_KEY=... pnpm tsx examples/agent.ts demo1     # then open $ORIGIN/view/demo1
+MALLEABLE_API_KEY=... pnpm tsx examples/agent.ts demo1     # then open $ORIGIN/view/demo1
 ```
 
 ## Client
@@ -168,7 +168,7 @@ LOVEPACK_API_KEY=... pnpm tsx examples/agent.ts demo1     # then open $ORIGIN/vi
 | `Project` | `init`, `info`, `openSession`, `sessions`, `log`, `files`, `undo`, `restore`, `branches`, `createBranch`, `merge`, `deleteBranch`, `createGitToken`, `gitTokens`, `revokeGitToken`, `watch` |
 | `Session` | `apply`, `read`, `list`, `diff`, `build`, `commit`, `discard` |
 
-Failed calls throw `LovepackError` with `status` and `code` (for example `SESSION_ACTIVE`, `REPLACE_AMBIGUOUS`). Responses are plain JSON.
+Failed calls throw `MalleableError` with `status` and `code` (for example `SESSION_ACTIVE`, `REPLACE_AMBIGUOUS`). Responses are plain JSON.
 
 ```ts
 const project = new Project({ endpoint, apiKey, id: 'u123' })

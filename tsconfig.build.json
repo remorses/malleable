@@ -1,0 +1,16 @@
+{
+  // Builds only the published client. The worker is deployed by wrangler, not published.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "allowImportingTsExtensions": false,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "rootDir": "src",
+    "outDir": "dist",
+    "types": []
+  },
+  "include": [],
+  "files": ["src/client.ts"]
+}

@@ -7,12 +7,7 @@
  * branch head plus the op log, and only `ProjectDO` can derive them (it needs git).
  */
 
-export type Author = { kind: 'agent' | 'user' | 'system'; id: string }
-
-export type SessionOp =
-  | { op: 'write'; path: string; content: string }
-  | { op: 'replace'; path: string; oldString: string; newString: string }
-  | { op: 'delete'; path: string }
+import type { Author, GitScope, GitTokenInfo, SessionOp } from './api-types.js'
 
 export type Tree = ReadonlyMap<string, string>
 export type SessionOutcome = 'committed' | 'discarded'
@@ -269,21 +264,6 @@ class SessionStore {
 }
 
 // ───────────────────────── git tokens ─────────────────────────
-
-export type GitScope = 'read' | 'write'
-
-/** A git token as listed. The secret itself is never stored, only its SHA-256. */
-export interface GitTokenInfo {
-  id: string
-  scope: GitScope
-  label: string
-  /** Unix ms */
-  createdAt: number
-  /** Unix ms, null when the token never expires */
-  expiresAt: number | null
-  /** Unix ms of the last accepted git request, null when never used */
-  lastUsedAt: number | null
-}
 
 type GitTokenRow = {
   id: string

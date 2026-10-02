@@ -8,7 +8,7 @@ import { repoNameFor, DIST_DIR, type ProjectDO } from './project-do.js'
 export interface ProjectsEnv {
   ARTIFACTS: Artifacts
   PROJECT: DurableObjectNamespace<ProjectDO>
-  LOVEPACK_API_KEY: string
+  MALLEABLE_API_KEY: string
 }
 
 const authorSchema = z.object({
@@ -124,7 +124,7 @@ const stubFor = (env: ProjectsEnv, projectId: string) => {
 
 /**
  * Management API: REST wrapper over the ProjectDO RPC methods.
- * Requires `Authorization: Bearer $LOVEPACK_API_KEY`.
+ * Requires `Authorization: Bearer $MALLEABLE_API_KEY`.
  */
 export const projectsApi = new Spiceflow()
   .state('env', {} as ProjectsEnv)
@@ -133,9 +133,9 @@ export const projectsApi = new Spiceflow()
     if (!new URL(request.url).pathname.startsWith('/api/projects')) return next()
     if (request.method === 'OPTIONS') return next()
     const given = (request.headers.get('authorization') ?? '').replace(/^Bearer /, '')
-    if (!(await keyMatches(given, state.env.LOVEPACK_API_KEY))) {
+    if (!(await keyMatches(given, state.env.MALLEABLE_API_KEY))) {
       return Response.json(
-        { message: 'Missing or invalid API key. Send `Authorization: Bearer <LOVEPACK_API_KEY>`.' },
+        { message: 'Missing or invalid API key. Send `Authorization: Bearer <MALLEABLE_API_KEY>`.' },
         { status: 401 },
       )
     }
@@ -393,7 +393,7 @@ export const projectsPublic = new Spiceflow()
       if (!scope || (service === 'git-receive-pack' && scope !== 'write')) {
         return new Response('Missing or invalid git token. Create one with POST /api/projects/:id/git-tokens', {
           status: 401,
-          headers: { 'WWW-Authenticate': 'Basic realm="lovepack"' },
+          headers: { 'WWW-Authenticate': 'Basic realm="malleable"' },
         })
       }
 

@@ -1,10 +1,10 @@
 // Richer agent demo: builds a shadcn-style dashboard in three commits.
 // Many files with relative imports, cva/clsx/tailwind-merge bundled from esm.sh, React kept external.
-// Usage: LOVEPACK_API_KEY=... pnpm tsx examples/dashboard-agent.ts <projectId> [endpoint]
+// Usage: MALLEABLE_API_KEY=... pnpm tsx examples/dashboard-agent.ts <projectId> [endpoint]
 import { Project } from '../src/client.ts'
 
 const [projectId = 'dashboard', endpoint = 'https://remote-bundler.fumabase.com'] = process.argv.slice(2)
-const apiKey = process.env.LOVEPACK_API_KEY!
+const apiKey = process.env.MALLEABLE_API_KEY!
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
 const project = new Project({ endpoint, apiKey, id: projectId })
