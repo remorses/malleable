@@ -17,7 +17,9 @@ import type {
   LogEntry,
   ProjectInfo,
   SessionOp,
+  SessionStatus,
 } from './api-types.ts'
+import { conflictErrorText, conflictPrompt, findConflicts, mergeTrees, treeOps } from './merge.ts'
 import {
   applyOp,
   DIST_DIR,
@@ -66,7 +68,8 @@ interface Env {
 }
 
 const WORKDIR = '/w'
-const STALE_SESSION_MS = 10 * 60 * 1000
+/** Sessions idle longer than this are discarded when any session opens */
+const STALE_SESSION_MS = 24 * 60 * 60 * 1000
 
 const STARTER_APP = dedent`
   export default function App() {
@@ -190,6 +193,10 @@ export class ProjectDO extends DurableObject<Env> {
 
   // ── sessions ──
 
+  /**
+   * Any number of sessions can be open on a branch. Each one edits its own tree; `commit` merges
+   * it with whatever landed on the branch meanwhile. Pass `id` to reattach to an open session.
+   */
   async openSession(opts: {
     branch?: string
     author: Author
@@ -197,15 +204,12 @@ export class ProjectDO extends DurableObject<Env> {
   }): Promise<{ sessionId: string; base: string; branch: string }> {
     const branch = opts.branch ?? 'main'
     return this.serial(async () => {
-      for (const open of this.store.sessions.open(branch)) {
-        if (open.id === opts.id) {
-          const s = await this.rebuildSession(open.id)
-          return { sessionId: s.id, base: s.base, branch }
-        }
-        if (Date.now() - open.updatedAt < STALE_SESSION_MS) {
-          throw new Error(`SESSION_ACTIVE: ${open.id} on branch ${branch}`)
-        }
-        this.endSession(open.id, 'discarded')
+      for (const open of this.store.sessions.open()) {
+        if (Date.now() - open.updatedAt > STALE_SESSION_MS) this.endSession(open.id, 'discarded')
+      }
+      if (opts.id && this.store.sessions.get(opts.id)) {
+        const s = await this.rebuildSession(opts.id)
+        return { sessionId: s.id, base: s.base, branch: s.branch }
       }
       const head = await this.sync(branch)
       const s = this.store.sessions.create({
@@ -221,8 +225,11 @@ export class ProjectDO extends DurableObject<Env> {
 
   /** Apply ops atomically: nothing is applied if one fails. */
   async apply(opts: { sessionId: string; ops: SessionOp[] }) {
-    await this.loadSession(opts.sessionId)
-    this.store.sessions.apply(opts.sessionId, opts.ops)
+    // serial: a commit in flight works on a snapshot of the tree, an edit landing mid-commit would be lost
+    await this.serial(async () => {
+      await this.rebuildSession(opts.sessionId)
+      this.store.sessions.apply(opts.sessionId, opts.ops)
+    })
   }
 
   async read(opts: { sessionId: string; path: string }): Promise<string | null> {
@@ -240,10 +247,7 @@ export class ProjectDO extends DurableObject<Env> {
     sessionId: string
   }): Promise<Array<['added' | 'modified' | 'deleted', string]>> {
     const s = await this.loadSession(opts.sessionId)
-    const base = await this.serial(async () => {
-      await this.sync(s.branch)
-      return this.readSources()
-    })
+    const base = await this.readSourcesAt(s.base)
     const out: Array<['added' | 'modified' | 'deleted', string]> = []
     for (const [p, c] of s.tree) {
       if (!base.has(p)) out.push(['added', p])
@@ -277,36 +281,50 @@ export class ProjectDO extends DurableObject<Env> {
     return this.store.sessions.draftFiles(opts.sessionId, opts.build)?.get(opts.path) ?? null
   }
 
-  /** Build, commit and push. Fails (and keeps the session open) when the build fails. */
-  async commit(opts: {
-    sessionId: string
-    message: string
-    rebase?: boolean
-  }): Promise<CommitResult> {
-    const s = await this.loadSession(opts.sessionId)
+  /**
+   * Build, commit and push. If the branch moved since the session's base, the session is first
+   * three-way merged onto the new head (and stays there). Overlapping edits become conflict markers
+   * in the session files; the result then carries a `prompt` that tells the agent how to fix them.
+   * Fails, keeping the session open, on conflicts and build errors.
+   */
+  async commit(opts: { sessionId: string; message: string }): Promise<CommitResult> {
     return this.serial(async () => {
+      let s = await this.rebuildSession(opts.sessionId)
+      const previousBase = s.base
       const head = await this.sync(s.branch)
       const headTree = await this.readSources()
-      let tree = s.tree
-      if (head !== s.base) {
-        if (!opts.rebase) return { ok: false, reason: 'conflict', head }
-        try {
-          const rebased = new Map(headTree)
-          for (const op of this.store.sessions.ops(s.id)) applyOp(rebased, op)
-          tree = rebased
-        } catch {
-          return { ok: false, reason: 'conflict', head }
-        }
+      const moved = head !== previousBase
+      if (moved) {
+        const tree = mergeTrees({
+          base: await this.readSourcesAt(previousBase),
+          mine: s.tree,
+          theirs: headTree,
+          labels: { mine: `yours (session ${s.id})`, theirs: `${s.branch} ${head.slice(0, 7)}` },
+        })
+        s = this.store.sessions.rebase(s.id, { base: head, tree, ops: treeOps(headTree, tree) })
       }
-      if (sameTree(tree, headTree)) {
+      const conflicts = findConflicts(s.tree)
+      if (conflicts.length) {
+        const incoming = moved ? await this.commitsSince({ branch: s.branch, base: previousBase }) : []
+        this.broadcast({ type: 'conflict', session: s.id, conflicts })
+        const prompt = conflictPrompt({ branch: s.branch, conflicts, incoming })
+        return { ok: false, reason: 'conflict', head, conflicts, prompt }
+      }
+      if (sameTree(s.tree, headTree)) {
         this.endSession(s.id, 'committed')
         return { ok: true, sha: head, url: this.moduleUrl(`r/${head}`), noop: true }
       }
-      const res = await this.commitTree(s.branch, tree, opts.message, s.author)
+      const res = await this.commitTree(s.branch, s.tree, opts.message, s.author)
       if (!res.ok) return res
       this.endSession(s.id, 'committed')
-      return res
+      return moved ? { ...res, merged: true } : res
     })
+  }
+
+  /** Branch, base and unresolved conflicts of a session */
+  async status(opts: { sessionId: string }): Promise<SessionStatus> {
+    const s = await this.loadSession(opts.sessionId)
+    return { branch: s.branch, base: s.base, conflicts: findConflicts(s.tree) }
   }
 
   async discard(opts: { sessionId: string }) {
@@ -356,7 +374,6 @@ export class ProjectDO extends DurableObject<Env> {
     const branch = opts.branch ?? 'main'
     const sources = await this.readSourcesAt(sha)
     return this.serial(async () => {
-      this.assertNoOpenSession(branch)
       await this.sync(branch)
       const res = await this.commitTree(
         branch,
@@ -399,7 +416,6 @@ export class ProjectDO extends DurableObject<Env> {
   async merge(opts: { branch: string; into?: string }): Promise<{ sha: string; url: string }> {
     const { branch, into = 'main' } = opts
     return this.serial(async () => {
-      this.assertNoOpenSession(into)
       const sha = await this.sync(branch)
       const target = await this.sync(into)
       if (sha !== target) {
@@ -589,27 +605,27 @@ export class ProjectDO extends DurableObject<Env> {
     return this.store.sessions.loaded(id) ?? this.serial(() => this.rebuildSession(id))
   }
 
-  /** Must run inside `serial`. Replays the op log over the current head. */
+  /** Must run inside `serial`. Replays the op log over the session base. */
   private async rebuildSession(id: string): Promise<LoadedSession> {
     const cached = this.store.sessions.loaded(id)
     if (cached) return cached
     const record = this.store.sessions.get(id)
     if (!record) throw new Error(`SESSION_NOT_FOUND: ${id}`)
-    await this.sync(record.branch)
-    const tree = await this.readSources()
+    const tree = await this.readSourcesAt(record.base)
     for (const op of this.store.sessions.ops(id)) applyOp(tree, op)
-    // A head that moved since `base` is reported by commit() as a conflict
     return this.store.sessions.restoreTree(id, tree)
+  }
+
+  /** Commits on `branch` after `base`, newest first */
+  private async commitsSince(opts: { branch: string; base: string }): Promise<LogEntry[]> {
+    const log = await this.log({ branch: opts.branch, limit: 50 })
+    const end = log.findIndex((c) => c.sha === opts.base)
+    return end === -1 ? log : log.slice(0, end)
   }
 
   private endSession(id: string, outcome: SessionOutcome) {
     this.store.sessions.end(id, outcome)
     this.broadcast({ type: 'draft-end', session: id, outcome })
-  }
-
-  private assertNoOpenSession(branch: string) {
-    const [open] = this.store.sessions.open(branch)
-    if (open) throw new Error(`SESSION_ACTIVE: ${open.id} on branch ${branch}`)
   }
 
   // ───────────────────────── private: build ─────────────────────────
@@ -618,6 +634,11 @@ export class ProjectDO extends DurableObject<Env> {
     | { ok: true; dist: Map<string, string> }
     | { ok: false; errors: BuildError[]; errorText: string }
   > {
+    const conflicts = findConflicts(tree)
+    if (conflicts.length) {
+      const errors = conflicts.flatMap((c) => c.lines.map((line) => ({ file: c.path, line, text: 'unresolved merge conflict' })))
+      return { ok: false, errors, errorText: conflictErrorText(conflicts) }
+    }
     const config = parseConfig(tree)
     if (!tree.has(config.entry)) {
       const text = `Entry point "${config.entry}" not found`

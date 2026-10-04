@@ -230,6 +230,24 @@ class SessionStore {
     return { ...record, tree }
   }
 
+  /** Move a session onto a new base. `ops` replace the whole op log: base + ops must give `tree`. */
+  rebase(id: string, opts: { base: string; tree: Tree; ops: SessionOp[] }): LoadedSession {
+    const record = this.get(id)
+    if (!record) throw new Error(`SESSION_NOT_FOUND: ${id}`)
+    const updatedAt = Date.now()
+    this.storage.transactionSync(() => {
+      this.sql.exec(`DELETE FROM ops WHERE session_id = ?`, id)
+      for (const op of opts.ops) {
+        this.sql.exec(`INSERT INTO ops (session_id, op) VALUES (?, ?)`, id, JSON.stringify(op))
+      }
+      this.sql.exec(`UPDATE sessions SET base = ?, updated_at = ? WHERE id = ?`, opts.base, updatedAt, id)
+    })
+    const next = { ...record, base: opts.base, updatedAt }
+    this.openMap.set(id, next)
+    this.trees.set(id, opts.tree)
+    return { ...next, tree: opts.tree }
+  }
+
   end(id: string, outcome: SessionOutcome) {
     this.storage.transactionSync(() => {
       this.sql.exec(`UPDATE sessions SET status = ? WHERE id = ?`, outcome, id)

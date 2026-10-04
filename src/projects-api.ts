@@ -38,7 +38,6 @@ const statusByCode: Record<string, number> = {
   NOTHING_TO_UNDO: 409,
   REPLACE_NOT_FOUND: 422,
   REPLACE_AMBIGUOUS: 422,
-  SESSION_ACTIVE: 409,
   NOT_FAST_FORWARD: 409,
   CANNOT_DELETE_DEFAULT_BRANCH: 400,
   GIT_TOKEN_NOT_FOUND: 404,
@@ -235,10 +234,16 @@ export const projectsApi = new Spiceflow()
   .route({
     method: 'POST',
     path: '/api/projects/:id/sessions/:sid/commit',
-    request: z.object({ message: z.string().min(1), rebase: z.boolean().optional() }),
+    request: z.object({ message: z.string().min(1) }),
     async handler({ request, params, state }) {
-      return stubFor(state.env, params.id).commit({ sessionId: params.sid, ...(await request.json()) })
+      const { message } = await request.json()
+      return stubFor(state.env, params.id).commit({ sessionId: params.sid, message })
     },
+  })
+  .route({
+    method: 'GET',
+    path: '/api/projects/:id/sessions/:sid/status',
+    handler: ({ params, state }) => stubFor(state.env, params.id).status({ sessionId: params.sid }),
   })
   .route({
     method: 'DELETE',

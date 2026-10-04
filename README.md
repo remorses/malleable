@@ -121,6 +121,7 @@ Try it with an agent script, then open `/view/<projectId>`:
 ```bash
 MALLEABLE_API_KEY=... pnpm tsx examples/agent.ts demo1
 MALLEABLE_API_KEY=... pnpm tsx examples/dashboard-agent.ts dash1
+MALLEABLE_API_KEY=... pnpm tsx examples/parallel-agents.ts par1   # two agents, one conflict
 ```
 
 ## Development
@@ -135,10 +136,17 @@ pnpm test         # runs against the deployed worker, deploy first
 | Test | Covers |
 |---|---|
 | `src/bundle.test.ts` | Tailwind output, CSS imports, relative and npm imports, code splitting, build errors |
-| `src/project.test.ts` | sessions, drafts, commit, undo, branches, live messages, git clone and push |
+| `src/project.test.ts` | sessions, drafts, commit, undo, branches, parallel sessions and conflicts, live messages, git clone and push |
 | `src/generate-tailwind.test.ts` | Tailwind class scanner, local, no network |
 
 The worker tests need `MALLEABLE_API_KEY` (env or `.dev.vars`) and `deno` on the PATH.
+
+The dashboard demo is a separate worker (spiceflow, D1, Workers AI). Build the root package first, it imports `@malleable/ui` from `dist/`:
+
+```bash
+pnpm build                                  # root: emits dist/client.js
+cd dashboard-demo && pnpm run deploy:prod   # D1 migrations, tsc, vite build, wrangler deploy
+```
 
 ## License
 

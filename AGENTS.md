@@ -41,8 +41,19 @@ This is a Cloudflare Workers project for versioned React UI projects: agents edi
 - Tailwind CSS v4 generation via `compile()` (no PostCSS), see `docs/tailwind-v4-upgrade.md`
 - npm package resolution via esm.sh CDN
 - Live viewer page at `/view/:id`
-- Deployed at: https://remote-bundler.fumabase.com
+- Deployed at: https://malleableui.dev
 
 ## Projects (Artifacts)
 
 See `docs/projects.md`. Build logic lives in `src/build.ts` (Rollup plugins in `src/rollup-plugins.ts`). `ProjectDO` (`src/project-do.ts`) is the single writer; its storage and caches live only in `ProjectStore` (`src/project-store.ts`); REST in `src/projects-api.ts`; client in `src/client.ts`. `src/project.test.ts` and `src/bundle.test.ts` run against the deployed worker and need `MALLEABLE_API_KEY` (read from `.dev.vars`). `bundle.test.ts` tests bundler output through draft builds of one project.
+
+`dashboard-demo/` is an example host app (spiceflow RSC, D1, Workers AI) that embeds generated screens; see `docs/embedding.md`. It is deployed separately with `pnpm run deploy:prod` inside that folder.
+
+## Cloudflare Artifacts competition
+
+We plan to submit this project to "Build the next Git platform on Cloudflare" (https://blog.cloudflare.com/next-git-platform-on-cloudflare/, submit at http://cloudflare.com/git-competition).
+
+- **Deadline: October 14, 2026.** Top 3 teams present at Cloudflare Connect SF (Oct 19-21). First place gets $25,000 in Cloudflare credits.
+- **Must use Workers + Artifacts.** Minimum bar: multiple agents working on changes concurrently. They want new ideas, not GitHub with agents on top (rethink branches, PRs, review, merge conflicts, agent context, comparing parallel changes and picking one to ship).
+- **Submission:** 5-10 minute video, source code under MIT/Apache/BSD, instructions to run or try it.
+- Prefer features that serve the competition: concurrent agent sessions, side-by-side live previews of parallel drafts, picking a winner, real merges (not only fast-forward), keeping agent context (prompt, reasoning) next to each commit.

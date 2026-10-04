@@ -71,6 +71,7 @@
     "eventemitter3": "^5.0.1",
     "importmap-vite-plugin": "^0.0.0",
     "isomorphic-git": "^1.42.4",
+    "node-diff3": "^3.2.1",
     "path-browserify": "^1.0.1",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",

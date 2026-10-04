@@ -22,8 +22,8 @@ function stable(value: unknown) {
         return `<sha${i}>`
       })
       .replace(/s_[0-9a-f-]{12,}/g, '<session>')
-      .replace(/Undo [0-9a-f]{7}:/g, 'Undo <short>:')
-      .replace(/[tg]-[a-z0-9]{8}/g, '<project>'),
+      .replace(/\b[0-9a-f]{7}\b/g, '<short>')
+      .replace(/[tgm]-[a-z0-9]{8}/g, '<project>'),
   )
 }
 
@@ -84,7 +84,6 @@ describe('projects: session, draft, commit, undo, branches', () => {
       }
     `)
 
-    // open a session; a second one on the same branch is rejected
     const session = await project.openSession({ author })
     expect(stable(session.base)).toMatchInlineSnapshot(`"<sha0>"`)
     expect(stable(await project.sessions())).toMatchInlineSnapshot(`
@@ -98,13 +97,6 @@ describe('projects: session, draft, commit, undo, branches', () => {
           "id": "<session>",
         },
       ]
-    `)
-    expect(stable(await failure(project.openSession({ author })))).toMatchInlineSnapshot(`
-      {
-        "code": "SESSION_ACTIVE",
-        "message": "SESSION_ACTIVE: <session> on branch main",
-        "status": 409,
-      }
     `)
 
     // ops are atomic: a failing op applies nothing
@@ -391,7 +383,7 @@ describe('projects: session, draft, commit, undo, branches', () => {
           "kind": "draft",
           "session": "<session>",
           "type": "update",
-          "url": "/p/<project>/d/<session>/1/index.js",
+          "url": "https://malleableui.dev/p/<project>/d/<session>/1/index.js",
         },
         {
           "branch": "main",
@@ -399,7 +391,7 @@ describe('projects: session, draft, commit, undo, branches', () => {
           "message": "Add revenue card",
           "sha": "<sha1>",
           "type": "update",
-          "url": "/p/<project>/r/<sha1>/index.js",
+          "url": "https://malleableui.dev/p/<project>/r/<sha1>/index.js",
         },
         {
           "outcome": "committed",
@@ -412,7 +404,7 @@ describe('projects: session, draft, commit, undo, branches', () => {
           "message": "Rename card",
           "sha": "<sha4>",
           "type": "update",
-          "url": "/p/<project>/r/<sha4>/index.js",
+          "url": "https://malleableui.dev/p/<project>/r/<sha4>/index.js",
         },
         {
           "outcome": "committed",
@@ -425,7 +417,7 @@ describe('projects: session, draft, commit, undo, branches', () => {
           "message": "Undo <short>: Rename card",
           "sha": "<sha2>",
           "type": "update",
-          "url": "/p/<project>/r/<sha2>/index.js",
+          "url": "https://malleableui.dev/p/<project>/r/<sha2>/index.js",
         },
         {
           "branch": "draft",
@@ -433,7 +425,7 @@ describe('projects: session, draft, commit, undo, branches', () => {
           "message": "Extra on draft",
           "sha": "<sha3>",
           "type": "update",
-          "url": "/p/<project>/r/<sha3>/index.js",
+          "url": "https://malleableui.dev/p/<project>/r/<sha3>/index.js",
         },
         {
           "outcome": "committed",
@@ -446,10 +438,175 @@ describe('projects: session, draft, commit, undo, branches', () => {
           "message": "Merge draft",
           "sha": "<sha3>",
           "type": "update",
-          "url": "/p/<project>/r/<sha3>/index.js",
+          "url": "https://malleableui.dev/p/<project>/r/<sha3>/index.js",
         },
       ]
     `)
+  })
+})
+
+describe('parallel sessions', () => {
+  it('merges disjoint edits; overlapping edits become markers the agent resolves', { timeout: 180_000 }, async () => {
+    const project = newProject('m')
+    await project.init()
+    const seed = await project.openSession({ author })
+    await seed.apply({
+      ops: [
+        {
+          op: 'write',
+          path: 'App.tsx',
+          content: [
+            'export default function App() {',
+            '  return (',
+            '    <div className="p-4">',
+            '      <h1 className="text-2xl">Revenue</h1>',
+            '      <p className="text-sm">Monthly totals</p>',
+            '    </div>',
+            '  )',
+            '}',
+            '',
+          ].join('\n'),
+        },
+      ],
+    })
+    expect((await seed.commit({ message: 'Seed' })).ok).toMatchInlineSnapshot(`true`)
+
+    // three agents open sessions on main at the same time
+    const [a, b, c] = await Promise.all(
+      ['agent-a', 'agent-b', 'agent-c'].map((id) => project.openSession({ author: { kind: 'agent', id } })),
+    )
+    await a.apply({ ops: [{ op: 'replace', path: 'App.tsx', oldString: 'Monthly totals', newString: 'Weekly totals' }] })
+    await b.apply({ ops: [{ op: 'replace', path: 'App.tsx', oldString: 'p-4', newString: 'p-8' }] })
+    await c.apply({ ops: [{ op: 'replace', path: 'App.tsx', oldString: 'Monthly totals', newString: 'Totals per month' }] })
+
+    // a lands first; b changed another line, so it merges cleanly
+    expect(stable(await a.commit({ message: 'Weekly totals' }))).toMatchInlineSnapshot(`
+      {
+        "ok": true,
+        "sha": "<sha5>",
+        "url": "https://malleableui.dev/p/<project>/r/<sha5>/index.js",
+      }
+    `)
+    expect(stable(await b.commit({ message: 'More padding' }))).toMatchInlineSnapshot(`
+      {
+        "merged": true,
+        "ok": true,
+        "sha": "<sha6>",
+        "url": "https://malleableui.dev/p/<project>/r/<sha6>/index.js",
+      }
+    `)
+
+    // c changed the same line as a: its session moves onto main with markers, commit returns a prompt
+    const conflict = await c.commit({ message: 'Reword totals' })
+    if (conflict.ok || conflict.reason !== 'conflict') throw new Error(`expected a conflict: ${JSON.stringify(conflict)}`)
+    expect(stable(conflict.conflicts)).toMatchInlineSnapshot(`
+      [
+        {
+          "lines": [
+            5,
+          ],
+          "path": "App.tsx",
+        },
+      ]
+    `)
+    expect('\n' + stable(conflict.prompt)).toMatchInlineSnapshot(`
+      "
+      Your commit was not saved: your changes conflict with main.
+
+      Commits that landed on main while you worked:
+      - <short> "More padding" by agent agent-b
+      - <short> "Weekly totals" by agent agent-a
+
+      Your files now contain both versions, separated by conflict markers:
+      - App.tsx: line 5
+
+      Each conflict looks like this:
+
+      <<<<<<< yours
+      (your version)
+      ||||||| base
+      (the version you both started from)
+      =======
+      (the version now on main)
+      >>>>>>> main
+
+      Read each file. Replace every block, from the <<<<<<< line to the >>>>>>> line, with code that keeps
+      both intents. Compare each side with the base to see what it changed. Keep the other change unless it
+      contradicts what the user asked for. Then commit again."
+    `)
+    const marked = (await c.read({ path: 'App.tsx' }))!
+    expect('\n' + stable(marked)).toMatchInlineSnapshot(`
+      "
+      export default function App() {
+        return (
+          <div className="p-8">
+            <h1 className="text-2xl">Revenue</h1>
+      <<<<<<< yours (session <session>)
+            <p className="text-sm">Totals per month</p>
+      ||||||| base
+            <p className="text-sm">Monthly totals</p>
+      =======
+            <p className="text-sm">Weekly totals</p>
+      >>>>>>> main <short>
+          </div>
+        )
+      }
+      "
+    `)
+    expect(stable(await c.status())).toMatchInlineSnapshot(`
+      {
+        "base": "<sha6>",
+        "branch": "main",
+        "conflicts": [
+          {
+            "lines": [
+              5,
+            ],
+            "path": "App.tsx",
+          },
+        ],
+      }
+    `)
+    const blocked = await c.build()
+    expect(blocked.ok === false && blocked.errorText).toMatchInlineSnapshot(`"App.tsx:5: unresolved merge conflict. Remove the markers before building."`)
+
+    // the agent replaces the block with its normal edit tool and commits again
+    const start = marked.indexOf('<<<<<<<')
+    const block = marked.slice(start, marked.indexOf('\n', marked.indexOf('>>>>>>>')))
+    await c.apply({
+      ops: [{ op: 'replace', path: 'App.tsx', oldString: block, newString: '      <p className="text-sm">Weekly totals per month</p>' }],
+    })
+    expect(stable(await c.commit({ message: 'Reword totals' }))).toMatchInlineSnapshot(`
+      {
+        "ok": true,
+        "sha": "<sha7>",
+        "url": "https://malleableui.dev/p/<project>/r/<sha7>/index.js",
+      }
+    `)
+
+    const check = await project.openSession({ author })
+    expect('\n' + (await check.read({ path: 'App.tsx' }))).toMatchInlineSnapshot(`
+      "
+      export default function App() {
+        return (
+          <div className="p-8">
+            <h1 className="text-2xl">Revenue</h1>
+            <p className="text-sm">Weekly totals per month</p>
+          </div>
+        )
+      }
+      "
+    `)
+    expect((await project.log()).map((l) => l.message)).toMatchInlineSnapshot(`
+      [
+        "Reword totals",
+        "More padding",
+        "Weekly totals",
+        "Seed",
+        "Initialize project",
+      ]
+    `)
+    await check.discard()
   })
 })
 

@@ -55,12 +55,41 @@ await project.commit({ sessionId, message: 'Add chart' }) // build + git add . +
 // or project.discard({ sessionId })
 ```
 
-- **One open session per branch.** A session idle for 10 minutes is replaced.
+- **Many sessions per branch.** Agents work in parallel, each on its own tree. A session idle for 24 hours is discarded.
 - **Failed builds do not commit.** `commit` returns `{ ok: false, reason: 'build-error', errorText }`; the session stays open.
-- **Head moved since open** returns `{ ok: false, reason: 'conflict' }`. Retry with `{ rebase: true }` to replay the ops over the new head.
+- **Head moved since open**: `commit` merges, see below.
 - **History**: `log`, `undo` (new commit with the previous sources), `restore({ sha })`. History is never rewritten.
 - **Branches**: `createBranch`, `branches`, `merge` (fast-forward only), `deleteBranch`.
 - **Drafts live in DO memory only.** The last 3 builds per session are kept. A DO restart loses them; call `build` again.
+
+## Parallel sessions and conflicts
+
+`commit` is optimistic. If nothing landed since the session opened, it builds and pushes. Otherwise it **three-way merges** the session onto the new head first:
+
+```
+ agent A ─ commit ──────────────▶ main: A
+ agent B ─ commit ─▶ merge(base, main, B) ─ clean ──▶ main: A + B   { ok: true, merged: true }
+ agent C ─ commit ─▶ merge(base, main, C) ─ overlap ─▶ markers in C's files
+                                                     { ok: false, reason: 'conflict', conflicts, prompt }
+```
+
+- Files changed on one side take that side. Files changed on both are merged line by line.
+- On a conflict the session **moves onto the new head** and its files contain diff3 markers. Nothing is committed.
+- `prompt` tells the agent which commits landed (message and author), which lines conflict and how to fix them. Give it to the model as is.
+- The agent resolves with its normal tools: `read` shows the markers, a `replace` op swaps the whole block for merged code. Then `commit` again.
+- **Markers are the only conflict state.** `build` and `commit` refuse a tree with `<<<<<<<` lines; `session.status()` lists them.
+
+```
+<<<<<<< yours (session s_1)
+      <p className="text-sm">Totals per month</p>
+||||||| base
+      <p className="text-sm">Monthly totals</p>
+=======
+      <p className="text-sm">Weekly totals</p>
+>>>>>>> main a1b2c3d
+```
+
+`examples/parallel-agents.ts` runs the whole flow. With one agent at a time nothing changes: the head has not moved, so `commit` skips the merge.
 
 ## Stream component urls in the chat response
 
@@ -114,13 +143,13 @@ The entry module default-exports the component. Its CSS is loaded relative to th
 | `/api/projects/:id` | POST, GET | init, info |
 | `/api/projects/:id/sessions` | POST, GET | open, list |
 | `/api/projects/:id/sessions/:sid/ops` | POST | `{ ops: [{ op: 'write' \| 'replace' \| 'delete', ... }] }`, atomic |
-| `/api/projects/:id/sessions/:sid/{files,file?path=,diff}` | GET | list, read, diff against base |
+| `/api/projects/:id/sessions/:sid/{files,file?path=,diff,status}` | GET | list, read, diff against base, conflicts |
 | `/api/projects/:id/sessions/:sid/{build,commit}` | POST | draft build, commit |
 | `/api/projects/:id/sessions/:sid` | DELETE | discard |
 | `/api/projects/:id/{log,files,undo,restore,branches,merge}` | | history and branches |
 | `/p/:id/r/:ref/*` | GET | built file at a branch or sha |
 | `/p/:id/d/:sid/:build/*` | GET | draft build file |
-| `/p/:id/live` | WS | `hello`, `update` (`kind: 'draft' \| 'commit'`), `build-error`, `draft-end` |
+| `/p/:id/live` | WS | `hello`, `update` (`kind: 'draft' \| 'commit'`), `build-error`, `conflict`, `draft-end` |
 | `/view/:id` | GET | minimal live viewer page |
 | `/api/projects/:id/git-tokens` | POST, GET | create a git token (secret shown once), list tokens |
 | `/api/projects/:id/git-tokens/:tokenId` | DELETE | revoke a git token |
@@ -148,7 +177,7 @@ git commit -am 'Tweak' && git push origin main
 
 - **After a push**, `ProjectDO.afterGitPush()` builds the pushed sources. If `dist/` does not match, it adds a commit `Build dist for pushed sources`, and viewers get an `update`. Run `git pull` to get it.
 - **Tokens** (`lpgit_<48 hex>`) live in the project DO (`GitTokenStore` in `src/project-store.ts`). Only their SHA-256 is stored. Every git request asks the DO to verify the token, so revocation is immediate.
-- **Push while an agent session is open** is allowed. The session's next `commit` returns `conflict`; retry with `rebase: true`.
+- **Push while an agent session is open** is allowed. The session's next `commit` merges with it.
 - A push with a build error still lands, viewers get `build-error` with `session: 'git-push'`, and the head keeps its old `dist/`.
 
 ## Example
@@ -166,17 +195,18 @@ MALLEABLE_API_KEY=... pnpm tsx examples/agent.ts demo1     # then open $ORIGIN/v
 | Class | Methods |
 |---|---|
 | `Project` | `init`, `info`, `openSession`, `sessions`, `log`, `files`, `undo`, `restore`, `branches`, `createBranch`, `merge`, `deleteBranch`, `createGitToken`, `gitTokens`, `revokeGitToken`, `watch` |
-| `Session` | `apply`, `read`, `list`, `diff`, `build`, `commit`, `discard` |
+| `Session` | `apply`, `read`, `list`, `diff`, `status`, `build`, `commit`, `discard` |
 
-Failed calls throw `MalleableError` with `status` and `code` (for example `SESSION_ACTIVE`, `REPLACE_AMBIGUOUS`). Responses are plain JSON.
+Failed calls throw `MalleableError` with `status` and `code` (for example `SESSION_NOT_FOUND`, `REPLACE_AMBIGUOUS`). Responses are plain JSON.
 
 ```ts
+// endpoint defaults to https://malleableui.dev; pass yours when you self-host
 const project = new Project({ endpoint, apiKey, id: 'u123' })
 project.watch({
   onMessage: async (msg) => {
     // draft or commit, every update has its own module url
     if (msg.type === 'update') {
-      const mod = await import(new URL(msg.url, endpoint).href)
+      const mod = await import(msg.url)
       setComponent(() => mod.default)
     }
   },
@@ -193,6 +223,7 @@ All methods take a single object argument, in the RPC, the client and the REST b
 | `update` `kind: 'draft'` | `build` | `url`, `session`, `branch`, `build`. Not in git, lost on DO restart |
 | `update` `kind: 'commit'` | commit, undo, restore, merge, git push | `url`, `branch`, `sha`, `message`, `author`. Immutable url |
 | `build-error` | build failed | `session` (`git-push` for pushes), `errors` |
+| `conflict` | commit hit overlapping edits | `session`, `conflicts` |
 | `draft-end` | session committed or discarded | `session`, `outcome` |
 
 `url` is relative to the Worker origin, so clients never build `/r/` or `/d/` paths themselves.
@@ -203,6 +234,6 @@ All methods take a single object argument, in the RPC, the client and the REST b
 - `isomorphic-git` needs `readlink` and `symlink` on the fs, and `err.code` on fs errors.
 - `git.commit({ ref })` needs the full ref (`refs/heads/main`). A short name writes a stray ref and the push fails with a bare 500.
 - `git.fetch` needs the `origin` remote configured (`addRemote`) and returns the fetched sha in `fetchHead`.
-- The DO keeps the clone in memory only. After hibernation the first call re-fetches (depth 1) and replays the session op log.
+- The DO keeps the clone in memory only. After hibernation a session tree is rebuilt from its `base` commit (read through the Artifacts binding) plus its op log. A merge compacts the op log to writes against the new base.
 - All DO state goes through `ProjectStore` (`src/project-store.ts`). It writes SQLite/KV first, then its in-memory cache, and loads caches lazily, so a fresh instance after hibernation reads storage. `ProjectDO` never touches `ctx.storage`.
 - Debug failed pushes through `gitHttp` in `project-do.ts`: it keeps the 5xx response body.

@@ -3,6 +3,7 @@ import type {
   BuildError,
   BuildResult,
   CommitResult,
+  Conflict,
   CreatedGitToken,
   GitScope,
   GitTokenInfo,
@@ -11,6 +12,7 @@ import type {
   LogEntry,
   ProjectInfo,
   SessionOp,
+  SessionStatus,
 } from './api-types.ts'
 
 export type {
@@ -18,6 +20,7 @@ export type {
   BuildError,
   BuildResult,
   CommitResult,
+  Conflict,
   CreatedGitToken,
   GitScope,
   GitTokenInfo,
@@ -26,6 +29,7 @@ export type {
   LogEntry,
   ProjectInfo,
   SessionOp,
+  SessionStatus,
 }
 
 export class MalleableError extends Error {
@@ -38,16 +42,21 @@ export class MalleableError extends Error {
   }
 }
 
+/** Hosted worker. Self-hosted deployments pass their own `endpoint`. */
+export const DEFAULT_ENDPOINT = 'https://malleableui.dev'
+
 export interface ClientOptions {
-  /** Worker origin, e.g. https://remote-bundler.fumabase.com */
-  endpoint: string
+  /** Worker origin. Defaults to `DEFAULT_ENDPOINT`; set it when you self-host. */
+  endpoint?: string
   apiKey: string
 }
+
+type ResolvedOptions = Required<ClientOptions>
 
 /**
  * HTTP client for the Malleable UI REST API. Mirrors the ProjectDO RPC methods:
  *
- *   const project = new Project({ endpoint, apiKey, id: 'u123' })
+ *   const project = new Project({ apiKey, id: 'u123' }) // or { endpoint: 'https://my-worker.dev', ... }
  *   await project.init()
  *   const session = await project.openSession({ author })
  *   await session.apply({ ops: [{ op: 'write', path: 'App.tsx', content: code }] })
@@ -55,7 +64,7 @@ export interface ClientOptions {
  *   await session.commit({ message: 'Add chart' }) // one commit per agent message
  */
 async function call<T>(
-  options: ClientOptions,
+  options: ResolvedOptions,
   method: string,
   path: string,
   body?: unknown,
@@ -120,7 +129,7 @@ export class Project {
     return new Session(this.options, this, s.sessionId, s.branch, s.base)
   }
 
-  /** Open sessions, at most one per branch */
+  /** Open sessions. Many agents can work on the same branch at once. */
   sessions() {
     return call<Array<{ id: string; branch: string; author: Author }>>(this.options, 'GET', this.path('/sessions'))
   }
@@ -249,9 +258,18 @@ export class Session {
     return call<BuildResult>(this.options, 'POST', this.path('/build'))
   }
 
-  /** Build, commit and push. Resolves with `{ ok: false }` when the build fails or the branch moved. */
-  commit(opts: { message: string; rebase?: boolean }) {
+  /**
+   * Build, commit and push. Merges with commits that landed on the branch meanwhile. Resolves with
+   * `{ ok: false }` on build errors, or on conflicts: then pass `prompt` to the agent, let it edit
+   * the conflict markers out of the files, and commit again.
+   */
+  commit(opts: { message: string }) {
     return call<CommitResult>(this.options, 'POST', this.path('/commit'), opts)
+  }
+
+  /** Base commit and unresolved conflicts */
+  status() {
+    return call<SessionStatus>(this.options, 'GET', this.path('/status'))
   }
 
   async discard() {

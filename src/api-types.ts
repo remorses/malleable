@@ -14,9 +14,27 @@ export type BuildError = { file?: string; line?: number; text: string }
  * to the user in its own response stream, so the client does not need `watch`.
  */
 export type CommitResult =
-  | { ok: true; sha: string; url: string; noop?: boolean }
+  /** `merged`: the branch moved while the session was open and the changes merged cleanly */
+  | { ok: true; sha: string; url: string; noop?: boolean; merged?: boolean }
   | { ok: false; reason: 'build-error'; errors: BuildError[]; errorText: string }
-  | { ok: false; reason: 'conflict'; head: string }
+  /**
+   * The session now sits on `head` and its files contain conflict markers. Give `prompt` to the
+   * agent: it edits the marked blocks with its normal tools, then commits again.
+   */
+  | { ok: false; reason: 'conflict'; head: string; conflicts: Conflict[]; prompt: string }
+
+/** A file with unresolved conflict markers. `lines` are the 1-based lines of each `<<<<<<<`. */
+export interface Conflict {
+  path: string
+  lines: number[]
+}
+
+export interface SessionStatus {
+  branch: string
+  /** commit the session is based on; it moves to the branch head on every commit attempt */
+  base: string
+  conflicts: Conflict[]
+}
 
 export type BuildResult =
   | { ok: true; build: number; url: string; files: string[] }
@@ -86,4 +104,5 @@ export type LiveMessage =
       author: Author
     }
   | { type: 'build-error'; session: string; errors: BuildError[] }
+  | { type: 'conflict'; session: string; conflicts: Conflict[] }
   | { type: 'draft-end'; session: string; outcome: 'committed' | 'discarded' }
