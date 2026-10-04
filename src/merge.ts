@@ -119,6 +119,7 @@ export function conflictPrompt(opts: { branch: string; conflicts: Conflict[]; in
 
     Read each file. Replace every block, from the ${START} line to the ${END} line, with code that keeps
     both intents. Compare each side with the base to see what it changed. Keep the other change unless it
-    contradicts what the user asked for. Then commit again.
+    contradicts what the user asked for. A side that says "(deleted in ...)" means that side deleted the
+    file: to keep it deleted, delete the file instead of editing it. Then commit again.
   `
 }

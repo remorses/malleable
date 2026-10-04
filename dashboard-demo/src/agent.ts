@@ -283,19 +283,18 @@ export async function runAgent({ viewId, messages }: { viewId: string; messages:
       }
       writer.write({ type: 'finish' })
     },
-    async onEnd({ messages: all }) {
-      await db.batch([
-        db.delete(schema.chatMessages).where(orm.eq(schema.chatMessages.viewId, viewId)),
-        ...all.map((m, position) =>
-          db.insert(schema.chatMessages).values({
-            messageId: m.id,
-            viewId,
-            role: m.role,
-            parts: m.parts,
-            position,
-          }),
-        ),
-      ] as [any, ...any[]])
+    // Save only this turn, appended after what other chats saved meanwhile. Rewriting the whole history
+    // from this client's copy would erase turns of parallel chats on the same view.
+    async onEnd({ responseMessage }) {
+      const turn = [messages.findLast((m) => m.role === 'user'), responseMessage].flatMap((m) => (m ? [m] : []))
+      const nextPosition = orm.sql<number>`(SELECT COALESCE(MAX(${schema.chatMessages.position}), -1) + 1 FROM ${schema.chatMessages} WHERE ${schema.chatMessages.viewId} = ${viewId})`
+      const [first, ...rest] = turn.map((m) =>
+        db
+          .insert(schema.chatMessages)
+          .values({ messageId: m.id, viewId, role: m.role, parts: m.parts, position: nextPosition })
+          .onConflictDoUpdate({ target: schema.chatMessages.messageId, set: { parts: m.parts } }),
+      )
+      if (first) await db.batch([first, ...rest])
     },
   })
   return createUIMessageStreamResponse({ stream })

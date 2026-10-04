@@ -532,7 +532,8 @@ describe('parallel sessions', () => {
 
       Read each file. Replace every block, from the <<<<<<< line to the >>>>>>> line, with code that keeps
       both intents. Compare each side with the base to see what it changed. Keep the other change unless it
-      contradicts what the user asked for. Then commit again."
+      contradicts what the user asked for. A side that says "(deleted in ...)" means that side deleted the
+      file: to keep it deleted, delete the file instead of editing it. Then commit again."
     `)
     const marked = (await c.read({ path: 'App.tsx' }))!
     expect('\n' + stable(marked)).toMatchInlineSnapshot(`

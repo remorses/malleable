@@ -259,17 +259,19 @@ export class ProjectDO extends DurableObject<Env> {
 
   /** Draft build. Never touches git. Viewers get an `update` message of kind `draft`. */
   async build(opts: { sessionId: string }): Promise<BuildResult> {
-    const s = await this.loadSession(opts.sessionId)
-    const built = await this.runBuild(s.tree)
-    if (!built.ok) {
-      this.broadcast({ type: 'build-error', session: s.id, errors: built.errors })
-      return built
-    }
-    // throws if the session ended while building
-    const build = this.store.sessions.addDraft(s.id, built.dist)
-    const url = this.moduleUrl(`d/${encodeURIComponent(s.id)}/${build}`)
-    this.broadcast({ type: 'update', kind: 'draft', url, session: s.id, branch: s.branch, build })
-    return { ok: true, build, url, files: [...built.dist.keys()] }
+    // serial: a commit could rebase the session mid-build, and the old tree would go out as the latest draft
+    return this.serial(async () => {
+      const s = await this.rebuildSession(opts.sessionId)
+      const built = await this.runBuild(s.tree)
+      if (!built.ok) {
+        this.broadcast({ type: 'build-error', session: s.id, errors: built.errors })
+        return built
+      }
+      const build = this.store.sessions.addDraft(s.id, built.dist)
+      const url = this.moduleUrl(`d/${encodeURIComponent(s.id)}/${build}`)
+      this.broadcast({ type: 'update', kind: 'draft', url, session: s.id, branch: s.branch, build })
+      return { ok: true, build, url, files: [...built.dist.keys()] }
+    })
   }
 
   /** Output file of a draft build, served by the Worker at /d/:session/:build/* */
