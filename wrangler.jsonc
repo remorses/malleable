@@ -10,7 +10,7 @@
   ],
   "artifacts": [{ "binding": "ARTIFACTS", "namespace": "lovepack" }],
   // Public origin of this Worker, used in git remote urls. Override in .dev.vars for local dev.
-  "vars": { "PUBLIC_URL": "https://remote-bundler.fumabase.com" },
+  "vars": { "PUBLIC_URL": "https://malleableui.dev" },
   "observability": {
     "enabled": true,
   },
@@ -43,9 +43,9 @@
   ],
   "routes": [
     {
-      "zone_name": "fumabase.com",
+      "zone_name": "malleableui.dev",
       "custom_domain": true,
-      "pattern": "remote-bundler.fumabase.com",
+      "pattern": "malleableui.dev",
     },
   ],
   "rules": [

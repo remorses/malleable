@@ -22,7 +22,7 @@ A **project** is a git repo in Cloudflare Artifacts plus a Durable Object (`Proj
   "compatibility_date": "2026-09-01",
   "artifacts": [{ "binding": "ARTIFACTS", "namespace": "lovepack" }],
   "kv_namespaces": [{ "binding": "jsCache", "id": "<kv id>" }],  // build cache
-  "vars": { "PUBLIC_URL": "https://remote-bundler.fumabase.com" },  // origin used in git remote urls
+  "vars": { "PUBLIC_URL": "https://malleableui.dev" },  // origin used in git remote urls
   "durable_objects": { "bindings": [{ "class_name": "ProjectDO", "name": "PROJECT" }] },
   "migrations": [{ "tag": "v3", "new_sqlite_classes": ["ProjectDO"] }]
 }

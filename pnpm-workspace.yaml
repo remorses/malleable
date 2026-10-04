@@ -1,2 +1,16 @@
+packages:
+  - .
+  - dashboard-demo
+
 patchedDependencies:
   '@rollup/browser': patches/@rollup__browser.patch
+
+# TODO: remove once spiceflow declares vite as a peer dependency. Without it, spiceflow/vite
+# resolves the hoisted vite 7 of the root package instead of the demo's vite 8.
+packageExtensions:
+  spiceflow:
+    peerDependencies:
+      vite: '*'
+    peerDependenciesMeta:
+      vite:
+        optional: true

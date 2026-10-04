@@ -4,6 +4,7 @@ import { transform as sucrase } from 'sucrase'
 import dedent from 'string-dedent'
 import { fetchCdnModule, getPackageName } from './cdn-modules.ts'
 import type { BuildCache } from './build.ts'
+import { SCOPE_ATTRIBUTE } from './generate-tailwind.ts'
 
 const CDN_URL = 'https://esm.sh'
 const RESOLVE_EXTENSIONS = ['', '.ts', '.tsx', '.js', '.jsx', '.mjs', '.css', '.json']
@@ -14,7 +15,10 @@ const js = dedent
 /** Reserved project path of the generated entry module. */
 export const ENTRY_PATH = '/__malleable_entry__.js'
 
-/** Entry module: re-exports the user entry and links `index.css` next to it, around its default export. */
+/**
+ * Entry module: re-exports the user entry and links `index.css` next to it, around its default export.
+ * The `display: contents` root is the `@scope` root of the generated CSS (see `scopeCss`).
+ */
 export function entryWrapperSource(actualEntryPath: string): string {
   const entry = JSON.stringify('./' + actualEntryPath)
   // createElement keeps the wrapper independent of the JSX transform
@@ -25,8 +29,8 @@ export function entryWrapperSource(actualEntryPath: string): string {
     const OriginalDefault = ActualEntry.default;
     export default function WrappedComponent(props) {
       return React.createElement(
-        React.Fragment,
-        null,
+        'div',
+        { ${JSON.stringify(SCOPE_ATTRIBUTE)}: '', style: { display: 'contents' } },
         React.createElement('link', { rel: 'stylesheet', href: new URL('./index.css', import.meta.url).href }),
         OriginalDefault ? React.createElement(OriginalDefault, props) : null,
       );

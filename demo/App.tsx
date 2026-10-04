@@ -23,7 +23,7 @@ function setupImportMap() {
 }
 
 // Project on the Malleable UI worker. Files live in an Artifacts git repo, one commit per agent message.
-const ENDPOINT = 'https://remote-bundler.fumabase.com'
+const ENDPOINT = 'https://malleableui.dev'
 const projectId =
   localStorage.getItem('malleable-project') ||
   (() => {

@@ -54,6 +54,30 @@ describe('scan performance', () => {
 })
 
 describe('generateTailwindCSS', () => {
+  it('scopes rules to the component root so they never restyle the host page', async () => {
+    const css = await generateTailwindCSS('<div className="hidden md:flex animate-spin" />')
+    // only the shape: top-level statements, first line of each
+    const outline = css
+      .split('\n')
+      .filter((l) => /^\S/.test(l) || /^ {2}(:scope|\.|@layer|@media)/.test(l))
+      .filter((l) => !l.startsWith('@property') && !l.startsWith('}'))
+    expect(outline).toMatchInlineSnapshot(`
+      [
+        "/*! tailwindcss v4.3.3 | MIT License | https://tailwindcss.com */",
+        "@keyframes spin {",
+        "@scope ([data-malleable-root]) {",
+        "@layer base {",
+        ":scope, :scope {",
+        ".hidden {",
+        ".animate-spin {",
+        "@media (width >= 48rem) {",
+        "  .md\\:flex {",
+        "button:not(:disabled), [role="button"]:not(:disabled) {",
+        "dialog {",
+      ]
+    `)
+  })
+
   it('resolves project @import with layers and @apply from nested files', async () => {
     const css = await generateTailwindCSS('<p className="before:content-[\'hi\']" />', {
       userCss: '@import "/styles/a.css";',
@@ -82,6 +106,7 @@ describe('generateTailwindCSS', () => {
             --tw-content: "";
           }
         }
+      }
       }
       "
     `)

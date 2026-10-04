@@ -16,7 +16,7 @@ npm i @malleable/ui
 ```ts
 import { Project } from '@malleable/ui'
 
-const project = new Project({ endpoint: 'https://remote-bundler.fumabase.com', apiKey, id: 'u123' })
+const project = new Project({ apiKey, id: 'u123' })
 await project.init()
 
 const session = await project.openSession({ author: { kind: 'agent', id: 'ses_1' } })
@@ -26,7 +26,7 @@ await session.commit({ message: 'Add chart' })  // one commit, sources + dist, r
 await project.undo()                            // new commit with the previous sources
 ```
 
-An agent loop in a Worker sends `draft.url` to the user in its own chat stream, next to the tokens. The browser only runs `import(new URL(url, endpoint))`. See [docs/projects.md](docs/projects.md#stream-component-urls-in-the-chat-response).
+An agent loop in a Worker sends `draft.url` to the user in its own chat stream, next to the tokens. The client returns absolute urls, so the browser only runs `import(url)`. See [docs/projects.md](docs/projects.md#stream-component-urls-in-the-chat-response).
 
 Or follow every change of a project over a WebSocket:
 
@@ -34,10 +34,16 @@ Or follow every change of a project over a WebSocket:
 project.watch({
   onMessage: async (msg) => {
     if (msg.type !== 'update') return
-    const mod = await import(new URL(msg.url, endpoint).href)  // draft or commit module
+    const mod = await import(msg.url)  // draft or commit module
     setComponent(() => mod.default)
   },
 })
+```
+
+The client talks to `https://malleableui.dev` by default. If you **self-host** the worker, pass its origin:
+
+```ts
+const project = new Project({ endpoint: 'https://ui.example.com', apiKey, id: 'u123' })
 ```
 
 Users can also edit with plain git:
@@ -51,9 +57,32 @@ git clone "$AUTHENTICATED_URL" app
 git commit -am 'Tweak' && git push origin main   # the worker builds dist/ on top
 ```
 
+## Embed in your app
+
+Let users add screens to your dashboard with **your own** AI SDK agent loop. Each `write` or `edit` tool builds and returns a url; the browser imports it at once.
+
+```ts
+const edit = tool({
+  inputSchema: z.object({ path: z.string(), oldString: z.string(), newString: z.string() }),
+  async execute(input) {
+    await session.apply({ ops: [{ op: 'replace', ...input }] })
+    return session.build()   // { ok: true, url } or { ok: false, errorText } for the model
+  },
+})
+```
+
+```tsx
+// browser: latest tool output url, React shared through an import map
+const { default: View } = use(import(url))
+return <View api={dashboardApi} />
+```
+
+Full guide with the agent route, import map and error handling: [docs/embedding.md](docs/embedding.md). Live example: https://demo.malleableui.dev, code in [`dashboard-demo/`](dashboard-demo).
+
 ## Features
 
-- **Sessions**: atomic `write` / `replace` / `delete` ops, one open session per branch
+- **Sessions**: atomic `write` / `replace` / `delete` ops
+- **Parallel agents**: many sessions per branch; `commit` three-way merges, overlapping edits come back as conflict markers plus a `prompt` for the agent
 - **Drafts**: `build()` publishes a module to viewers without touching git
 - **History**: every commit holds sources and `dist/`; `undo`, `restore`, branches, fast-forward `merge`
 - **Git remote**: clone and push with short-lived tokens

@@ -1,12 +1,12 @@
 // Benchmark draft build latency (`session.build()`) of one project. Usage:
-//   MALLEABLE_API_KEY=... tsx scripts/bench-bundle.ts [--url https://remote-bundler.fumabase.com] [--runs 20] [--scenario small|multi|npm] [--vary]
+//   MALLEABLE_API_KEY=... tsx scripts/bench-bundle.ts [--url https://malleableui.dev] [--runs 20] [--scenario small|multi|npm] [--vary]
 // Prints per-run wall time, then p50/p95. The files are written before the timer starts.
 import { parseArgs } from 'node:util'
 import { Project } from '../src/client.ts'
 
 const { values } = parseArgs({
   options: {
-    url: { type: 'string', default: 'https://remote-bundler.fumabase.com' },
+    url: { type: 'string', default: 'https://malleableui.dev' },
     runs: { type: 'string', default: '20' },
     scenario: { type: 'string', default: 'multi' },
     // change the source every run so source-keyed caches always miss

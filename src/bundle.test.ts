@@ -6,7 +6,7 @@ import { execFileSync } from 'node:child_process'
 import { Project, type Session } from './client.ts'
 import type { ProjectConfig } from './project-do.ts'
 
-const endpoint = 'https://remote-bundler.fumabase.com'
+const endpoint = 'https://malleableui.dev'
 const apiKey =
   process.env.MALLEABLE_API_KEY ??
   /MALLEABLE_API_KEY=(\S+)/.exec(readFileSync('.dev.vars', 'utf8'))![1]
@@ -157,7 +157,8 @@ describe('bundle', { timeout: 60_000 }, () => {
         ".custom-button",
       ]
     `)
-    expect(css.slice(css.lastIndexOf('.container {'), css.indexOf('@property'))).toMatchInlineSnapshot(`
+    // project CSS comes last inside the @scope block
+    expect(css.slice(css.lastIndexOf('.container {'), css.lastIndexOf('}'))).toMatchInlineSnapshot(`
       ".container {
         margin-inline: auto;
         max-width: var(--container-4xl);

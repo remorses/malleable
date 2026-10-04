@@ -8,9 +8,10 @@ import shadcnThemeCss from './shadcn-theme.css'
 
 const pathPosix = pathBrowserify.posix
 
-// No `layer()` on purpose: layered rules lose to any unlayered CSS on the host page.
+// Theme and utilities have no `layer()` on purpose: layered rules lose to any unlayered CSS on the host page.
+// Preflight is layered: an unlayered reset (`* { padding: 0 }`) would beat the host's own layered utilities.
 const BASE_CSS = `
-@import "tailwindcss/preflight.css";
+@import "tailwindcss/preflight.css" layer(base);
 @import "tailwindcss/theme.css";
 @import "tailwindcss/utilities.css";
 ${shadcnThemeCss}
@@ -80,6 +81,58 @@ export function scanCandidates(source: string): string[] {
   return [...out]
 }
 
+/** Attribute on the element the entry wrapper renders around the component (`entryWrapperSource`) */
+export const SCOPE_ATTRIBUTE = 'data-malleable-root'
+
+// Global at-rules: they cannot be scoped and do not select elements
+const GLOBAL_AT_RULE = /^@(property|keyframes|font-face|import|charset|layer properties)\b/
+
+/** Top-level statements of a stylesheet: rules, blocks, `;` statements and comments. */
+function topLevelStatements(css: string): string[] {
+  const out: string[] = []
+  let start = 0
+  let depth = 0
+  for (let i = 0; i < css.length; i++) {
+    const ch = css[i]
+    if (ch === '/' && css[i + 1] === '*') {
+      const end = css.indexOf('*/', i + 2)
+      i = end === -1 ? css.length : end + 1
+      if (depth === 0) {
+        out.push(css.slice(start, i + 1))
+        start = i + 1
+      }
+    } else if (ch === '"' || ch === "'") {
+      for (i++; i < css.length && css[i] !== ch; i++) if (css[i] === '\\') i++
+    } else if (ch === '{') {
+      depth++
+    } else if (ch === '}' || (ch === ';' && depth === 0)) {
+      if (ch === '}') depth--
+      if (depth === 0) {
+        out.push(css.slice(start, i + 1))
+        start = i + 1
+      }
+    }
+  }
+  out.push(css.slice(start))
+  return out.map((s) => s.trim()).filter(Boolean)
+}
+
+/**
+ * Wraps the generated CSS in `@scope ([data-malleable-root])`. Generated utilities are unlayered, so
+ * without a scope a `.hidden` in a generated sheet beats the host page's own `md:flex` on host elements.
+ * Theme variables move from `:root` to the scope root, so they do not override the host theme either.
+ */
+export function scopeCss(css: string): string {
+  const global: string[] = []
+  const scoped: string[] = []
+  for (const statement of topLevelStatements(css)) {
+    if (statement.startsWith('/*') || GLOBAL_AT_RULE.test(statement)) global.push(statement)
+    else scoped.push(statement.replace(/(^|[\s,])(?::root|:host)(?=[\s,{])/g, '$1:scope'))
+  }
+  if (!scoped.length) return global.join('\n')
+  return `${global.join('\n')}\n@scope ([${SCOPE_ATTRIBUTE}]) {\n${scoped.join('\n')}\n}\n`
+}
+
 export interface TailwindOptions {
   /** Project CSS that may use @apply or @import of other project files */
   userCss?: string
@@ -111,7 +164,7 @@ export async function generateTailwindCSS(
         return { path: id, base, module: typography }
       },
     })
-    return compiler.build(scanCandidates(code))
+    return scopeCss(compiler.build(scanCandidates(code)))
   } catch (error: any) {
     console.error('Failed to generate Tailwind CSS:', error)
     throw new Error(`Failed to generate Tailwind CSS: ${error.message}`)

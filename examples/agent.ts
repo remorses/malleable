@@ -2,7 +2,7 @@
 // Usage: MALLEABLE_API_KEY=... pnpm tsx examples/agent.ts <projectId> [endpoint]
 import { Project } from '../src/client.ts'
 
-const [projectId = 'example', endpoint = 'https://remote-bundler.fumabase.com'] = process.argv.slice(2)
+const [projectId = 'example', endpoint = 'https://malleableui.dev'] = process.argv.slice(2)
 const apiKey = process.env.MALLEABLE_API_KEY!
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 

@@ -26,7 +26,8 @@ export interface BuildCache {
   put(key: string, value: string, ttlSeconds: number): void
 }
 
-const CACHE_VERSION = 'v4'
+// Bump when generated output changes for the same input (Tailwind base CSS, plugins)
+const CACHE_VERSION = 'v6'
 
 /** KV-backed cache under the `cache:` prefix. */
 export function createKvBuildCache(

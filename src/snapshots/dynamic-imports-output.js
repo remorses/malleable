@@ -19,8 +19,8 @@ const LazyComponent = lazy(() => import('./chunks/LazyComponent-DIGiiDRE.js'));
 const OriginalDefault = App;
 function WrappedComponent(props) {
   return React.createElement(
-    React.Fragment,
-    null,
+    'div',
+    { "data-malleable-root": '', style: { display: 'contents' } },
     React.createElement('link', { rel: 'stylesheet', href: new URL('./index.css', import.meta.url).href }),
     OriginalDefault ? React.createElement(OriginalDefault, props) : null,
   );

@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { MalleableError, Project, type Author, type LiveMessage } from './client.ts'
 
 // Runs against the deployed worker: deploy first (`pnpm deployment`)
-const endpoint = 'https://remote-bundler.fumabase.com'
+const endpoint = 'https://malleableui.dev'
 const apiKey =
   process.env.MALLEABLE_API_KEY ??
   /MALLEABLE_API_KEY=(\S+)/.exec(readFileSync('.dev.vars', 'utf8'))![1]
@@ -167,7 +167,7 @@ describe('projects: session, draft, commit, undo, branches', () => {
           "index.css",
         ],
         "ok": true,
-        "url": "/p/<project>/d/<session>/1/index.js",
+        "url": "https://malleableui.dev/p/<project>/d/<session>/1/index.js",
       }
     `)
     // the agent gets the module url back, no socket needed
@@ -214,7 +214,7 @@ describe('projects: session, draft, commit, undo, branches', () => {
       {
         "ok": true,
         "sha": "<sha1>",
-        "url": "/p/<project>/r/<sha1>/index.js",
+        "url": "https://malleableui.dev/p/<project>/r/<sha1>/index.js",
       }
     `)
     if (!commit.ok) throw new Error('commit failed')
@@ -303,7 +303,7 @@ describe('projects: session, draft, commit, undo, branches', () => {
       {
         "ok": true,
         "sha": "<sha2>",
-        "url": "/p/<project>/r/<sha2>/index.js",
+        "url": "https://malleableui.dev/p/<project>/r/<sha2>/index.js",
       }
     `)
     const jsAfterUndo = await (await fetch(`${endpoint}/p/${project.id}/r/main/index.js`)).text()
@@ -343,7 +343,7 @@ describe('projects: session, draft, commit, undo, branches', () => {
     expect(stable(await project.merge({ branch: 'draft' }))).toMatchInlineSnapshot(`
       {
         "sha": "<sha3>",
-        "url": "/p/<project>/r/<sha3>/index.js",
+        "url": "https://malleableui.dev/p/<project>/r/<sha3>/index.js",
       }
     `)
     expect(await project.files()).toMatchInlineSnapshot(`
@@ -366,7 +366,7 @@ describe('projects: session, draft, commit, undo, branches', () => {
     live.close()
     const commitUrls = live.messages.flatMap((m) => (m.type === 'update' && m.kind === 'commit' ? [m.url] : []))
     expect(
-      await Promise.all(commitUrls.map(async (url) => (await fetch(`${endpoint}${url}`)).status)),
+      await Promise.all(commitUrls.map(async (url) => (await fetch(url)).status)),
     ).toMatchInlineSnapshot(`
       [
         200,

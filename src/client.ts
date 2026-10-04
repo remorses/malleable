@@ -72,16 +72,29 @@ async function call<T>(
   if (!res.ok) {
     throw new MalleableError(json.message ?? res.statusText, res.status, json.code)
   }
-  return json as T
+  return withAbsoluteUrl(options.endpoint, json) as T
+}
+
+/** Module urls from the worker are origin-relative. Make them absolute so they can be stored and imported anywhere. */
+function withAbsoluteUrl<T>(endpoint: string, value: T): T {
+  if (!value || typeof value !== 'object' || !('url' in value)) return value
+  const url = value.url
+  if (typeof url !== 'string' || !url.startsWith('/')) return value
+  return { ...value, url: `${endpoint}${url}` }
 }
 
 export class Project {
-  private options: ClientOptions
+  private options: ResolvedOptions
   readonly id: string
 
-  constructor({ id, ...options }: ClientOptions & { id: string }) {
-    this.options = options
+  constructor({ id, endpoint = DEFAULT_ENDPOINT, apiKey }: ClientOptions & { id: string }) {
+    this.options = { endpoint: endpoint.replace(/\/+$/, ''), apiKey }
     this.id = id
+  }
+
+  /** Worker origin. Module `url`s in results are already absolute. */
+  get endpoint() {
+    return this.options.endpoint
   }
 
   private path(suffix = '') {
@@ -176,7 +189,11 @@ export class Project {
     const connect = () => {
       ws = new WebSocket(wsUrl)
       ws.onopen = () => (attempt = 0)
-      ws.onmessage = (e) => onMessage(JSON.parse(String(e.data)))
+      ws.onmessage = (e) => {
+        const msg: LiveMessage = withAbsoluteUrl(this.options.endpoint, JSON.parse(String(e.data)))
+        if (msg.type !== 'hello') return onMessage(msg)
+        onMessage({ ...msg, drafts: msg.drafts.map((d) => withAbsoluteUrl(this.options.endpoint, d)) })
+      }
       // 1006 is a dropped connection or a DO restart: always reconnect
       ws.onclose = () => {
         if (closed) return
@@ -195,7 +212,7 @@ export class Project {
 
 export class Session {
   constructor(
-    private options: ClientOptions,
+    private options: ResolvedOptions,
     readonly project: Project,
     readonly id: string,
     readonly branch: string,

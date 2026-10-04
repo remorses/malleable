@@ -1,0 +1,41 @@
+@import '@fontsource-variable/geist';
+@import '@fontsource-variable/geist-mono';
+@import 'tailwindcss';
+
+@theme {
+  --font-sans: 'Geist Variable', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'Geist Mono Variable', ui-monospace, monospace;
+}
+
+/*
+ * Generated views load their own Tailwind CSS, which declares --font-sans again on :root and wins
+ * (same specificity, loaded later). Literal fonts on body and code keep Geist for views too.
+ * The hsl tokens below are the ones the generated theme reads (bg-card, border-border...).
+ */
+:root {
+  --background: 0 0% 100%;
+  --foreground: 0 0% 9%;
+  --card: 0 0% 100%;
+  --card-foreground: 0 0% 9%;
+  --muted: 0 0% 96%;
+  --muted-foreground: 0 0% 40%;
+  --accent: 0 0% 96%;
+  --accent-foreground: 0 0% 9%;
+  --primary: 0 0% 9%;
+  --primary-foreground: 0 0% 100%;
+  --border: 0 0% 92%;
+  --input: 0 0% 92%;
+  --ring: 0 0% 9%;
+  --radius: 0.5rem;
+}
+
+body {
+  font-family: 'Geist Variable', ui-sans-serif, system-ui, sans-serif;
+}
+
+code,
+kbd,
+samp,
+pre {
+  font-family: 'Geist Mono Variable', ui-monospace, monospace;
+}

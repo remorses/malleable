@@ -6,8 +6,8 @@ const App = () => jsx('div', { className: "p-4 bg-blue-500 text-white"  , childr
 const OriginalDefault = App;
 function WrappedComponent(props) {
   return React.createElement(
-    React.Fragment,
-    null,
+    'div',
+    { "data-malleable-root": '', style: { display: 'contents' } },
     React.createElement('link', { rel: 'stylesheet', href: new URL('./index.css', import.meta.url).href }),
     OriginalDefault ? React.createElement(OriginalDefault, props) : null,
   );

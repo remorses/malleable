@@ -1,0 +1,22 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "malleable-dashboard-demo",
+  // Spiceflow's RSC entry re-exports the Worker default export
+  "main": "./src/app.tsx",
+  "compatibility_date": "2026-09-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true, "traces": { "enabled": true } },
+  "ai": { "binding": "AI" },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "malleable-dashboard-demo",
+      "database_id": "47d6772e-a29d-4a1d-82e5-ef90cda62bd9",
+      "migrations_dir": "./drizzle",
+      "migrations_pattern": "drizzle/*/migration.sql",
+    },
+  ],
+  "vars": { "MALLEABLE_ENDPOINT": "https://malleableui.dev" },
+  "secrets": { "required": ["MALLEABLE_API_KEY"] },
+  "routes": [{ "pattern": "demo.malleableui.dev", "custom_domain": true }],
+}
